@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23507" systemVersion="24B91" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" userDefinedModelVersionIdentifier="">
+    <entity name="AlarmConfiguration" representedClassName="AlarmConfiguration" syncable="YES">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="daysOfWeek" optional="YES" attributeType="Binary"/>
+        <attribute name="enabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="smartWakeEnabled" attributeType="Boolean" defaultValueString="30" usesScalarValueType="YES"/>
+        <attribute name="smartWakeWindow" attributeType="Integer 16" defaultValueString="9" usesScalarValueType="YES"/>
+        <attribute name="snoozeDuration" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="snoozeEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="time" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="vibrationOnly" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <relationship name="preferences" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="alarmConfigurations" inverseEntity="UserPreferences"/>
+    </entity>
+    <entity name="DailyMetrics" representedClassName="DailyMetrics" syncable="YES">
+        <attribute name="averageHeartRate" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="averageRespiratoryRate" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="sleepDebt" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="totalSleepTime" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="sessions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="dailyMetrics" inverseEntity="SleepSession"/>
+        <relationship name="weeklyMetrics" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WeeklyMetrics" inverseName="dailyMetrics" inverseEntity="WeeklyMetrics"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="EnvironmentalReading" representedClassName="EnvironmentalReading" syncable="YES">
+        <attribute name="deviceType" optional="YES" attributeType="String"/>
+        <attribute name="humidity" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="lightLevel" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="noiseLevel" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="temperature" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="environmentalReadings" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="HeartRateData" representedClassName="HeartRateData" syncable="YES">
+        <attribute name="confidence" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="deviceType" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="rawData" optional="YES" attributeType="Binary"/>
+        <attribute name="samplingRate" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="value" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="heartRateData" inverseEntity="SleepSession"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="MovementData" representedClassName="MovementData" syncable="YES">
+        <attribute name="activityLevel" attributeType="Integer 16" minValueString="0" maxValueString="5" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="deviceType" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="magnitude" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="xAcceleration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="yAcceleration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="zAcceleration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="movementData" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="RespiratoryData" representedClassName="RespiratoryData" syncable="YES">
+        <attribute name="confidence" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="deviceType" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key=" indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="oxygenSaturation" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="respiratoryRate" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="respiratoryData" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="SleepNote" representedClassName="SleepNote" syncable="YES">
+        <attribute name="category" optional="YES" attributeType="String"/>
+        <attribute name="content" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="notes" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="SleepQualityScore" representedClassName="SleepQualityScore" syncable="YES">
+        <attribute name="calculationVersion" optional="YES" attributeType="String"/>
+        <attribute name="environmentalScore" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="heartRateScore" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="movementScore" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="overallScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="respiratoryScore" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="sleepCycleScore" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="qualityScores" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="SleepSession" representedClassName="SleepSession" syncable="YES">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="deviceIdentifier" optional="YES" attributeType="String"/>
+        <attribute name="endTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isActive" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="qualityScore" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="startTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="userFeedback" optional="YES" attributeType="Integer 16" minValueString="1" maxValueString="5" usesScalarValueType="NO"/>
+        <relationship name="dailyMetrics" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DailyMetrics" inverseName="sessions" inverseEntity="DailyMetrics"/>
+        <relationship name="environmentalReadings" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="EnvironmentalReading" inverseName="session" inverseEntity="EnvironmentalReading"/>
+        <relationship name="heartRateData" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HeartRateData" inverseName="session" inverseEntity="HeartRateData"/>
+        <relationship name="movementData" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="MovementData" inverseName="session" inverseEntity="MovementData"/>
+        <relationship name="notes" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SleepNote" inverseName="session" inverseEntity="SleepNote"/>
+        <relationship name="qualityScores" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SleepQualityScore" inverseName="session" inverseEntity="SleepQualityScore"/>
+        <relationship name="respiratoryData" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="RespiratoryData" inverseName="session" inverseEntity="RespiratoryData"/>
+        <relationship name="sleepStages" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SleepStage" inverseName="session" inverseEntity="SleepStage"/>
+    </entity>
+    <entity name="SleepStage" representedClassName="SleepStage" syncable="YES">
+        <attribute name="confidence" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="duration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="endTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="stageType" optional="YES" attributeType="String"/>
+        <attribute name="startTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="sleepStages" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="UserPreferences" representedClassName="UserPreferences" syncable="YES">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="healthKitSyncEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="notificationsEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="sleepGoalEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="targetBedtime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="targetSleepDuration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="targetWakeTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="alarmConfigurations" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AlarmConfiguration" inverseName="preferences" inverseEntity="AlarmConfiguration"/>
+    </entity>
+    <entity name="WeeklyMetrics" representedClassName="WeeklyMetrics" syncable="YES">
+        <attribute name="averageQualityScore" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="averageSleepTime" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="consistencyScore" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="weekEndDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="weekStartDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="dailyMetrics" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="DailyMetrics" inverseName="weeklyMetrics" inverseEntity="DailyMetrics"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+</model>
