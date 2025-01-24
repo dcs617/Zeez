@@ -130,7 +130,7 @@ final class EnvironmentalMonitor {
             try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [])
             
             // Check audio session availability
-            audioSession.requestRecordPermission { hasPermission in
+            AVAudioApplication.requestRecordPermission { hasPermission in
                 if !hasPermission {
                     completion(false)
                     return
@@ -141,7 +141,7 @@ final class EnvironmentalMonitor {
                     completion(false)
                     return
                 }
-                
+
                 completion(true)
             }
         } catch {

@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		653B1AA52D3630C500B2CAE4 /* ZeezWatch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 653B1A822D3630C300B2CAE4 /* ZeezWatch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		653B18F42D3315EB00B2CAE4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +25,50 @@
 			remoteGlobalIDString = 653B18DD2D3315EA00B2CAE4;
 			remoteInfo = Zeez;
 		};
+		653B1A922D3630C500B2CAE4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 653B18D62D3315EA00B2CAE4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 653B1A812D3630C300B2CAE4;
+			remoteInfo = "ZeezWatch Watch App";
+		};
+		653B1A9C2D3630C500B2CAE4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 653B18D62D3315EA00B2CAE4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 653B1A812D3630C300B2CAE4;
+			remoteInfo = "ZeezWatch Watch App";
+		};
+		653B1AA32D3630C500B2CAE4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 653B18D62D3315EA00B2CAE4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 653B1A812D3630C300B2CAE4;
+			remoteInfo = "ZeezWatch Watch App";
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		653B1AA92D3630C500B2CAE4 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				653B1AA52D3630C500B2CAE4 /* ZeezWatch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		653B18DE2D3315EA00B2CAE4 /* Zeez.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Zeez.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		653B18F32D3315EB00B2CAE4 /* ZeezTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZeezTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		653B18FD2D3315EB00B2CAE4 /* ZeezUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZeezUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		653B1A822D3630C300B2CAE4 /* ZeezWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ZeezWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		653B1A912D3630C500B2CAE4 /* ZeezWatch Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ZeezWatch Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		653B1A9B2D3630C500B2CAE4 /* ZeezWatch Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ZeezWatch Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -43,6 +85,21 @@
 		653B19002D3315EB00B2CAE4 /* ZeezUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ZeezUITests;
+			sourceTree = "<group>";
+		};
+		653B1A832D3630C300B2CAE4 /* ZeezWatch Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "ZeezWatch Watch App";
+			sourceTree = "<group>";
+		};
+		653B1A942D3630C500B2CAE4 /* ZeezWatch Watch AppTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "ZeezWatch Watch AppTests";
+			sourceTree = "<group>";
+		};
+		653B1A9E2D3630C500B2CAE4 /* ZeezWatch Watch AppUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "ZeezWatch Watch AppUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +126,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		653B1A7F2D3630C300B2CAE4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		653B1A8E2D3630C500B2CAE4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		653B1A982D3630C500B2CAE4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -78,6 +156,9 @@
 				653B18E02D3315EA00B2CAE4 /* Zeez */,
 				653B18F62D3315EB00B2CAE4 /* ZeezTests */,
 				653B19002D3315EB00B2CAE4 /* ZeezUITests */,
+				653B1A832D3630C300B2CAE4 /* ZeezWatch Watch App */,
+				653B1A942D3630C500B2CAE4 /* ZeezWatch Watch AppTests */,
+				653B1A9E2D3630C500B2CAE4 /* ZeezWatch Watch AppUITests */,
 				653B18DF2D3315EA00B2CAE4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +169,9 @@
 				653B18DE2D3315EA00B2CAE4 /* Zeez.app */,
 				653B18F32D3315EB00B2CAE4 /* ZeezTests.xctest */,
 				653B18FD2D3315EB00B2CAE4 /* ZeezUITests.xctest */,
+				653B1A822D3630C300B2CAE4 /* ZeezWatch Watch App.app */,
+				653B1A912D3630C500B2CAE4 /* ZeezWatch Watch AppTests.xctest */,
+				653B1A9B2D3630C500B2CAE4 /* ZeezWatch Watch AppUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,10 +186,12 @@
 				653B18DA2D3315EA00B2CAE4 /* Sources */,
 				653B18DB2D3315EA00B2CAE4 /* Frameworks */,
 				653B18DC2D3315EA00B2CAE4 /* Resources */,
+				653B1AA92D3630C500B2CAE4 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				653B1AA42D3630C500B2CAE4 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				653B18E02D3315EA00B2CAE4 /* Zeez */,
@@ -163,6 +249,74 @@
 			productReference = 653B18FD2D3315EB00B2CAE4 /* ZeezUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		653B1A812D3630C300B2CAE4 /* ZeezWatch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 653B1AA62D3630C500B2CAE4 /* Build configuration list for PBXNativeTarget "ZeezWatch Watch App" */;
+			buildPhases = (
+				653B1A7E2D3630C300B2CAE4 /* Sources */,
+				653B1A7F2D3630C300B2CAE4 /* Frameworks */,
+				653B1A802D3630C300B2CAE4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				653B1A832D3630C300B2CAE4 /* ZeezWatch Watch App */,
+			);
+			name = "ZeezWatch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "ZeezWatch Watch App";
+			productReference = 653B1A822D3630C300B2CAE4 /* ZeezWatch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		653B1A902D3630C500B2CAE4 /* ZeezWatch Watch AppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 653B1AAA2D3630C500B2CAE4 /* Build configuration list for PBXNativeTarget "ZeezWatch Watch AppTests" */;
+			buildPhases = (
+				653B1A8D2D3630C500B2CAE4 /* Sources */,
+				653B1A8E2D3630C500B2CAE4 /* Frameworks */,
+				653B1A8F2D3630C500B2CAE4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				653B1A932D3630C500B2CAE4 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				653B1A942D3630C500B2CAE4 /* ZeezWatch Watch AppTests */,
+			);
+			name = "ZeezWatch Watch AppTests";
+			packageProductDependencies = (
+			);
+			productName = "ZeezWatch Watch AppTests";
+			productReference = 653B1A912D3630C500B2CAE4 /* ZeezWatch Watch AppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		653B1A9A2D3630C500B2CAE4 /* ZeezWatch Watch AppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 653B1AAD2D3630C500B2CAE4 /* Build configuration list for PBXNativeTarget "ZeezWatch Watch AppUITests" */;
+			buildPhases = (
+				653B1A972D3630C500B2CAE4 /* Sources */,
+				653B1A982D3630C500B2CAE4 /* Frameworks */,
+				653B1A992D3630C500B2CAE4 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				653B1A9D2D3630C500B2CAE4 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				653B1A9E2D3630C500B2CAE4 /* ZeezWatch Watch AppUITests */,
+			);
+			name = "ZeezWatch Watch AppUITests";
+			packageProductDependencies = (
+			);
+			productName = "ZeezWatch Watch AppUITests";
+			productReference = 653B1A9B2D3630C500B2CAE4 /* ZeezWatch Watch AppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +338,17 @@
 						CreatedOnToolsVersion = 16.1;
 						TestTargetID = 653B18DD2D3315EA00B2CAE4;
 					};
+					653B1A812D3630C300B2CAE4 = {
+						CreatedOnToolsVersion = 16.1;
+					};
+					653B1A902D3630C500B2CAE4 = {
+						CreatedOnToolsVersion = 16.1;
+						TestTargetID = 653B1A812D3630C300B2CAE4;
+					};
+					653B1A9A2D3630C500B2CAE4 = {
+						CreatedOnToolsVersion = 16.1;
+						TestTargetID = 653B1A812D3630C300B2CAE4;
+					};
 				};
 			};
 			buildConfigurationList = 653B18D92D3315EA00B2CAE4 /* Build configuration list for PBXProject "Zeez" */;
@@ -203,6 +368,9 @@
 				653B18DD2D3315EA00B2CAE4 /* Zeez */,
 				653B18F22D3315EB00B2CAE4 /* ZeezTests */,
 				653B18FC2D3315EB00B2CAE4 /* ZeezUITests */,
+				653B1A812D3630C300B2CAE4 /* ZeezWatch Watch App */,
+				653B1A902D3630C500B2CAE4 /* ZeezWatch Watch AppTests */,
+				653B1A9A2D3630C500B2CAE4 /* ZeezWatch Watch AppUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +391,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		653B18FB2D3315EB00B2CAE4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		653B1A802D3630C300B2CAE4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		653B1A8F2D3630C500B2CAE4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		653B1A992D3630C500B2CAE4 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +442,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		653B1A7E2D3630C300B2CAE4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		653B1A8D2D3630C500B2CAE4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		653B1A972D3630C500B2CAE4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +475,21 @@
 			isa = PBXTargetDependency;
 			target = 653B18DD2D3315EA00B2CAE4 /* Zeez */;
 			targetProxy = 653B18FE2D3315EB00B2CAE4 /* PBXContainerItemProxy */;
+		};
+		653B1A932D3630C500B2CAE4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 653B1A812D3630C300B2CAE4 /* ZeezWatch Watch App */;
+			targetProxy = 653B1A922D3630C500B2CAE4 /* PBXContainerItemProxy */;
+		};
+		653B1A9D2D3630C500B2CAE4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 653B1A812D3630C300B2CAE4 /* ZeezWatch Watch App */;
+			targetProxy = 653B1A9C2D3630C500B2CAE4 /* PBXContainerItemProxy */;
+		};
+		653B1AA42D3630C500B2CAE4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 653B1A812D3630C300B2CAE4 /* ZeezWatch Watch App */;
+			targetProxy = 653B1AA32D3630C500B2CAE4 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -321,6 +546,9 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -378,6 +606,9 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -393,6 +624,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Zeez/Zeez.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -400,6 +632,8 @@
 				DEVELOPMENT_TEAM = QQH4V4JLV5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Zeez needs permission to read your sleep data to provide accurate sleep analysis and recommendations";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Zeez needs permission to save your sleep data to provide accurate sleep tracking and analysis";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -424,6 +658,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Zeez/Zeez.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -431,6 +666,8 @@
 				DEVELOPMENT_TEAM = QQH4V4JLV5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Zeez needs permission to read your sleep data to provide accurate sleep analysis and recommendations";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Zeez needs permission to save your sleep data to provide accurate sleep tracking and analysis";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -522,6 +759,146 @@
 			};
 			name = Release;
 		};
+		653B1AA72D3630C500B2CAE4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"ZeezWatch Watch App/Preview Content\"";
+				DEVELOPMENT_TEAM = QQH4V4JLV5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = ZeezWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = placeholder.Zeez;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = placeholder.Zeez.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.1;
+			};
+			name = Debug;
+		};
+		653B1AA82D3630C500B2CAE4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"ZeezWatch Watch App/Preview Content\"";
+				DEVELOPMENT_TEAM = QQH4V4JLV5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = ZeezWatch;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = placeholder.Zeez;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = placeholder.Zeez.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.1;
+			};
+			name = Release;
+		};
+		653B1AAB2D3630C500B2CAE4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QQH4V4JLV5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "placeholder.ZeezWatch-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ZeezWatch Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ZeezWatch Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 11.1;
+			};
+			name = Debug;
+		};
+		653B1AAC2D3630C500B2CAE4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QQH4V4JLV5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "placeholder.ZeezWatch-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ZeezWatch Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ZeezWatch Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 11.1;
+			};
+			name = Release;
+		};
+		653B1AAE2D3630C500B2CAE4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QQH4V4JLV5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "placeholder.ZeezWatch-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "ZeezWatch Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 11.1;
+			};
+			name = Debug;
+		};
+		653B1AAF2D3630C500B2CAE4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = QQH4V4JLV5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "placeholder.ZeezWatch-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "ZeezWatch Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 11.1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -557,6 +934,33 @@
 			buildConfigurations = (
 				653B190E2D3315EB00B2CAE4 /* Debug */,
 				653B190F2D3315EB00B2CAE4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		653B1AA62D3630C500B2CAE4 /* Build configuration list for PBXNativeTarget "ZeezWatch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				653B1AA72D3630C500B2CAE4 /* Debug */,
+				653B1AA82D3630C500B2CAE4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		653B1AAA2D3630C500B2CAE4 /* Build configuration list for PBXNativeTarget "ZeezWatch Watch AppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				653B1AAB2D3630C500B2CAE4 /* Debug */,
+				653B1AAC2D3630C500B2CAE4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		653B1AAD2D3630C500B2CAE4 /* Build configuration list for PBXNativeTarget "ZeezWatch Watch AppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				653B1AAE2D3630C500B2CAE4 /* Debug */,
+				653B1AAF2D3630C500B2CAE4 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

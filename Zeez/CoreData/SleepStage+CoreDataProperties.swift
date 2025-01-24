@@ -2,7 +2,7 @@
 //  SleepStage+CoreDataProperties.swift
 //  Zeez
 //
-//  Created by Daniel on 1/12/25.
+//  Created by Daniel on 1/19/25.
 //
 //
 
@@ -23,6 +23,7 @@ extension SleepStage {
     @NSManaged public var confidence: Double
     @NSManaged public var duration: Double
     @NSManaged public var session: SleepSession?
+    @NSManaged public var featureAccess: FeatureAccessRecord?
 
 }
 

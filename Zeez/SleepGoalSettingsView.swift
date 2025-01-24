@@ -5,11 +5,11 @@ import CoreData
 struct SleepGoalSettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.dismiss) private var dismiss
-    @FetchRequest(
+    @FetchRequest<UserPreferences>(
         sortDescriptors: [],
         animation: .default
-    ) private var preferences: FetchedResults<UserPreferences>
-    
+    ) private var preferences
+
     // Local state for editing
     @State private var sleepGoalEnabled: Bool
     @State private var targetBedtime: Date

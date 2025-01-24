@@ -2,7 +2,7 @@
 //  AlarmConfiguration+CoreDataProperties.swift
 //  Zeez
 //
-//  Created by Daniel on 1/12/25.
+//  Created by Daniel on 1/19/25.
 //
 //
 
@@ -27,7 +27,22 @@ extension AlarmConfiguration {
     @NSManaged public var snoozeEnabled: Bool
     @NSManaged public var snoozeDuration: Int16
     @NSManaged public var vibrationOnly: Bool
-    @NSManaged public var preferences: UserPreferences?
+    @NSManaged public var wakeType: String?
+    @NSManaged public var timerDuration: Int16
+    @NSManaged public var audioCapture: Bool
+    @NSManaged public var musicEnabled: Bool
+    @NSManaged public var musicSource: String?
+    @NSManaged public var musicTrackId: String?
+    @NSManaged public var musicVolume: Double
+    @NSManaged public var fadeInDuration: Int16
+    @NSManaged public var name: String?
+    @NSManaged public var watchHaptics: Bool
+    @NSManaged public var allowVibrationsWithSound: Bool
+    @NSManaged public var snoozeGesture: String?
+    @NSManaged public var deactivateGesture: String?
+    @NSManaged public var alarmSound: String?
+    @NSManaged public var alarmSoundSource: String?
+    @NSManaged public var userPreferences: UserPreferences?
 
 }
 

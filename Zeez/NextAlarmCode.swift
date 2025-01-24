@@ -1,18 +1,23 @@
 import SwiftUI
+import CoreData
 
 struct NextAlarmCard: View {
-    @FetchRequest(
+    @FetchRequest<AlarmConfiguration>(
         sortDescriptors: [NSSortDescriptor(keyPath: \AlarmConfiguration.time, ascending: true)],
         predicate: NSPredicate(format: "enabled == YES"),
-        animation: .default)
-    private var alarms: FetchedResults<AlarmConfiguration>
+        animation: .default
+    ) private var alarms
+    
+    private var alarmsArray: [AlarmConfiguration] {
+        Array(alarms)
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Next Alarm")
                 .font(.headline)
             
-            if let nextAlarm = alarms.first,
+            if let nextAlarm = alarmsArray.first,
                let alarmTime = nextAlarm.time {
                 HStack {
                     Image(systemName: "alarm.fill")

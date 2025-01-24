@@ -55,7 +55,7 @@ struct ChartSection<Content: View>: View {
     }
 }
 
-struct SleepQualityChart: View {
+struct SleepQualityBarChart: View {
     let data: [(date: Date, quality: Double)]
     
     var body: some View {

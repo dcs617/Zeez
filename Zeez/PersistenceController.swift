@@ -2,70 +2,51 @@ import CoreData
 
 final class PersistenceController {
     static let shared = PersistenceController()
-    
     let container: NSPersistentContainer
     
     private init() {
         container = NSPersistentContainer(name: "Zeez")
         
-        // Configure container description
-        guard let description = container.persistentStoreDescriptions.first else {
-            fatalError("Failed to retrieve persistent store description")
+        // Configure store options
+        if let description = container.persistentStoreDescriptions.first {
+            // Enable history tracking
+            description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+            
+            // Migration options
+            description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+            description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
+            
+            // SQLite optimizations
+            let pragmaOptions: [String: String] = [
+                "journal_mode": "DELETE",          // Use simpler journaling
+                "synchronous": "NORMAL",           // Reduce write-ahead logging
+                "page_size": "4096",              // Optimize page size
+                "temp_store": "MEMORY",           // Use memory for temp storage
+                "auto_vacuum": "FULL"             // Enable full auto-vacuum
+            ]
+            description.setOption(pragmaOptions as NSDictionary, forKey: NSSQLitePragmasOption)
         }
         
-        description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-        description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
-        
-        // Load persistent stores
         container.loadPersistentStores { description, error in
             if let error = error {
-                fatalError("Unable to load persistent stores: \(error)")
+                print("Core Data failed to load: \(error.localizedDescription)")
             }
         }
         
-        // Configure container for background tasks
         container.viewContext.automaticallyMergesChangesFromParent = true
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
-        
-        // Set staleness interval for optimal performance
-        container.viewContext.stalenessInterval = 0
-        
-        // Configure query generation if needed
-        do {
-            try container.viewContext.setQueryGenerationFrom(.current)
-        } catch {
-            print("Error setting query generation: \(error)")
-        }
     }
-    
-    // MARK: - Background Context
     
     func newBackgroundContext() -> NSManagedObjectContext {
         let context = container.newBackgroundContext()
         context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        context.automaticallyMergesChangesFromParent = true
         return context
     }
     
-    // MARK: - Save Context
-    
-    func save() {
-        let context = container.viewContext
-        
-        if context.hasChanges {
-            do {
-                try context.save()
-            } catch {
-                let nsError = error as NSError
-                print("Unresolved error saving context: \(nsError), \(nsError.userInfo)")
-            }
-        }
-    }
-    
-    // MARK: - Preview Support
-    
+    // MARK: - Preview Helper
     static var preview: PersistenceController = {
         let controller = PersistenceController(inMemory: true)
-        // Add preview data here when needed
         return controller
     }()
     
@@ -76,6 +57,10 @@ final class PersistenceController {
             container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")
         }
         
+        if let description = container.persistentStoreDescriptions.first {
+            description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
+        }
+        
         container.loadPersistentStores { description, error in
             if let error = error {
                 fatalError("Error: \(error.localizedDescription)")
@@ -83,5 +68,42 @@ final class PersistenceController {
         }
         
         container.viewContext.automaticallyMergesChangesFromParent = true
+        container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+    }
+    
+    func clearAllData() {
+        guard let url = container.persistentStoreDescriptions.first?.url else { return }
+        
+        let coordinator = container.persistentStoreCoordinator
+        
+        // Remove the store first
+        if let store = coordinator.persistentStore(for: url) {
+            do {
+                try coordinator.remove(store)
+            } catch {
+                print("Failed to remove store: \(error)")
+                return
+            }
+        }
+        
+        // Delete the files
+        let fileManager = FileManager.default
+        try? fileManager.removeItem(at: url)
+        try? fileManager.removeItem(at: url.appendingPathExtension("shm"))
+        try? fileManager.removeItem(at: url.appendingPathExtension("wal"))
+        try? fileManager.removeItem(at: url.appendingPathExtension("sqlite-journal"))
+        
+        // Add a new store
+        do {
+            try coordinator.addPersistentStore(
+                ofType: NSSQLiteStoreType,
+                configurationName: nil,
+                at: url,
+                options: container.persistentStoreDescriptions.first?.options
+            )
+            print("Successfully cleared and recreated store")
+        } catch {
+            print("Failed to add new store: \(error)")
+        }
     }
 }

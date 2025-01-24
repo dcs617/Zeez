@@ -2,7 +2,7 @@
 //  SleepSession+CoreDataProperties.swift
 //  Zeez
 //
-//  Created by Daniel on 1/12/25.
+//  Created by Daniel on 1/19/25.
 //
 //
 
@@ -25,6 +25,7 @@ extension SleepSession {
     @NSManaged public var deviceIdentifier: String?
     @NSManaged public var qualityScore: Double
     @NSManaged public var userFeedback: NSNumber?
+    @NSManaged public var environmentalScore: Double
     @NSManaged public var dailyMetrics: DailyMetrics?
     @NSManaged public var sleepStages: NSSet?
     @NSManaged public var heartRateData: NSSet?
@@ -33,6 +34,10 @@ extension SleepSession {
     @NSManaged public var respiratoryData: NSSet?
     @NSManaged public var notes: NSSet?
     @NSManaged public var qualityScores: NSSet?
+    @NSManaged public var analyticsEvents: NSSet?
+    @NSManaged public var subscriptionEvents: NSSet?
+    @NSManaged public var featureAccess: NSSet?
+    @NSManaged public var upgradeEvents: NSSet?
 
 }
 
@@ -152,6 +157,74 @@ extension SleepSession {
 
     @objc(removeQualityScores:)
     @NSManaged public func removeFromQualityScores(_ values: NSSet)
+
+}
+
+// MARK: Generated accessors for analyticsEvents
+extension SleepSession {
+
+    @objc(addAnalyticsEventsObject:)
+    @NSManaged public func addToAnalyticsEvents(_ value: AnalyticsEvent)
+
+    @objc(removeAnalyticsEventsObject:)
+    @NSManaged public func removeFromAnalyticsEvents(_ value: AnalyticsEvent)
+
+    @objc(addAnalyticsEvents:)
+    @NSManaged public func addToAnalyticsEvents(_ values: NSSet)
+
+    @objc(removeAnalyticsEvents:)
+    @NSManaged public func removeFromAnalyticsEvents(_ values: NSSet)
+
+}
+
+// MARK: Generated accessors for subscriptionEvents
+extension SleepSession {
+
+    @objc(addSubscriptionEventsObject:)
+    @NSManaged public func addToSubscriptionEvents(_ value: SubscriptionEventRecord)
+
+    @objc(removeSubscriptionEventsObject:)
+    @NSManaged public func removeFromSubscriptionEvents(_ value: SubscriptionEventRecord)
+
+    @objc(addSubscriptionEvents:)
+    @NSManaged public func addToSubscriptionEvents(_ values: NSSet)
+
+    @objc(removeSubscriptionEvents:)
+    @NSManaged public func removeFromSubscriptionEvents(_ values: NSSet)
+
+}
+
+// MARK: Generated accessors for featureAccess
+extension SleepSession {
+
+    @objc(addFeatureAccessObject:)
+    @NSManaged public func addToFeatureAccess(_ value: FeatureAccessRecord)
+
+    @objc(removeFeatureAccessObject:)
+    @NSManaged public func removeFromFeatureAccess(_ value: FeatureAccessRecord)
+
+    @objc(addFeatureAccess:)
+    @NSManaged public func addToFeatureAccess(_ values: NSSet)
+
+    @objc(removeFeatureAccess:)
+    @NSManaged public func removeFromFeatureAccess(_ values: NSSet)
+
+}
+
+// MARK: Generated accessors for upgradeEvents
+extension SleepSession {
+
+    @objc(addUpgradeEventsObject:)
+    @NSManaged public func addToUpgradeEvents(_ value: UpgradeEventRecord)
+
+    @objc(removeUpgradeEventsObject:)
+    @NSManaged public func removeFromUpgradeEvents(_ value: UpgradeEventRecord)
+
+    @objc(addUpgradeEvents:)
+    @NSManaged public func addToUpgradeEvents(_ values: NSSet)
+
+    @objc(removeUpgradeEvents:)
+    @NSManaged public func removeFromUpgradeEvents(_ values: NSSet)
 
 }
 

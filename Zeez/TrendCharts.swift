@@ -154,10 +154,3 @@ struct ScheduleConsistencyChart: View {
         return CGFloat(time / 24) * geometry.size.height
     }
 }
-
-extension Collection {
-    /// Safe array access that returns nil if index is out of bounds
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
-    }
-}

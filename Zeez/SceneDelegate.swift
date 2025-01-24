@@ -24,9 +24,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     
     func sceneDidBecomeActive(_ scene: UIScene) {
         backgroundTaskManager.checkBatteryAndStorage()
-        UIApplication.shared.applicationIconBadgeNumber = 0
+        UNUserNotificationCenter.current().setBadgeCount(0) { error in
+            if let error = error {
+                self.errorManager.reportError(error)
+            }
+        }
     }
-    
+
     func sceneWillResignActive(_ scene: UIScene) {
         saveCoreDataContext()
     }

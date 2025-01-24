@@ -2,7 +2,7 @@
 //  RespiratoryData+CoreDataProperties.swift
 //  Zeez
 //
-//  Created by Daniel on 1/12/25.
+//  Created by Daniel on 1/19/25.
 //
 //
 

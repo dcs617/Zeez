@@ -1,8 +1,6 @@
 import SwiftUI
 import CoreData
 
-/// Detailed analysis view for a single sleep session
-/// Displays comprehensive sleep metrics, quality scores, and environmental data
 struct SleepDetailView: View {
     @ObservedObject var session: SleepSession
     @Environment(\.managedObjectContext) private var viewContext
@@ -22,9 +20,7 @@ struct SleepDetailView: View {
                 
                 environmentalSection
                 
-                NavigationLink(destination: SleepStageView(session: session)) {
-                    sleepStagePreview
-                }
+                sleepStagesSection
                 
                 sleepMetricsSection
             }
@@ -36,8 +32,18 @@ struct SleepDetailView: View {
     
     private var sessionOverview: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Session Overview")
-                .font(.headline)
+            HStack {
+                Text("Session Overview")
+                    .font(.headline)
+                
+                Spacer()
+                
+                NavigationLink(destination: LearnCircadianRhythmView()) {
+                    Label("Learn More", systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+            }
             
             if let start = session.startTime,
                let end = session.endTime {
@@ -56,6 +62,16 @@ struct SleepDetailView: View {
                 }
                 
                 Text("Duration: \(DateHelper.hoursBetween(start: start, end: end), specifier: "%.1f") hours")
+                
+                NavigationLink(destination: LearnSleepDebtView()) {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundColor(.orange)
+                        Text("View Sleep Debt Analysis")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                }
             }
         }
         .padding()
@@ -87,8 +103,18 @@ struct SleepDetailView: View {
     
     private var environmentalSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Room Conditions")
-                .font(.headline)
+            HStack {
+                Text("Room Conditions")
+                    .font(.headline)
+                
+                Spacer()
+                
+                NavigationLink(destination: LearnEnvironmentalImpactView()) {
+                    Label("Learn More", systemImage: "info.circle")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+            }
             
             if let readings = session.environmentalReadings?.allObjects as? [EnvironmentalReading],
                !readings.isEmpty {
@@ -103,15 +129,31 @@ struct SleepDetailView: View {
         .cornerRadius(10)
     }
     
-    private var sleepStagePreview: some View {
+    private var sleepStagesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sleep Stages")
-                .font(.headline)
+            HStack {
+                Text("Sleep Stages")
+                    .font(.headline)
+                
+                Spacer()
+                
+                NavigationLink(destination: LearnSleepStageComparisonView()) {
+                    Label("Compare Stages", systemImage: "arrow.left.arrow.right")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
+            }
             
             if let stages = session.sleepStages?.allObjects as? [SleepStage],
                !stages.isEmpty {
                 SleepStagePreviewChart(stages: stages)
                     .frame(height: 100)
+                
+                NavigationLink(destination: SleepStageView(session: session)) {
+                    Text("View Detailed Analysis")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                }
             } else {
                 Text("No sleep stage data available")
                     .foregroundColor(.secondary)
@@ -139,6 +181,12 @@ struct SleepDetailView: View {
                     value: movementCount,
                     unit: "events"
                 )
+            }
+            
+            NavigationLink(destination: LearnBrainActivityVisualizer()) {
+                Label("View Brain Activity Analysis", systemImage: "brain.head.profile")
+                    .font(.caption)
+                    .foregroundColor(.blue)
             }
         }
         .padding()
@@ -185,8 +233,7 @@ struct SleepDetailView: View {
     
     private var movementCount: Int {
         guard let movementData = session.movementData?.allObjects as? [MovementData] else {
-            return 0
-        }
+            return 0 }
         return movementData.filter { $0.activityLevel >= 3 }.count
     }
 }

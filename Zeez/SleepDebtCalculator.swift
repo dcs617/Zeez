@@ -22,8 +22,8 @@ final class SleepDebtCalculator {
         request.sortDescriptors = [NSSortDescriptor(keyPath: \SleepSession.startTime, ascending: true)]
         
         let sessions = try context.fetch(request)
-        let preferences = try context.fetchUserPreferences()
-        
+        let preferences = context.fetchUserPreferences()
+
         guard let targetDuration = preferences?.targetSleepDuration,
               targetDuration > 0 else {
             throw SleepError.noSleepGoalSet
@@ -49,8 +49,8 @@ final class SleepDebtCalculator {
         return SleepDebtMetrics(
             weeklyDebt: weeklyDebt,
             monthlyDebt: monthlyDebt,
-            recoveryPlan: recoveryPlan,
-            debtTrend: calculateDebtTrend(sessions: sessions)
+            debtTrend: calculateDebtTrend(sessions: sessions),
+            recoveryPlan: recoveryPlan
         )
     }
     
@@ -120,21 +120,21 @@ final class SleepDebtCalculator {
         switch hoursPerNight {
         case ..<1:
             return RecoveryPlan(
-                severity: .mild,
                 recommendedAction: "Add 30 minutes to your nightly sleep",
-                timeToRecover: "1 week"
+                timeToRecover: "1 week",
+                severity: .mild
             )
         case 1..<2:
             return RecoveryPlan(
-                severity: .moderate,
                 recommendedAction: "Add 1 hour to your nightly sleep",
-                timeToRecover: "2 weeks"
+                timeToRecover: "2 weeks",
+                severity: .moderate
             )
         default:
             return RecoveryPlan(
-                severity: .severe,
                 recommendedAction: "Gradually increase sleep by 1-2 hours",
-                timeToRecover: "3-4 weeks"
+                timeToRecover: "3-4 weeks",
+                severity: .severe
             )
         }
     }
@@ -183,32 +183,4 @@ enum SleepError: LocalizedError {
             return "Not enough sleep data to calculate debt"
         }
     }
-}
-
-/// Metrics describing sleep debt status
-struct SleepDebtMetrics {
-    let weeklyDebt: TimeInterval
-    let monthlyDebt: TimeInterval
-    let recoveryPlan: RecoveryPlan
-    let debtTrend: DebtTrend
-}
-
-/// Plan for recovering from sleep debt
-struct RecoveryPlan {
-    enum Severity {
-        case mild
-        case moderate
-        case severe
-    }
-    
-    let severity: Severity
-    let recommendedAction: String
-    let timeToRecover: String
-}
-
-/// Trend of sleep debt over time
-enum DebtTrend {
-    case improving
-    case stable
-    case worsening
 }

@@ -7,16 +7,20 @@ import HealthKit
 /// HealthKit integration, and alarm preferences
 struct SettingsView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @FetchRequest(
+    @FetchRequest<UserPreferences>(
         sortDescriptors: [],
         animation: .default
-    ) private var preferences: FetchedResults<UserPreferences>
+    ) private var preferences
     
     @State private var showingHealthKitAlert = false
     @State private var healthKitError: Error?
     
+    private var preferencesArray: [UserPreferences] {
+        Array(preferences)
+    }
+    
     private var userPreferences: UserPreferences {
-        if let existing = preferences.first {
+        if let existing = preferencesArray.first {
             return existing
         }
         let new = UserPreferences(context: viewContext)
@@ -123,12 +127,9 @@ struct SettingsView: View {
     }
 }
 
-struct SettingsView_Previews: PreviewProvider {
-    static var previews: some View {
-        NavigationView {
-            SettingsView()
-                .environment(\.managedObjectContext,
-                            PersistenceController.preview.container.viewContext)
-        }
+#Preview {
+    NavigationView {
+        SettingsView()
+            .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }
 }

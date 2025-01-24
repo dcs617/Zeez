@@ -2,6 +2,7 @@ import SwiftUI
 import HealthKit
 import UserNotifications
 
+@MainActor
 final class OnboardingManager: ObservableObject {
     static let shared = OnboardingManager()
     
@@ -40,25 +41,30 @@ final class OnboardingManager: ObservableObject {
         
         do {
             try await healthStore.requestAuthorization(toShare: typesToShare, read: typesToRead)
-
-            healthKitAuthorized = true
+            await MainActor.run {
+                self.healthKitAuthorized = true
+            }
             return true
         } catch {
             ErrorManager.shared.reportError(error)
             return false
         }
     }
-    
+
     func requestNotificationPermissions() async -> Bool {
         let center = UNUserNotificationCenter.current()
         do {
             let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .authorized else {
                 let success = try await center.requestAuthorization(options: [.alert, .badge, .sound])
-                notificationsAuthorized = success
+                await MainActor.run {
+                    self.notificationsAuthorized = success
+                }
                 return success
             }
-            notificationsAuthorized = true
+            await MainActor.run {
+                self.notificationsAuthorized = true
+            }
             return true
         } catch {
             ErrorManager.shared.reportError(error)
@@ -71,10 +77,8 @@ final class OnboardingManager: ObservableObject {
             let center = UNUserNotificationCenter.current()
             let settings = await center.notificationSettings()
             
-            await MainActor.run {
-                notificationsAuthorized = settings.authorizationStatus == .authorized
-                healthKitAuthorized = HKHealthStore.isHealthDataAvailable()
-            }
+            self.notificationsAuthorized = settings.authorizationStatus == .authorized
+            self.healthKitAuthorized = HKHealthStore.isHealthDataAvailable()
         }
     }
     

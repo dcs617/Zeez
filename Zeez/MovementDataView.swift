@@ -1,116 +1,65 @@
 import SwiftUI
-import CoreData
 
-/// View for displaying movement and restlessness data during sleep
 struct MovementDataView: View {
-    @ObservedObject var session: SleepSession
-    
-    private var readings: [MovementData] {
-        (session.movementData?.allObjects as? [MovementData] ?? [])
-            .sorted { ($0.timestamp ?? Date()) < ($1.timestamp ?? Date()) }
-    }
+    let session: SleepSession
     
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                if readings.isEmpty {
-                    emptyStateView
-                } else {
-                    activityOverview
-                    movementChart
-                    restlessPeriods
-                }
+                movementChart
+                
+                movementStats
             }
             .padding()
         }
-        .navigationTitle("Movement")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-    
-    private var emptyStateView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "figure.walk")
-                .font(.system(size: 40))
-                .foregroundColor(.purple)
-            
-            Text("No Movement Data")
-                .font(.headline)
-            
-            Text("Movement tracking was not active during this session")
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
-    }
-    
-    private var activityOverview: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Activity Overview")
-                .font(.headline)
-            
-            let stats = calculateActivityStats()
-            LazyVGrid(columns: [.init(), .init()], spacing: 20) {
-                StatTile(
-                    title: "Restless Periods",
-                    value: "\(stats.restlessPeriods)",
-                    icon: "waveform.path"
-                )
-                
-                StatTile(
-                    title: "Calm Periods",
-                    value: "\(stats.calmPeriods)",
-                    icon: "moon.zzz"
-                )
-                
-                StatTile(
-                    title: "Average Activity",
-                    value: String(format: "%.1f", stats.averageActivity),
-                    icon: "chart.bar"
-                )
-                
-                StatTile(
-                    title: "Peak Activity",
-                    value: String(format: "%.1f", stats.peakActivity),
-                    icon: "arrow.up.right"
-                )
-            }
-        }
-        .padding()
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(10)
     }
     
     private var movementChart: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Movement Intensity")
+            Text("Movement")
                 .font(.headline)
             
-            TrendChart(
-                data: readings.map { ($0.timestamp ?? Date(), Double($0.activityLevel)) },
-                valueLabel: "Level",
-                color: .purple
-            )
-            .frame(height: 200)
+            // Chart placeholder
+            Rectangle()
+                .fill(Color.gray.opacity(0.1))
+                .frame(height: 200)
+                .overlay(
+                    Text("Movement Chart")
+                        .foregroundColor(.gray)
+                )
         }
         .padding()
         .background(Color(UIColor.secondarySystemBackground))
         .cornerRadius(10)
     }
     
-    private var restlessPeriods: some View {
+    private var movementStats: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Restless Periods")
+            Text("Statistics")
                 .font(.headline)
             
-            let periods = identifyRestlessPeriods()
-            if periods.isEmpty {
-                Text("No significant restless periods detected")
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(periods, id: \.start) { period in
-                    RestlessPeriodRow(period: period)
-                }
+            let stats = calculateStats()
+            LazyVGrid(columns: [.init(), .init()], spacing: 20) {
+                MovementStatTile(
+                    title: "Activity Level",
+                    value: String(format: "%.1f", stats.averageActivity),
+                    icon: "figure.walk"
+                )
+                MovementStatTile(
+                    title: "Movement Score",
+                    value: "\(Int(stats.score))",
+                    icon: "waveform.path"
+                )
+                MovementStatTile(
+                    title: "Restlessness",
+                    value: "\(stats.restlessEpisodes)",
+                    icon: "bed.double"
+                )
+                MovementStatTile(
+                    title: "Peak Activity",
+                    value: String(format: "%.1f", stats.peakActivity),
+                    icon: "chart.bar.fill"
+                )
             }
         }
         .padding()
@@ -118,54 +67,30 @@ struct MovementDataView: View {
         .cornerRadius(10)
     }
     
-    private func calculateActivityStats() -> (
-        restlessPeriods: Int,
-        calmPeriods: Int,
-        averageActivity: Double,
-        peakActivity: Double
-    ) {
-        let restlessThreshold: Int16 = 3
-        let restless = readings.filter { $0.activityLevel >= restlessThreshold }.count
-        let calm = readings.count - restless
-        
-        let avgActivity = Double(readings.reduce(0) { $0 + Int($1.activityLevel) }) /
-                         Double(max(1, readings.count))
-        let peakActivity = Double(readings.max(by: { $0.activityLevel < $1.activityLevel })?.activityLevel ?? 0)
-        
-        return (restlessPeriods: restless,
-                calmPeriods: calm,
-                averageActivity: avgActivity,
-                peakActivity: peakActivity)
-    }
-    
-    private func identifyRestlessPeriods() -> [(start: Date, end: Date, intensity: Double)] {
-        var periods: [(start: Date, end: Date, intensity: Double)] = []
-        var currentPeriodStart: Date?
-        var currentIntensity: Double = 0
-        let restlessThreshold: Int16 = 3
-        
-        for reading in readings {
-            guard let timestamp = reading.timestamp else { continue }
-            
-            if reading.activityLevel >= restlessThreshold {
-                if currentPeriodStart == nil {
-                    currentPeriodStart = timestamp
-                }
-                currentIntensity = max(currentIntensity, Double(reading.activityLevel))
-            } else if let start = currentPeriodStart {
-                periods.append((start: start,
-                              end: timestamp,
-                              intensity: currentIntensity))
-                currentPeriodStart = nil
-                currentIntensity = 0
-            }
+    private func calculateStats() -> (averageActivity: Double, score: Double, restlessEpisodes: Int, peakActivity: Double) {
+        guard let movementData = session.movementData?.allObjects as? [MovementData],
+              !movementData.isEmpty else {
+            return (0, 0, 0, 0)
         }
         
-        return periods
+        let activities = movementData.map { Int($0.activityLevel) }
+        let magnitudes = movementData.map { $0.magnitude }
+        
+        let avgActivity = Double(activities.reduce(0, +)) / Double(activities.count)
+        let peakActivity = magnitudes.max() ?? 0
+        
+        // Count episodes where activity level is high
+        let restlessThreshold = 3
+        let restlessEpisodes = activities.filter { $0 >= restlessThreshold }.count
+        
+        // Calculate overall score (lower activity is better for sleep)
+        let score = 100 - min(100, (avgActivity * 20))
+        
+        return (avgActivity, score, restlessEpisodes, peakActivity)
     }
 }
 
-private struct StatTile: View {
+private struct MovementStatTile: View {
     let title: String
     let value: String
     let icon: String
@@ -191,27 +116,10 @@ private struct StatTile: View {
     }
 }
 
-private struct RestlessPeriodRow: View {
-    let period: (start: Date, end: Date, intensity: Double)
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text(FormatterUtils.timeFormatter.string(from: period.start))
-                    .font(.headline)
-                Text("Duration: \(FormatterUtils.formattedDuration(start: period.start, end: period.end))")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-            
-            Text("Level \(Int(period.intensity))")
-                .font(.subheadline)
-                .padding(6)
-                .background(Color.purple.opacity(0.2))
-                .cornerRadius(6)
+struct MovementDataView_Previews: PreviewProvider {
+    static var previews: some View {
+        if let session = try? PersistenceController.preview.container.viewContext.fetch(SleepSession.fetchRequest()).first {
+            MovementDataView(session: session)
         }
-        .padding(.vertical, 8)
     }
 }

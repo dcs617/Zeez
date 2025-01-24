@@ -10,8 +10,8 @@ struct MainView: View {
         case rise
         case dream
         case dashboard
-        case stats
-        case trends
+        case learn
+        case insights
     }
     
     var body: some View {
@@ -49,46 +49,65 @@ struct MainView: View {
                 .tag(Tab.dashboard)
                 
                 NavigationView {
-                    StatsView()
+                    LearnView()
                         .navigationBarHidden(true)
                 }
                 .tabItem {
-                    Label("Stats", systemImage: "chart.bar")
+                    Label("Learn", systemImage: "book.fill")
                         .environment(\.symbolVariants, .none)
                 }
-                .tag(Tab.stats)
+                .tag(Tab.learn)
                 
                 NavigationView {
                     TrendsView()
                         .navigationBarHidden(true)
                 }
                 .tabItem {
-                    Label("Trends", systemImage: "chart.line.uptrend.xyaxis")
+                    Label("Insights", systemImage: "chart.line.uptrend.xyaxis")
                         .environment(\.symbolVariants, .none)
                 }
-                .tag(Tab.trends)
+                .tag(Tab.insights)
             }
             .accentColor(.purple) // Ensures consistent tab selection color
             .onAppear {
-                // Configure tab bar appearance
-                let appearance = UITabBarAppearance()
-                appearance.configureWithTransparentBackground()
-                
-                // Keep icons small and use consistent colors
-                appearance.stackedLayoutAppearance.normal.iconColor = .systemGray
-                appearance.stackedLayoutAppearance.selected.iconColor = .systemPurple
-                
-                // Set font sizes for tab labels
-                appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
-                    .font: UIFont.systemFont(ofSize: 10)
-                ]
-                appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
-                    .font: UIFont.systemFont(ofSize: 10)
-                ]
-                
-                // Apply appearance settings
-                UITabBar.appearance().standardAppearance = appearance
-                UITabBar.appearance().scrollEdgeAppearance = appearance
+                configureAppearance()
+            }
+        }
+    }
+    
+    private func configureAppearance() {
+        // Configure tab bar appearance
+        let tabBarAppearance = UITabBarAppearance()
+        tabBarAppearance.configureWithDefaultBackground()
+        
+        // Keep icons small and use consistent colors
+        tabBarAppearance.stackedLayoutAppearance.normal.iconColor = .systemGray
+        tabBarAppearance.stackedLayoutAppearance.selected.iconColor = .systemPurple
+        
+        // Set font sizes for tab labels
+        tabBarAppearance.stackedLayoutAppearance.normal.titleTextAttributes = [
+            .font: UIFont.systemFont(ofSize: 10)
+        ]
+        tabBarAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [
+            .font: UIFont.systemFont(ofSize: 10)
+        ]
+        
+        // Apply tab bar appearance settings
+        UITabBar.appearance().standardAppearance = tabBarAppearance
+        UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
+        
+        // Configure navigation bar and status bar appearance
+        let navBarAppearance = UINavigationBarAppearance()
+        navBarAppearance.configureWithOpaqueBackground()
+        
+        // Apply navigation bar appearance settings
+        UINavigationBar.appearance().standardAppearance = navBarAppearance
+        UINavigationBar.appearance().scrollEdgeAppearance = navBarAppearance
+        
+        // Configure scroll edge appearance for status bar
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            windowScene.windows.forEach { window in
+                window.backgroundColor = .systemBackground
             }
         }
     }
