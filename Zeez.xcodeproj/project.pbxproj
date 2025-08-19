@@ -60,6 +60,16 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		653B1D852D44C04800B2CAE4 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -71,9 +81,22 @@
 		653B1A9B2D3630C500B2CAE4 /* ZeezWatch Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ZeezWatch Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		65CA4BC82D61BCFD00A78979 /* Exceptions for "Zeez" folder in "Zeez" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 653B18DD2D3315EA00B2CAE4 /* Zeez */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		653B18E02D3315EA00B2CAE4 /* Zeez */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				65CA4BC82D61BCFD00A78979 /* Exceptions for "Zeez" folder in "Zeez" target */,
+			);
 			path = Zeez;
 			sourceTree = "<group>";
 		};
@@ -187,6 +210,7 @@
 				653B18DB2D3315EA00B2CAE4 /* Frameworks */,
 				653B18DC2D3315EA00B2CAE4 /* Resources */,
 				653B1AA92D3630C500B2CAE4 /* Embed Watch Content */,
+				653B1D852D44C04800B2CAE4 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
@@ -631,7 +655,10 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Zeez/Preview Content\"";
 				DEVELOPMENT_TEAM = QQH4V4JLV5;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Zeez/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Zeez needs permission to read your sleep data to provide accurate sleep analysis and recommendations";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Zeez needs permission to save your sleep data to provide accurate sleep tracking and analysis";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -644,7 +671,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = placeholder.Zeez;
+				PRODUCT_BUNDLE_IDENTIFIER = com.danielsparano.zeez;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -665,7 +692,10 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Zeez/Preview Content\"";
 				DEVELOPMENT_TEAM = QQH4V4JLV5;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Zeez/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Zeez needs permission to read your sleep data to provide accurate sleep analysis and recommendations";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Zeez needs permission to save your sleep data to provide accurate sleep tracking and analysis";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -678,7 +708,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = placeholder.Zeez;
+				PRODUCT_BUNDLE_IDENTIFIER = com.danielsparano.zeez;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -772,14 +802,17 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ZeezWatch;
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = placeholder.Zeez;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.danielsparano.zeez;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = placeholder.Zeez.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.danielsparano.zeez.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -803,14 +836,17 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = ZeezWatch;
+				INFOPLIST_KEY_NSHealthClinicalHealthRecordsShareUsageDescription = "";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = placeholder.Zeez;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.danielsparano.zeez;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = placeholder.Zeez.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.danielsparano.zeez.watchapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;

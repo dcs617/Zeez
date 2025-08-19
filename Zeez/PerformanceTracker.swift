@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import os.log
 
 /// Tracks app performance metrics
 class PerformanceTracker {

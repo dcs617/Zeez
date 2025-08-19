@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 enum DataSource: String {
     case healthKit = "HealthKit"

@@ -26,6 +26,12 @@ extension SleepQualityScore {
     @NSManaged public var respiratoryScore: Double
     @NSManaged public var calculationVersion: String?
     @NSManaged public var session: SleepSession?
+    
+    // Personalization fields (v3.0+)
+    @NSManaged public var confidenceScore: Double
+    @NSManaged public var personalizationLevel: String?
+    @NSManaged public var isPersonalized: Bool
+    @NSManaged public var personalizedComponents: String? // JSON of which components used personalization
 
 }
 

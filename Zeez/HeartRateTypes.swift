@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 enum HeartRateTimeRange: String, CaseIterable, Identifiable {
     case hour = "1h"
@@ -25,14 +26,14 @@ struct HeartRateDataPoint: Identifiable {
 
 struct DetailedHeartRateStats {
     let average: Int
-    let averageTrend: TrendDirection
+    let averageTrend: HeartRateTrendDirection
     let resting: Int
-    let restingTrend: TrendDirection
+    let restingTrend: HeartRateTrendDirection
     let minimum: Int
     let maximum: Int
 }
 
-enum TrendDirection {
+enum HeartRateTrendDirection {
     case up, down, neutral
     
     var icon: String {

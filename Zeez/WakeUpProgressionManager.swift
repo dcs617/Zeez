@@ -1,6 +1,7 @@
 import Foundation
 import CoreData
 import WatchConnectivity
+import os.log
 
 /// Manages the progressive wake-up sequence including haptic patterns and backup alarms
 class WakeUpProgressionManager {
@@ -61,7 +62,7 @@ class WakeUpProgressionManager {
                     "command": "stopWakeSequence"
                 ])
             } catch {
-                print("Error stopping wake sequence on watch: \(error)")
+                ZeezLogger.error(ZeezLogger.alarm, "Error stopping wake sequence on watch", error: error)
             }
         }
     }
@@ -84,6 +85,8 @@ class WakeUpProgressionManager {
         
         // Schedule new wake sequence after snooze duration
         let snoozeTime = Date().addingTimeInterval(Double(alarm.snoozeDuration) * 60)
+        ZeezLogger.alarm.info("Alarm snoozed for \(alarm.snoozeDuration) minutes. Will resume at \(snoozeTime.formatted())")
+        
         Timer.scheduledTimer(withTimeInterval: Double(alarm.snoozeDuration) * 60, repeats: false) { [weak self] _ in
             guard let self = self,
                   let alarm = sequence.alarm,
@@ -117,7 +120,7 @@ class WakeUpProgressionManager {
                 "duration": sequence.progressionDuration
             ])
         } catch {
-            print("Error starting wake sequence on watch: \(error)")
+            ZeezLogger.error(ZeezLogger.alarm, "Error starting wake sequence on watch", error: error)
         }
         
         // Schedule intensity increases
@@ -144,7 +147,7 @@ class WakeUpProgressionManager {
                         "pattern": sequence.currentPattern.rawValue
                     ])
                 } catch {
-                    print("Error updating intensity on watch: \(error)")
+                    ZeezLogger.error(ZeezLogger.alarm, "Error updating intensity on watch", error: error)
                 }
             }
         }
@@ -168,7 +171,7 @@ class WakeUpProgressionManager {
                         "command": "triggerBackupAlarm"
                     ])
                 } catch {
-                    print("Error triggering backup alarm on watch: \(error)")
+                    ZeezLogger.error(ZeezLogger.alarm, "Error triggering backup alarm on watch", error: error)
                 }
             }
         }

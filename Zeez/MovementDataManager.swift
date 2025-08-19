@@ -1,6 +1,7 @@
 import CoreData
 import CoreMotion
 import UIKit
+import os.log
 
 final class MovementDataManager {
     static let shared = MovementDataManager()

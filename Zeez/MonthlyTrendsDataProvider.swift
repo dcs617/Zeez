@@ -1,5 +1,6 @@
 import CoreData
 import SwiftUI
+import os.log
 
 /// Provides aggregated monthly sleep data for trend analysis
 class MonthlyTrendsDataProvider {
@@ -97,7 +98,7 @@ class MonthlyTrendsDataProvider {
     }
     
     private func calculateSleepDebt(_ months: [MonthlyMetrics]) -> TimeInterval {
-        let targetSleep: TimeInterval = 8 * 3600 // 8 hours in seconds
+        let targetSleep: TimeInterval = AppConstants.Sleep.targetDuration // 8 hours in seconds
         let recentMonths = Array(months.suffix(3)) // Last 3 months
         
         return recentMonths.reduce(0) { total, metrics in
@@ -125,8 +126,11 @@ class MonthlyTrendsDataProvider {
         // Analyze trends
         if data.count >= 2 {
             let recent = data.suffix(2)
-            let current = recent.last!
-            let previous = recent.first!
+            guard let current = recent.last,
+                  let previous = recent.first else {
+                ZeezLogger.error(ZeezLogger.ui, "Failed to get trend comparison data")
+                return insights
+            }
             
             // Quality trends
             if current.metrics.averageQuality > previous.metrics.averageQuality + 5 {

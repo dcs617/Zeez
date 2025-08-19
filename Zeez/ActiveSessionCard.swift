@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct ActiveSessionCard: View {
     let session: SleepSession

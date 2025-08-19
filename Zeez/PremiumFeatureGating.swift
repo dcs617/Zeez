@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 /// View modifier to gate premium features
 struct PremiumGate: ViewModifier {

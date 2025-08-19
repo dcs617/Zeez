@@ -1,10 +1,11 @@
 import SwiftUI
 import Charts
+import os.log
 
 struct HeartRateStatCard: View {
     let title: String
     let value: Int
-    var trend: TrendDirection?
+    var trend: HeartRateTrendDirection?
     let color: Color
     
     var body: some View {

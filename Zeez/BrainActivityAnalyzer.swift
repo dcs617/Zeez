@@ -1,5 +1,6 @@
 import CoreData
 import Foundation
+import os.log
 
 class BrainActivityAnalyzer {
     static let shared = BrainActivityAnalyzer()

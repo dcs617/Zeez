@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct TimeRangeButton: View {
     let title: String

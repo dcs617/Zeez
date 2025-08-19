@@ -1,5 +1,6 @@
 import CoreData
 import Foundation
+import os.log
 
 class MovementAnalyzer {
     static let shared = MovementAnalyzer()
@@ -62,7 +63,7 @@ class MovementAnalyzer {
         
         // Calculate weighted score based on position distribution
         let score = distribution.reduce(into: 0.0) { acc, item in
-            acc + (Double(item.key.impactScore) * item.value)
+            acc += (Double(item.key.impactScore) * item.value)
         }
         
         return Int(round(score))

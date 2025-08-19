@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// Shared formatters for consistent date and time display across the app
 enum FormatterUtils {

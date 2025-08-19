@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import os.log
 
 struct TrendInsightsSection: View {
     let insights: [MonthlyInsight]

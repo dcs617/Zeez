@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import os.log
 
 /// Manages analytics tracking throughout the app
 class AnalyticsManager {
@@ -73,11 +74,14 @@ class AnalyticsManager {
                 event.session = activeSession
             }
             
-            try? self.backgroundContext.save()
+            do {
+                try self.backgroundContext.save()
+            } catch {
+                ZeezLogger.debug(ZeezLogger.analytics, "Failed to save analytics event: \(error.localizedDescription)")
+                // Note: Analytics failures shouldn't crash the app
+            }
             
-            #if DEBUG
-            print("Analytics Event:", category, name, parameters)
-            #endif
+            ZeezLogger.debug(ZeezLogger.analytics, "Analytics Event: \(category) - \(name) - \(parameters)")
         }
     }
 }

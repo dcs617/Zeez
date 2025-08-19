@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import os.log
 
 /// Tracks and analyzes app errors
 class ErrorTracker {
@@ -44,10 +45,7 @@ class ErrorTracker {
         analytics.trackError(appError, context: context)
         
         // Log error for debugging
-        #if DEBUG
-        print("Error tracked:", appError.localizedDescription)
-        print("Context:", errorContext)
-        #endif
+        ZeezLogger.debug(ZeezLogger.error, "Error tracked: \(appError.localizedDescription), Context: \(errorContext)")
         
         // Check error thresholds
         checkErrorThresholds(for: appError.code)
@@ -59,33 +57,41 @@ class ErrorTracker {
         let endDate = Date()
         let startDate = endDate.addingTimeInterval(-timeWindow)
         
-        // Fetch error events from CoreData
-        let request = AnalyticsEvent.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "category == %@ AND timestamp >= %@ AND timestamp <= %@",
-            EventCategory.error.rawValue,
-            startDate as NSDate,
-            endDate as NSDate
-        )
+        var errorCount = 0
         
-        let errorCount = (try? context.count(for: request)) ?? 0
+        context.performAndWait {
+            // Fetch error events from CoreData
+            let request = AnalyticsEvent.fetchRequest()
+            request.predicate = NSPredicate(
+                format: "category == %@ AND timestamp >= %@ AND timestamp <= %@",
+                EventCategory.error.rawValue,
+                startDate as NSDate,
+                endDate as NSDate
+            )
+            
+            errorCount = (try? context.count(for: request)) ?? 0
+        }
+        
         return Double(errorCount) / (timeWindow / 3600.0) // errors per hour
     }
     
     func mostFrequentErrors(limit: Int = 5) -> [(error: String, count: Int)] {
-        let request = AnalyticsEvent.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "category == %@",
-            EventCategory.error.rawValue
-        )
-        
-        guard let events = try? context.fetch(request) else { return [] }
-        
-        // Group errors by code and count occurrences
         var errorCounts: [String: Int] = [:]
-        for event in events {
-            guard let name = event.name else { continue }
-            errorCounts[name, default: 0] += 1
+        
+        context.performAndWait {
+            let request = AnalyticsEvent.fetchRequest()
+            request.predicate = NSPredicate(
+                format: "category == %@",
+                EventCategory.error.rawValue
+            )
+            
+            guard let events = try? context.fetch(request) else { return }
+            
+            // Group errors by code and count occurrences
+            for event in events {
+                guard let name = event.name else { continue }
+                errorCounts[name, default: 0] += 1
+            }
         }
         
         // Sort by frequency
@@ -111,11 +117,7 @@ class ErrorTracker {
     
     private func notifyHighErrorRate(code: String, rate: Double) {
         // In a real app, this would send notifications to developers
-        #if DEBUG
-        print("⚠️ High error rate detected!")
-        print("Error code:", code)
-        print("Rate:", String(format: "%.1f errors/hour", rate))
-        #endif
+        ZeezLogger.error(ZeezLogger.error, "High error rate detected - Code: \(code), Rate: \(String(format: "%.1f errors/hour", rate))")
     }
 }
 

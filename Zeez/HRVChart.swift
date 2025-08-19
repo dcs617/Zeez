@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import os.log
 
 struct HRVChart: View {
     let data: [HRVDataPoint]

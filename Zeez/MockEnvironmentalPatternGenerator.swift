@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// Helper struct for generating realistic environmental patterns for mock data
 struct MockEnvironmentalPatternGenerator {

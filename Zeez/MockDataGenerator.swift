@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import os.log
 
 class MockDataGenerator {
     static let shared = MockDataGenerator()
@@ -35,7 +36,7 @@ class MockDataGenerator {
                 do {
                     try context.save()
                 } catch {
-                    print("Error saving session: \(error)")
+                    ZeezLogger.error(ZeezLogger.mockData, "Error saving session", error: error)
                 }
             }
         }
@@ -51,9 +52,9 @@ class MockDataGenerator {
             let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             request.predicate = NSPredicate(format: "qualityScore > 0")
             let count = try context.count(for: request)
-            print("Successfully saved \(count) sessions with quality scores")
+            ZeezLogger.info(ZeezLogger.mockData, "Successfully saved \(count) sessions with quality scores")
         } catch {
-            print("Error in final save of mock data: \(error)")
+            ZeezLogger.error(ZeezLogger.mockData, "Error in final save of mock data", error: error)
         }
     }
     
@@ -74,14 +75,14 @@ class MockDataGenerator {
                     NSManagedObjectContext.mergeChanges(fromRemoteContextSave: changes, into: [context])
                 }
             } catch {
-                print("Error clearing \(entityName) data: \(error)")
+                ZeezLogger.error(ZeezLogger.mockData, "Error clearing \(entityName) data", error: error)
             }
         }
         
         do {
             try context.save()
         } catch {
-            print("Error saving after clearing mock data: \(error)")
+            ZeezLogger.error(ZeezLogger.mockData, "Error saving after clearing mock data", error: error)
         }
     }
 
@@ -109,7 +110,12 @@ class MockDataGenerator {
         
         // Calculate end time (next morning)
         var endComponents = startComponents
-        endComponents.day! += 1  // Next day
+        guard let currentDay = endComponents.day else {
+            ZeezLogger.error(ZeezLogger.mockData, "Could not get day component for mock data generation")
+            context.delete(session)
+            return nil
+        }
+        endComponents.day = currentDay + 1  // Next day
         let actualWakeTime = preferredWakeTime + Double.random(in: -0.25...0.25)
         endComponents.hour = Int(actualWakeTime)
         endComponents.minute = Int((actualWakeTime.truncatingRemainder(dividingBy: 1)) * 60)
@@ -141,7 +147,7 @@ class MockDataGenerator {
         do {
             try context.save()
         } catch {
-            print("Error saving individual session: \(error)")
+            ZeezLogger.error(ZeezLogger.mockData, "Error saving individual session", error: error)
             context.delete(session)
             return nil
         }
@@ -184,7 +190,7 @@ class MockDataGenerator {
             totalScore += MockEnvironmentalPatternGenerator.calculateScore(reading: reading)
             readingCount += 1
             
-            currentTime = currentTime.addingTimeInterval(900) // 15 minutes
+            currentTime = currentTime.addingTimeInterval(AppConstants.MockData.sleepStageInterval) // 15 minutes
         }
         
         session.environmentalScore = totalScore / Double(max(1, readingCount))
@@ -205,7 +211,7 @@ class MockDataGenerator {
                 heartRate.samplingRate = 1.0
                 heartRate.session = session
                 
-                currentTime = currentTime.addingTimeInterval(300) // 5 minutes
+                currentTime = currentTime.addingTimeInterval(AppConstants.MockData.heartRateInterval) // 5 minutes
             }
         }
     }
@@ -231,7 +237,7 @@ class MockDataGenerator {
                 movement.deviceType = "Apple Watch"
                 movement.session = session
                 
-                currentTime = currentTime.addingTimeInterval(60) // 1 minute
+                currentTime = currentTime.addingTimeInterval(AppConstants.MockData.movementInterval) // 1 minute
             }
         }
     }
@@ -248,10 +254,10 @@ class MockDataGenerator {
                 respiratory.respiratoryRate = Double.random(in: respiratoryRange)
                 respiratory.confidence = Double.random(in: 0.8...1.0)
                 respiratory.deviceType = "Apple Watch"
-                respiratory.oxygenSaturation = Double.random(in: 95...100)
+                respiratory.oxygenSaturation = Double.random(in: AppConstants.HealthMetrics.Respiratory.minimumOxygenSaturation...AppConstants.HealthMetrics.Respiratory.maximumOxygenSaturation)
                 respiratory.session = session
                 
-                currentTime = currentTime.addingTimeInterval(300) // 5 minutes
+                currentTime = currentTime.addingTimeInterval(AppConstants.MockData.environmentalInterval) // 5 minutes
             }
         }
     }
@@ -268,7 +274,7 @@ class MockDataGenerator {
             metrics.totalSleepTime = endTime.timeIntervalSince(startTime)
             
             // Calculate sleep debt based on 8-hour target
-            let targetSleep: TimeInterval = 8 * 3600
+            let targetSleep: TimeInterval = AppConstants.Sleep.targetDuration
             metrics.sleepDebt = targetSleep - metrics.totalSleepTime
         }
         
@@ -322,7 +328,7 @@ extension MockDataGenerator {
         do {
             try context.save()
         } catch {
-            print("Error saving preview data: \(error)")
+            ZeezLogger.error(ZeezLogger.mockData, "Error saving preview data", error: error)
         }
     }
 }

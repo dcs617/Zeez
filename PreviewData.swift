@@ -23,9 +23,31 @@ extension SleepSession {
         if let session = try? context.fetch(fetchRequest).first {
             return session
         } else {
-            MockDataGenerator(context: context).generateMockData(for: 1)
-            return try! context.fetch(fetchRequest).first!
+            MockDataGenerator(context: context).generateMockData(for: AppConstants.MockData.previewGenerationDays)
+            // Safely fetch the generated session with fallback
+            if let session = try? context.fetch(fetchRequest).first {
+                return session
+            } else {
+                // Create a minimal fallback session if generation failed
+                return createFallbackSession(in: context)
+            }
         }
+    }
+    
+    private static func createFallbackSession(in context: NSManagedObjectContext) -> SleepSession {
+        let session = SleepSession(context: context)
+        session.id = UUID()
+        session.startTime = Date().addingTimeInterval(-AppConstants.Sleep.targetDuration) // 8 hours ago
+        session.endTime = Date()
+        session.isActive = false
+        session.totalSleepTime = AppConstants.Sleep.targetDuration // 8 hours
+        session.sleepEfficiency = 85.0
+        session.qualityScore = 75.0
+        
+        // Save the fallback session
+        try? context.save()
+        
+        return session
     }
 }
 
@@ -44,7 +66,7 @@ extension SleepStage {
             let stage = SleepStage(context: context)
             stage.id = UUID()
             stage.startTime = Date()
-            stage.endTime = Date().addingTimeInterval(5400)
+            stage.endTime = Date().addingTimeInterval(5400) // 1.5 hours from now
             stage.type = "deep"
             stage.session = session
             try? context.save()

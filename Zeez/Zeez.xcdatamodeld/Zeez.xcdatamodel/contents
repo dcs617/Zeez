@@ -346,6 +346,7 @@
     </entity>
     <entity name="SleepQualityScore" representedClassName="SleepQualityScore" syncable="YES">
         <attribute name="calculationVersion" optional="YES" attributeType="String"/>
+        <attribute name="confidenceScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="environmentalScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="heartRateScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
@@ -353,8 +354,11 @@
                 <entry key="indexed" value="YES"/>
             </userInfo>
         </attribute>
+        <attribute name="isPersonalized" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="movementScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="overallScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="personalizedComponents" optional="YES" attributeType="String"/>
+        <attribute name="personalizationLevel" optional="YES" attributeType="String"/>
         <attribute name="respiratoryScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="sleepCycleScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
@@ -374,6 +378,8 @@
         <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="qualityScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="startTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="completedCycles" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="cycleConsistency" optional="YES" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="userFeedback" optional="YES" attributeType="Integer 16" minValueString="1" maxValueString="5" usesScalarValueType="NO"/>
         <relationship name="analyticsEvents" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AnalyticsEvent" inverseName="session" inverseEntity="AnalyticsEvent"/>
         <relationship name="dailyMetrics" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DailyMetrics" inverseName="sessions" inverseEntity="DailyMetrics"/>

@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 /// Displays average environmental readings for a sleep session
 struct AverageEnvironmentalReadingView: View {

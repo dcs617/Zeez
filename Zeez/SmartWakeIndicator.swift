@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 /// Visual indicator for smart wake window
 struct SmartWakeIndicator: View {

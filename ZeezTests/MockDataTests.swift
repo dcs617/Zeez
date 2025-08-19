@@ -18,7 +18,7 @@ final class MockDataTests: XCTestCase {
     
     func testMockDataGeneration() throws {
         // Generate 7 days of mock data
-        MockDataGenerator(context: context).generateMockData(for: 7)
+        MockDataGenerator(context: context).generateMockData(for: AppConstants.MockData.testGenerationDays)
         
         // Test SleepSessions
         let sessionRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
@@ -47,7 +47,7 @@ final class MockDataTests: XCTestCase {
     }
     
     func testDataRangesAreRealistic() throws {
-        MockDataGenerator(context: context).generateMockData(for: 1)
+        MockDataGenerator(context: context).generateMockData(for: AppConstants.MockData.previewGenerationDays)
         
         let sessionRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
         guard let session = try context.fetch(sessionRequest).first else {
@@ -56,25 +56,31 @@ final class MockDataTests: XCTestCase {
         }
         
         // Test sleep duration is realistic (between 4 and 12 hours)
-        let duration = session.endTime!.timeIntervalSince(session.startTime!)
-        XCTAssertGreaterThan(duration, 4 * 3600) // More than 4 hours
-        XCTAssertLessThan(duration, 12 * 3600)   // Less than 12 hours
+        guard let startTime = session.startTime,
+              let endTime = session.endTime else {
+            XCTFail("Session should have start and end times")
+            return
+        }
+        
+        let duration = endTime.timeIntervalSince(startTime)
+        XCTAssertGreaterThan(duration, AppConstants.Sleep.minimumDuration) // More than 4 hours
+        XCTAssertLessThan(duration, AppConstants.Sleep.maximumDuration)   // Less than 12 hours
         
         // Test heart rate ranges
         if let heartRateData = session.heartRateData?.allObjects as? [HeartRateData] {
             for data in heartRateData {
-                XCTAssertGreaterThanOrEqual(data.value, 45)  // Min heart rate
-                XCTAssertLessThanOrEqual(data.value, 75)     // Max heart rate
+                XCTAssertGreaterThanOrEqual(data.value, AppConstants.HealthMetrics.HeartRate.minimumSleep)  // Min heart rate
+                XCTAssertLessThanOrEqual(data.value, AppConstants.HealthMetrics.HeartRate.maximumSleep)     // Max heart rate
             }
         }
         
         // Test environmental readings
         if let readings = session.environmentalReadings?.allObjects as? [EnvironmentalReading] {
             for reading in readings {
-                XCTAssertGreaterThanOrEqual(reading.temperature, 18)  // Min temp
-                XCTAssertLessThanOrEqual(reading.temperature, 24)     // Max temp
-                XCTAssertGreaterThanOrEqual(reading.noiseLevel, 20)   // Min noise
-                XCTAssertLessThanOrEqual(reading.noiseLevel, 50)      // Max noise
+                XCTAssertGreaterThanOrEqual(reading.temperature, AppConstants.HealthMetrics.Environmental.minimumTemperature)  // Min temp
+                XCTAssertLessThanOrEqual(reading.temperature, AppConstants.HealthMetrics.Environmental.maximumTemperature)     // Max temp
+                XCTAssertGreaterThanOrEqual(reading.noiseLevel, AppConstants.HealthMetrics.Environmental.minimumNoiseLevel)   // Min noise
+                XCTAssertLessThanOrEqual(reading.noiseLevel, AppConstants.HealthMetrics.Environmental.maximumNoiseLevel)      // Max noise
             }
         }
     }

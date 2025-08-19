@@ -1,5 +1,6 @@
 import CoreData
 import Foundation
+import os.log
 
 /// Handles enhanced environmental scoring with historical context
 class EnhancedEnvironmentalScoring {
@@ -142,9 +143,11 @@ class EnhancedEnvironmentalScoring {
     ) async throws -> Double {
         // Get recent sessions
         let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+        guard let startTime = session.startTime else { return 0.0 }
+        
         request.predicate = NSPredicate(
             format: "endTime < %@ AND qualityScore > 0",
-            session.startTime! as CVarArg
+            startTime as CVarArg
         )
         request.sortDescriptors = [
             NSSortDescriptor(keyPath: \SleepSession.endTime, ascending: false)

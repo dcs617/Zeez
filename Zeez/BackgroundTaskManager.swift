@@ -1,6 +1,7 @@
 import BackgroundTasks
 import CoreData
 import UIKit
+import os.log
 
 final class BackgroundTaskManager {
     static let shared = BackgroundTaskManager()
@@ -8,33 +9,62 @@ final class BackgroundTaskManager {
     private let persistenceController: PersistenceController
     private let errorManager = ErrorManager.shared
     
-    private let sleepUpdateTaskId = "com.yourcompany.zeez.sleepupdate"
-    private let dataProcessTaskId = "com.yourcompany.zeez.dataprocess"
+    private let sleepUpdateTaskId: String
+    private let dataProcessTaskId: String
+    
+    private var tasksRegistered = false
     
     private init() {
+        // Initialize task identifiers with dynamic bundle identifier
+        if let bundleId = Bundle.main.bundleIdentifier {
+            self.sleepUpdateTaskId = "\(bundleId).sleepupdate"
+            self.dataProcessTaskId = "\(bundleId).dataprocess"
+        } else {
+            // Fallback for development/testing scenarios
+            self.sleepUpdateTaskId = "com.zeez.app.sleepupdate"
+            self.dataProcessTaskId = "com.zeez.app.dataprocess"
+        }
+        
         self.persistenceController = .shared
         registerBackgroundTasks()
     }
     
     func registerBackgroundTasks() {
+        // Prevent double registration
+        guard !tasksRegistered else {
+            ZeezLogger.debug(ZeezLogger.background, "Background tasks already registered, skipping...")
+            return
+        }
+        
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: sleepUpdateTaskId,
             using: nil
         ) { task in
-            self.handleSleepUpdate(task: task as! BGAppRefreshTask)
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            self.handleSleepUpdate(task: refreshTask)
         }
         
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: dataProcessTaskId,
             using: nil
         ) { task in
-            self.handleDataProcessing(task: task as! BGProcessingTask)
+            guard let processingTask = task as? BGProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            self.handleDataProcessing(task: processingTask)
         }
+        
+        tasksRegistered = true
+        ZeezLogger.info(ZeezLogger.background, "Background tasks registered successfully")
     }
     
     func scheduleSleepUpdate() {
         let request = BGAppRefreshTaskRequest(identifier: sleepUpdateTaskId)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: AppConstants.Background.sleepUpdateInterval)
         
         do {
             try BGTaskScheduler.shared.submit(request)
@@ -47,7 +77,7 @@ final class BackgroundTaskManager {
         let request = BGProcessingTaskRequest(identifier: dataProcessTaskId)
         request.requiresNetworkConnectivity = false
         request.requiresExternalPower = false
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: AppConstants.Background.dataProcessingInterval)
         
         do {
             try BGTaskScheduler.shared.submit(request)
@@ -90,7 +120,7 @@ final class BackgroundTaskManager {
     
     private func scheduleNextSleepUpdate() {
         let request = BGAppRefreshTaskRequest(identifier: sleepUpdateTaskId)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: AppConstants.Background.sleepUpdateInterval)
         
         do {
             try BGTaskScheduler.shared.submit(request)
@@ -103,7 +133,7 @@ final class BackgroundTaskManager {
         let request = BGProcessingTaskRequest(identifier: dataProcessTaskId)
         request.requiresNetworkConnectivity = false
         request.requiresExternalPower = false
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: AppConstants.Background.dataProcessingInterval)
         
         do {
             try BGTaskScheduler.shared.submit(request)
@@ -172,7 +202,7 @@ final class BackgroundTaskManager {
     func checkBatteryAndStorage() {
         UIDevice.current.isBatteryMonitoringEnabled = true
         
-        if UIDevice.current.batteryLevel <= 0.2 {
+        if UIDevice.current.batteryLevel <= AppConstants.Background.criticalBatteryLevel {
             errorManager.showError(.lowBatteryWarning)
         }
         
@@ -181,7 +211,7 @@ final class BackgroundTaskManager {
             do {
                 let values = try urlForDocumentsDirectory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
                 if let capacity = values.volumeAvailableCapacityForImportantUsage,
-                   capacity < 100_000_000 { // 100MB
+                   capacity < AppConstants.Background.minimumStorageBytes { // 100MB
                     errorManager.showError(.storageSpaceLow)
                 }
             } catch {

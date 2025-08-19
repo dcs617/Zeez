@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import os.log
 
 /// Provides formatted data for statistical visualizations
 final class StatsDataProvider {
@@ -138,7 +139,7 @@ final class StatsDataProvider {
                 totalSleepTime += end.timeIntervalSince(start)
             }
             
-            if let start = session.startTime {
+            if session.startTime != nil {
                 totalQualityScore += session.qualityScore
                 sessionsWithScore += 1
             }

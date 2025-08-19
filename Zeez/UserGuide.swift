@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// User Guide for Zeez Sleep Tracking App
 struct UserGuide {

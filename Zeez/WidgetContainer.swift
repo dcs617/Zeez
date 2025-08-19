@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import os.log
 
 struct WidgetContainer: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -103,7 +104,7 @@ struct WidgetContainer: View {
     
     @ViewBuilder
     private func getWidget(for type: WidgetType) -> some View {
-        if let userPrefs = preferencesArray.first {
+        if preferencesArray.first != nil {
             switch type {
             case .sleepQuality:
                 if let latestSession = fetchLatestSession() {
@@ -115,8 +116,8 @@ struct WidgetContainer: View {
                 }
             case .sleepDebt:
                 let metrics = SleepDebtMetrics(
-                    weeklyDebt: SleepDebtAnalyzer.shared.calculateCurrentDebt(context: viewContext),
-                    monthlyDebt: SleepDebtAnalyzer.shared.calculateCurrentDebt(context: viewContext),
+                    weeklyDebt: SleepDebtCalculator.shared.calculateCurrentDebt(context: viewContext),
+                    monthlyDebt: SleepDebtCalculator.shared.calculateCurrentDebt(context: viewContext),
                     debtTrend: .stable,
                     recoveryPlan: RecoveryPlan(
                         recommendedAction: "Get extra sleep tonight",

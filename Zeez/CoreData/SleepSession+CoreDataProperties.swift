@@ -26,6 +26,8 @@ extension SleepSession {
     @NSManaged public var qualityScore: Double
     @NSManaged public var userFeedback: NSNumber?
     @NSManaged public var environmentalScore: Double
+    @NSManaged public var completedCycles: Int16
+    @NSManaged public var cycleConsistency: Double
     @NSManaged public var dailyMetrics: DailyMetrics?
     @NSManaged public var sleepStages: NSSet?
     @NSManaged public var heartRateData: NSSet?

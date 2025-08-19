@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 enum DebtSeverity: String {
     case minimal = "Minimal"

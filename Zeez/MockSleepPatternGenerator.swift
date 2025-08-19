@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// Helper struct for generating realistic mock sleep patterns
 struct MockSleepPatternGenerator {

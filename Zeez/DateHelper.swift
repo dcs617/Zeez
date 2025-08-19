@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 enum DateHelper {
     static func calculateSleepDuration(startTime: Date, endTime: Date) -> TimeInterval {

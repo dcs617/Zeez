@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import os.log
 
 struct TrendMetricCard<Content: View>: View {
     let title: String

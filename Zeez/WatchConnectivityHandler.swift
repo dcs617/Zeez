@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import os.log
 
 /// Manages communication with the Apple Watch app
 class WatchConnectivityHandler: NSObject, ObservableObject {
@@ -28,7 +29,7 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
         ]
         
         session.sendMessage(message, replyHandler: nil) { error in
-            print("Error sending wake pattern to watch: \(error)")
+            ZeezLogger.error(ZeezLogger.network, "Error sending wake pattern to watch", error: error)
         }
     }
     
@@ -57,7 +58,7 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
         do {
             try session.updateApplicationContext(context)
         } catch {
-            print("Error updating watch context: \(error)")
+            ZeezLogger.error(ZeezLogger.network, "Error updating watch context", error: error)
         }
     }
 }

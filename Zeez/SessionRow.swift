@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct SessionRow: View {
     let session: SleepSession
@@ -61,7 +62,7 @@ struct SessionRow: View {
 #Preview {
     let context = PersistenceController.preview.container.viewContext
     let session = SleepSession(context: context)
-    session.startTime = Date().addingTimeInterval(-8 * 3600) // 8 hours ago
+    session.startTime = Date().addingTimeInterval(-AppConstants.Sleep.targetDuration) // 8 hours ago
     session.endTime = Date()
     session.qualityScore = 85.5
     

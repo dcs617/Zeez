@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct LastNightCard: View {
     let session: SleepSession
@@ -95,7 +96,7 @@ struct LastNightCard: View {
             session.qualityScore = qualityScore.overallScore
             try context.save()
         } catch {
-            print("Error analyzing sleep quality: \(error)")
+            ZeezLogger.error(ZeezLogger.sleepTracking, "Error analyzing sleep quality", error: error)
         }
     }
 }

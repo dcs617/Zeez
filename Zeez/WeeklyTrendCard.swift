@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import os.log
 
 struct WeeklyTrendCard: View {
     let sessions: [SleepSession]
@@ -22,7 +23,7 @@ struct WeeklyTrendCard: View {
         let waketimeVariance = calculateVariance(waketimes)
         
         // Convert variance to consistency score (lower variance = higher consistency)
-        let maxVariance: Double = 3600 * 2 // 2 hours variance = 0% consistency
+        let maxVariance: Double = AppConstants.Sleep.maxConsistencyVariance // 2 hours variance = 0% consistency
         let bedtimeConsistency = max(0, 100 - (bedtimeVariance / maxVariance * 100))
         let waketimeConsistency = max(0, 100 - (waketimeVariance / maxVariance * 100))
         

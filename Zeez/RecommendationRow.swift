@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct RecommendationRow: View {
     let icon: String

@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 // Protocol that all widgets must conform to
 protocol Widget: Identifiable {

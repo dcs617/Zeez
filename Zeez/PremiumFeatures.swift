@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// Defines and manages premium features in the app
 enum PremiumFeature: String, CaseIterable {

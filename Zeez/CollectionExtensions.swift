@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 extension Collection {
     /// Safe array access that returns nil if index is out of bounds

@@ -1,5 +1,6 @@
 import CoreData
 import Combine
+import os.log
 
 /// Analyzes sleep data to determine optimal wake times within the user's set window
 class SmartWakeAnalyzer {

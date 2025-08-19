@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os.log
 
 /// Manages error and status states throughout the app
 final class ErrorManager: ObservableObject {
@@ -17,7 +18,7 @@ final class ErrorManager: ObservableObject {
             .compactMap { $0 }
             .filter { $0.isWarning }
             .sink { [weak self] error in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.UI.extendedNotificationDuration) {
                     if self?.currentError == error {
                         self?.dismissError()
                     }
@@ -43,7 +44,7 @@ final class ErrorManager: ObservableObject {
         statusMessage = message
         
         // Auto-dismiss status after 2 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.UI.notificationDuration) { [weak self] in
             if self?.statusMessage == message {
                 self?.statusMessage = nil
             }
@@ -53,14 +54,14 @@ final class ErrorManager: ObservableObject {
     /// Reports an error and logs it for analytics
     func reportError(_ error: Error, file: String = #file, line: Int = #line) {
         let fileName = (file as NSString).lastPathComponent
-        print("Error reported from \(fileName):\(line) - \(error.localizedDescription)")
+        ZeezLogger.error(ZeezLogger.error, "Error reported from \(fileName):\(line)", error: error)
         
         // Convert to AppError if possible
         if let appError = error as? AppError {
             showError(appError)
         } else {
             // Log unknown errors for analytics
-            print("Unknown error type: \(type(of: error))")
+            ZeezLogger.error(ZeezLogger.error, "Unknown error type: \(type(of: error))")
         }
         
         // TODO: Send to analytics service in production

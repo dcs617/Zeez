@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreData
+import os.log
 
 @main
 struct ZeezApp: App {
@@ -11,9 +12,17 @@ struct ZeezApp: App {
             RootView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
                 .onAppear {
-                    verifyDataIntegrity()
+                    setupApp()
                 }
         }
+    }
+    
+    private func setupApp() {
+        verifyDataIntegrity()
+        
+        // Start alarm system
+        AlarmObserver.shared.startObserving(context: persistenceController.container.viewContext)
+        ZeezLogger.info(ZeezLogger.alarm, "Alarm system initialized")
     }
     
     private func verifyDataIntegrity() {
@@ -24,11 +33,11 @@ struct ZeezApp: App {
         #if DEBUG
         do {
             let sessionsCount = try context.count(for: fetchRequest)
-            print("Found \(sessionsCount) valid sleep sessions")
+            ZeezLogger.debug(ZeezLogger.app, "Found \(sessionsCount) valid sleep sessions")
             
             if sessionsCount == 0 {
                 // Generate new mock data
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.UI.defaultDelay) {
                     generateMockData(context: context)
                 }
             } else {
@@ -37,18 +46,18 @@ struct ZeezApp: App {
                 let invalidSessions = try context.count(for: fetchRequest)
                 
                 if invalidSessions > 0 {
-                    print("Found \(invalidSessions) sessions without quality scores. Regenerating data...")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    ZeezLogger.debug(ZeezLogger.app, "Found \(invalidSessions) sessions without quality scores. Regenerating data...")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.UI.defaultDelay) {
                         persistenceController.clearAllData()
                         generateMockData(context: context)
                     }
                 }
             }
         } catch {
-            print("Error verifying data integrity: \(error)")
+            ZeezLogger.error(ZeezLogger.app, "Error verifying data integrity", error: error)
             
             // Attempt recovery
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.UI.defaultDelay) {
                 persistenceController.clearAllData()
                 generateMockData(context: context)
             }
@@ -57,19 +66,19 @@ struct ZeezApp: App {
     }
     
     private func generateMockData(context: NSManagedObjectContext) {
-        MockDataGenerator.shared.generateMockData(for: 90)
+        MockDataGenerator.shared.generateMockData(for: AppConstants.MockData.defaultGenerationDays)
         
         do {
             try context.save()
-            print("Generated and saved 90 days of mock data")
+            ZeezLogger.info(ZeezLogger.app, "Generated and saved 90 days of mock data")
             
             // Verify the generation
             let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             request.predicate = NSPredicate(format: "qualityScore > 0")
             let count = try context.count(for: request)
-            print("Verified \(count) sessions with quality scores")
+            ZeezLogger.info(ZeezLogger.app, "Verified \(count) sessions with quality scores")
         } catch {
-            print("Error generating mock data: \(error)")
+            ZeezLogger.error(ZeezLogger.app, "Error generating mock data", error: error)
         }
     }
 }

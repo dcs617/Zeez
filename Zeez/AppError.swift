@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 /// Represents various types of errors that can occur in the app
 enum AppError: LocalizedError, Equatable {

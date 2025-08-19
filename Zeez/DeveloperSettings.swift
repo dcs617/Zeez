@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 enum DeveloperSettings {
     @UserDefault(key: "dev_showPremiumFeatures", defaultValue: false)

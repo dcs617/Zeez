@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import os.log
 
 /// Tracks subscription-related events and metrics
 class SubscriptionEvents {

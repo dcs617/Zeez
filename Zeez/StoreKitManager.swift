@@ -1,5 +1,6 @@
 import StoreKit
 import Foundation
+import os.log
 
 @MainActor
 class StoreKitManager: ObservableObject {
@@ -74,7 +75,7 @@ class StoreKitManager: ObservableObject {
             let products = try await Product.products(for: identifiers)
             subscriptions = products.sorted { $0.price < $1.price }
         } catch {
-            print("Failed to load products:", error)
+            ZeezLogger.error(ZeezLogger.app, "Failed to load products", error: error)
         }
     }
     
@@ -86,7 +87,7 @@ class StoreKitManager: ObservableObject {
                     await self.updatePurchasedSubscriptions()
                     await transaction.finish()
                 } catch {
-                    print("Transaction failed verification:", error)
+                    ZeezLogger.error(ZeezLogger.app, "Transaction failed verification", error: error)
                 }
             }
         }
@@ -111,7 +112,7 @@ class StoreKitManager: ObservableObject {
                     purchased.append(subscription)
                 }
             } catch {
-                print("Failed to verify transaction:", error)
+                ZeezLogger.error(ZeezLogger.app, "Failed to verify transaction", error: error)
             }
         }
         

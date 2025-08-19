@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 struct MonthlyChartSection: View {
     let dataPoints: [MonthlyDataPoint]

@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import os.log
 
 struct TrendChartComponents {
     struct QualityChart: View {
@@ -139,12 +140,12 @@ struct TrendChartComponents {
     VStack(spacing: 20) {
         TrendChartComponents.QualityChart(
             data: [
-                (Date().addingTimeInterval(-86400 * 6), 85),
-                (Date().addingTimeInterval(-86400 * 5), 75),
-                (Date().addingTimeInterval(-86400 * 4), 90),
-                (Date().addingTimeInterval(-86400 * 3), 82),
-                (Date().addingTimeInterval(-86400 * 2), 88),
-                (Date().addingTimeInterval(-86400), 79),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 6), 85),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 5), 75),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 4), 90),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 3), 82),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 2), 88),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds), 79),
                 (Date(), 86)
             ],
             height: 200
@@ -152,12 +153,12 @@ struct TrendChartComponents {
         
         TrendChartComponents.DurationChart(
             data: [
-                (Date().addingTimeInterval(-86400 * 6), 7.5),
-                (Date().addingTimeInterval(-86400 * 5), 6.8),
-                (Date().addingTimeInterval(-86400 * 4), 8.2),
-                (Date().addingTimeInterval(-86400 * 3), 7.1),
-                (Date().addingTimeInterval(-86400 * 2), 7.8),
-                (Date().addingTimeInterval(-86400), 6.9),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 6), 7.5),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 5), 6.8),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 4), 8.2),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 3), 7.1),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds * 2), 7.8),
+                (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds), 6.9),
                 (Date(), 7.4)
             ],
             height: 200

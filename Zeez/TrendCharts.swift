@@ -1,4 +1,5 @@
 import SwiftUI
+import os.log
 
 /// Line chart for displaying trend data
 struct TrendChart: View {
