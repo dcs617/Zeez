@@ -394,6 +394,13 @@ single-sourced.
   `PersistenceController.shared` — the **real simulator store** — plus the real
   `UNUserNotificationCenter` and fixed `Task.sleep(2-5s)` waits. They're slow, stateful,
   order-dependent, and CI-hostile (need notification permission).
+  **Verified 2026-07-05 (Phase 0 exit):** these suites currently FAIL en masse — 42
+  failed / 2 passed — and fail **identically at the pre-Phase-0 baseline commit**, so this
+  is not a regression. Dominant signature: Core Data 132001 "attempt to recursively call
+  -save: on the context aborted" (tests saving to the shared viewContext while the live
+  host app's observers react), plus downstream `isScheduled`/`isDeleted` expectation
+  failures and one `checkNotificationPermissions` abrt. The in-memory + fake-center
+  refactor below is the fix.
 - **Steps:**
   1. Introduce a `NotificationScheduling` protocol wrapping the UNUserNotificationCenter
      calls used by `AlarmScheduler`/`AlarmNotificationHandler`/`AlarmNotificationUtils`;
@@ -461,6 +468,41 @@ single-sourced.
      kept.") rather than silent data loss.
   5. Add retention for `AnalyticsEvent`/`FeatureAccessRecord` rows (no pruning exists;
      local-only but unbounded).
+
+### 2.7 One-time cleanup of legacy notification identifiers *(discovered during 0.6)*
+- [ ] Done
+- **Problem:** the prefix-filtered removals from 0.5/0.6 only match the NEW identifier
+  schemes. Installs that scheduled notifications on earlier builds still have pending
+  requests with un-prefixed Learn identifiers (`challenge_*`, `challenge_completion_*`,
+  `learning_*`, `streak_reminder_*`, `snoozed_*`) that no removal path can ever target.
+- **Fix:** a one-time migration on launch (UserDefaults flag) that enumerates pending
+  requests and removes the known legacy Learn patterns. Low urgency pre-TestFlight (no
+  external installs exist), but must land before the first update shipped over an
+  installed build.
+
+### 2.8 `heavySleeperMode` missing from generated Core Data properties *(discovered during 0.3)*
+- [ ] Done
+- **Problem:** the attribute exists in the model (`Zeez.xcdatamodel/contents`) but not in
+  `Zeez/CoreData/AlarmConfiguration+CoreDataProperties.swift`, so production reads it via
+  KVC (`value(forKey: "heavySleeperMode")` in `AlarmNotificationHandler`) — stringly-typed
+  and invisible to the compiler.
+- **Fix:** add the `@NSManaged public var heavySleeperMode: Bool` property (or regenerate
+  the class files) and replace the KVC reads. Audit the other entities for the same drift
+  while there.
+
+### 2.9 Environmental monitoring honesty check *(discovered during 0.4)*
+- [ ] Done
+- **Problems found while tracing `EnvironmentalMonitor` for 0.4:**
+  1. `captureLightLevel()` reads camera ISO from `AVCaptureDevice` with **no running
+     capture session** — the value is almost certainly static/meaningless, so the "light
+     level" metric may be fiction. Verify on-device; fix or remove the metric. Also confirm
+     whether this AVCaptureDevice usage requires `NSCameraUsageDescription` (device
+     configuration without a session generally doesn't, but verify before App Review).
+  2. Sampling runs on a foreground `Timer` every 5 min — a locked phone suspends the app,
+     so overnight environmental data is mostly never collected. Decide the honest story:
+     background-task-based sampling, "works while charging + foreground" labeling, or cut.
+     Same claims-conformance standard as Smart Wake (1.7).
+  3. `estimateRoomTemperature()` returns a hardcoded 0 that gets persisted as a reading.
 
 ---
 
