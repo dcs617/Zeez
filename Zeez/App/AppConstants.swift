@@ -199,4 +199,13 @@ struct AppConstants {
         /// Progress bar calculation base (100 for percentage)
         static let percentageBase: Double = 100
     }
+
+    // MARK: - Legal / App Store
+
+    /// Legal and App Store metadata
+    struct Legal {
+        /// Privacy policy shown from Settings (required for HealthKit apps).
+        /// ⚠️ Placeholder host — publish the policy and confirm this URL before release.
+        static let privacyPolicyURL = URL(string: "https://dcs617.github.io/zeez-privacy/")!
+    }
 }

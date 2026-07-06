@@ -119,15 +119,14 @@ class HealthKitDataImporter {
             return
         }
 
+        // Request only the types the importer actually maps into Core Data
+        // (sleep sessions, HeartRateData, respiratory readings) — the same
+        // minimal set onboarding requests. Add types here only alongside
+        // import code that consumes them.
         let typesToRead: Set<HKObjectType> = [
             HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
             HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .restingHeartRate)!,
-            HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!,
-            HKObjectType.quantityType(forIdentifier: .respiratoryRate)!,
-            HKObjectType.quantityType(forIdentifier: .oxygenSaturation)!,
-            HKObjectType.quantityType(forIdentifier: .stepCount)!,
-            HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!
+            HKObjectType.quantityType(forIdentifier: .respiratoryRate)!
         ]
 
         ZeezLogger.info(ZeezLogger.coreData, "Requesting HealthKit authorization for \(typesToRead.count) data types")

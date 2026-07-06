@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var importStatus: String = ""
     @State private var isImporting = false
     @State private var hasRealDataCached: Bool = false
+    @State private var showingDeleteAllConfirmation = false
     
     @StateObject private var modalCoordinator = ModalCoordinator.shared
     
@@ -43,12 +44,88 @@ struct SettingsView: View {
             healthKitSection
             dataImportSection
             alarmSection
-            
+            privacySection
+
             #if DEBUG
             debugSection
             #endif
         }
         .navigationTitle("Settings")
+        .confirmationDialog(
+            "Delete All My Data?",
+            isPresented: $showingDeleteAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Everything", role: .destructive) {
+                deleteAllUserData()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes all sleep sessions, alarms, and settings from this device. Data in Apple Health is not affected. This cannot be undone.")
+        }
+    }
+
+    private var privacySection: some View {
+        Section("Privacy & Data") {
+            Link("Privacy Policy", destination: AppConstants.Legal.privacyPolicyURL)
+                .accessibilityLabel("Privacy Policy")
+                .accessibilityHint("Opens the Zeez privacy policy in your browser")
+                .accessibilityIdentifier("privacyPolicyLink")
+
+            Button(role: .destructive) {
+                showingDeleteAllConfirmation = true
+            } label: {
+                Text("Delete All My Data")
+            }
+            .accessibilityLabel("Delete All My Data")
+            .accessibilityHint("Permanently deletes all sleep data, alarms, and settings from this device")
+            .accessibilityIdentifier("deleteAllDataButton")
+
+            HStack {
+                Text("Version")
+                Spacer()
+                Text(appVersionString)
+                    .foregroundColor(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("App version \(appVersionString)")
+            .accessibilityIdentifier("appVersionRow")
+        }
+    }
+
+    private var appVersionString: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(version) (\(build))"
+    }
+
+    private func deleteAllUserData() {
+        // Wipe the Core Data store (recreated empty in place).
+        PersistenceController.shared.clearAllData()
+
+        // Reset preferences to first-run state. The StoreKit-backed subscription
+        // cache survives: entitlements belong to the Apple Account, not app data.
+        let defaults = UserDefaults.standard
+        let subscriptionTier = defaults.string(forKey: "subscription_tier")
+        if let bundleID = Bundle.main.bundleIdentifier {
+            defaults.removePersistentDomain(forName: bundleID)
+        }
+        if let subscriptionTier {
+            defaults.set(subscriptionTier, forKey: "subscription_tier")
+        }
+
+        // Every alarm and reminder references data that no longer exists, so a
+        // global wipe is correct here — unlike routine rescheduling (see the
+        // prefix-filtered removals in AlarmScheduler/LearnNotificationManager).
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+
+        ZeezLogger.info(ZeezLogger.app, "All user data deleted at user request")
+
+        // Return to onboarding immediately (RootView observes this) and close
+        // the settings modal.
+        OnboardingManager.shared.reset()
+        modalCoordinator.dismiss()
     }
     
     private var sleepGoalSection: some View {

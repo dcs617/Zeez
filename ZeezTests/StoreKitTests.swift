@@ -87,11 +87,25 @@ struct StoreKitTests {
         PremiumManager.shared.reset()
     }
 
+    /// SKTestSession state changes (buy/expire) apply asynchronously to the
+    /// entitlement stream, so assertions use confirmation-based waiting: re-run
+    /// updatePurchasedSubscriptions until the expected tier appears or timeout.
+    @MainActor
+    private func waitForTier(_ expected: SubscriptionTier?, timeout: TimeInterval = 5) async -> SubscriptionTier? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            await StoreKitManager.shared.updatePurchasedSubscriptions()
+            if PremiumManager.shared.activeSubscription == expected || Date() >= deadline {
+                return PremiumManager.shared.activeSubscription
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+    }
+
     @Test @MainActor func purchaseGrantsEntitledTier() async throws {
         let session = try makeSession()
         _ = try await session.buyProduct(identifier: "com.zeez.subscription.premium.monthly")
-        await StoreKitManager.shared.updatePurchasedSubscriptions()
-        #expect(PremiumManager.shared.activeSubscription == .premium)
+        #expect(await waitForTier(.premium) == .premium)
         await cleanUp(session)
     }
 
@@ -102,8 +116,7 @@ struct StoreKitTests {
         // call happens anywhere in this test.
         let session = try makeSession()
         _ = try await session.buyProduct(identifier: "com.zeez.subscription.premiumplus.annual")
-        await StoreKitManager.shared.updatePurchasedSubscriptions()
-        #expect(PremiumManager.shared.activeSubscription == .premium_plus)
+        #expect(await waitForTier(.premium_plus) == .premium_plus)
         await cleanUp(session)
     }
 
@@ -111,20 +124,17 @@ struct StoreKitTests {
         let session = try makeSession()
         _ = try await session.buyProduct(identifier: "com.zeez.subscription.premium.monthly")
         _ = try await session.buyProduct(identifier: "com.zeez.subscription.premiumplus.monthly")
-        await StoreKitManager.shared.updatePurchasedSubscriptions()
-        #expect(PremiumManager.shared.activeSubscription == .premium_plus)
+        #expect(await waitForTier(.premium_plus) == .premium_plus)
         await cleanUp(session)
     }
 
     @Test @MainActor func expiryDowngrades() async throws {
         let session = try makeSession()
         _ = try await session.buyProduct(identifier: "com.zeez.subscription.premium.monthly")
-        await StoreKitManager.shared.updatePurchasedSubscriptions()
-        #expect(PremiumManager.shared.activeSubscription == .premium)
+        #expect(await waitForTier(.premium) == .premium)
 
         try session.expireSubscription(productIdentifier: "com.zeez.subscription.premium.monthly")
-        await StoreKitManager.shared.updatePurchasedSubscriptions()
-        #expect(PremiumManager.shared.activeSubscription == nil)
+        #expect(await waitForTier(nil) == nil)
         await cleanUp(session)
     }
 }
