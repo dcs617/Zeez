@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23507" systemVersion="24B91" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23788.4" systemVersion="24G84" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
     <entity name="AlarmConfiguration" representedClassName="AlarmConfiguration" syncable="YES">
         <attribute name="alarmSound" optional="YES" attributeType="String"/>
         <attribute name="alarmSoundSource" optional="YES" attributeType="String"/>
@@ -10,6 +10,7 @@
         <attribute name="deactivateGesture" optional="YES" attributeType="String"/>
         <attribute name="enabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="fadeInDuration" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="heavySleeperMode" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
             <userInfo>
                 <entry key="indexed" value="YES"/>
@@ -283,7 +284,7 @@
         <attribute name="deviceType" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
             <userInfo>
-                <entry key=" indexed" value="YES"/>
+                <entry key="indexed" value="YES"/>
             </userInfo>
         </attribute>
         <attribute name="oxygenSaturation" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
@@ -357,15 +358,17 @@
         <attribute name="isPersonalized" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="movementScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="overallScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
-        <attribute name="personalizedComponents" optional="YES" attributeType="String"/>
         <attribute name="personalizationLevel" optional="YES" attributeType="String"/>
+        <attribute name="personalizedComponents" optional="YES" attributeType="String"/>
         <attribute name="respiratoryScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="sleepCycleScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
         <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="qualityScores" inverseEntity="SleepSession"/>
     </entity>
     <entity name="SleepSession" representedClassName="SleepSession" syncable="YES">
+        <attribute name="completedCycles" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="cycleConsistency" optional="YES" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="deviceIdentifier" optional="YES" attributeType="String"/>
         <attribute name="endTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="environmentalScore" optional="YES" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0" usesScalarValueType="YES"/>
@@ -378,8 +381,6 @@
         <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="qualityScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="startTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
-        <attribute name="completedCycles" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
-        <attribute name="cycleConsistency" optional="YES" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="userFeedback" optional="YES" attributeType="Integer 16" minValueString="1" maxValueString="5" usesScalarValueType="NO"/>
         <relationship name="analyticsEvents" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AnalyticsEvent" inverseName="session" inverseEntity="AnalyticsEvent"/>
         <relationship name="dailyMetrics" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DailyMetrics" inverseName="sessions" inverseEntity="DailyMetrics"/>

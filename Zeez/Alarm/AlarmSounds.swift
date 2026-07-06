@@ -5,26 +5,9 @@ import AVFoundation
 /// Manages alarm sounds including built-in iOS sounds and custom user sounds
 struct AlarmSounds {
     
-    /// Available built-in alarm sounds from iOS
+    /// Available system alarm sounds (only default works in local notifications)
     static let builtInSounds: [AlarmSoundOption] = [
-        AlarmSoundOption(id: "default", name: "Default", isBuiltIn: true),
-        AlarmSoundOption(id: "radar", name: "Radar", isBuiltIn: true),
-        AlarmSoundOption(id: "apex", name: "Apex", isBuiltIn: true),
-        AlarmSoundOption(id: "beacon", name: "Beacon", isBuiltIn: true),
-        AlarmSoundOption(id: "bulletin", name: "Bulletin", isBuiltIn: true),
-        AlarmSoundOption(id: "by_the_seaside", name: "By The Seaside", isBuiltIn: true),
-        AlarmSoundOption(id: "chimes", name: "Chimes", isBuiltIn: true),
-        AlarmSoundOption(id: "circuit", name: "Circuit", isBuiltIn: true),
-        AlarmSoundOption(id: "cosmic", name: "Cosmic", isBuiltIn: true),
-        AlarmSoundOption(id: "hillside", name: "Hillside", isBuiltIn: true),
-        AlarmSoundOption(id: "night_owl", name: "Night Owl", isBuiltIn: true),
-        AlarmSoundOption(id: "opening", name: "Opening", isBuiltIn: true),
-        AlarmSoundOption(id: "presto", name: "Presto", isBuiltIn: true),
-        AlarmSoundOption(id: "sencha", name: "Sencha", isBuiltIn: true),
-        AlarmSoundOption(id: "silk", name: "Silk", isBuiltIn: true),
-        AlarmSoundOption(id: "slow_rise", name: "Slow Rise", isBuiltIn: true),
-        AlarmSoundOption(id: "summit", name: "Summit", isBuiltIn: true),
-        AlarmSoundOption(id: "uplift", name: "Uplift", isBuiltIn: true)
+        // No built-in sounds - Classic Alarm is now the default
     ]
     
     /// Get all available alarm sounds (built-in + custom)
@@ -34,29 +17,58 @@ struct AlarmSounds {
         return allSounds
     }
     
+    /// Custom Zeez alarm sounds (bundled with the app)
+    static let customZeezSounds: [AlarmSoundOption] = [
+        AlarmSoundOption(id: "Alarm_Classic.caf", name: "Classic Alarm", isBuiltIn: false),
+        AlarmSoundOption(id: "Alarm_Honk.caf", name: "Honk", isBuiltIn: false),
+        AlarmSoundOption(id: "Alarm_Horn.caf", name: "Horn", isBuiltIn: false)
+    ]
+    
     /// Get custom user sounds from the app bundle
     static func getCustomSounds() -> [AlarmSoundOption] {
         var customSounds: [AlarmSoundOption] = []
         
-        // Check for custom sounds in the app bundle
-        if let soundsPath = Bundle.main.path(forResource: "CustomAlarmSounds", ofType: "bundle"),
-           let soundsBundle = Bundle(path: soundsPath) {
-            
-            let soundExtensions = ["m4a", "mp3", "wav", "aiff", "caf"]
-            
-            for ext in soundExtensions {
-                let soundPaths = soundsBundle.paths(forResourcesOfType: ext, inDirectory: nil)
-                
-                for path in soundPaths {
-                    let fileName = URL(fileURLWithPath: path).lastPathComponent
-                    let soundName = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+        // Add our bundled Zeez sounds first
+        customSounds.append(contentsOf: customZeezSounds)
+        
+        // Check for sounds in Resources/AlarmSounds/ directory
+        let soundExtensions = ["caf", "aiff", "wav", "m4a", "mp3"]
+        
+        for ext in soundExtensions {
+            if let soundURLs = Bundle.main.urls(forResourcesWithExtension: ext, subdirectory: "AlarmSounds") {
+                for url in soundURLs {
+                    let fileName = url.lastPathComponent
+                    let soundName = url.deletingPathExtension().lastPathComponent
                     let displayName = soundName.replacingOccurrences(of: "_", with: " ").capitalized
                     
-                    customSounds.append(AlarmSoundOption(
-                        id: fileName,
-                        name: displayName,
-                        isBuiltIn: false
-                    ))
+                    // Skip if we already added this as a Zeez sound
+                    if !customZeezSounds.contains(where: { $0.id == fileName }) {
+                        customSounds.append(AlarmSoundOption(
+                            id: fileName,
+                            name: displayName,
+                            isBuiltIn: false
+                        ))
+                    }
+                }
+            }
+        }
+        
+        // Also check main bundle root for any additional sounds
+        for ext in soundExtensions {
+            if let soundURLs = Bundle.main.urls(forResourcesWithExtension: ext, subdirectory: nil) {
+                for url in soundURLs {
+                    let fileName = url.lastPathComponent
+                    let soundName = url.deletingPathExtension().lastPathComponent
+                    let displayName = soundName.replacingOccurrences(of: "_", with: " ").capitalized
+                    
+                    // Skip if already added
+                    if !customSounds.contains(where: { $0.id == fileName }) {
+                        customSounds.append(AlarmSoundOption(
+                            id: fileName,
+                            name: displayName,
+                            isBuiltIn: false
+                        ))
+                    }
                 }
             }
         }
@@ -74,15 +86,32 @@ struct AlarmSounds {
             try AVAudioSession.sharedInstance().setActive(true)
             
             if soundOption.isBuiltIn {
-                // For built-in sounds, we'll use a short preview
-                // Note: Built-in iOS alarm sounds aren't directly accessible for preview
-                // This would need to be implemented with custom sound files
-                completion()
+                // For built-in default sound, play the system alert sound
+                AudioServicesPlaySystemSound(SystemSoundID(1005)) // System alert sound
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    completion()
+                }
                 return
             } else {
-                // Custom sound preview
-                if let soundURL = Bundle.main.url(forResource: soundOption.id, withExtension: nil) {
-                    player = try AVAudioPlayer(contentsOf: soundURL)
+                // Custom sound preview - try multiple locations
+                var soundURL: URL?
+                
+                // First try in AlarmSounds subdirectory
+                soundURL = Bundle.main.url(forResource: soundOption.id, withExtension: nil, subdirectory: "AlarmSounds")
+                
+                // If not found, try removing the extension and searching
+                if soundURL == nil {
+                    let nameWithoutExt = URL(fileURLWithPath: soundOption.id).deletingPathExtension().lastPathComponent
+                    soundURL = Bundle.main.url(forResource: nameWithoutExt, withExtension: "caf", subdirectory: "AlarmSounds")
+                }
+                
+                // Fallback to main bundle
+                if soundURL == nil {
+                    soundURL = Bundle.main.url(forResource: soundOption.id, withExtension: nil)
+                }
+                
+                if let url = soundURL {
+                    player = try AVAudioPlayer(contentsOf: url)
                     player?.volume = 0.5
                     player?.play()
                     
@@ -92,6 +121,7 @@ struct AlarmSounds {
                         completion()
                     }
                 } else {
+                    print("Could not find sound file: \(soundOption.id)")
                     completion()
                 }
             }

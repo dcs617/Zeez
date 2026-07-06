@@ -93,13 +93,18 @@ struct WeeklyProgressView: View {
         }
         
         if let session = session {
-            let duration = session.timeInSleep > 0 ? session.timeInSleep : (session.endTime?.timeIntervalSince(session.startTime ?? Date()) ?? 0)
-            let hours = Int(duration / 3600)
-            let minutes = Int((duration.truncatingRemainder(dividingBy: 3600)) / 60)
-            components.append("slept \(hours) hours \(minutes) minutes")
+            if let duration = session.derivedSleepMetrics.recordedSessionInterval.value {
+                let hours = Int(duration / 3600)
+                let minutes = Int((duration.truncatingRemainder(dividingBy: 3600)) / 60)
+                components.append("recorded session duration \(hours) hours \(minutes) minutes")
+            } else {
+                components.append("recorded session duration not available")
+            }
             
-            if session.qualityScore > 0 {
-                components.append("quality score \(Int(session.qualityScore))")
+            if session.hasDisplayableScore {
+                components.append("experimental Zeez estimated sleep score \(Int(session.qualityScore))")
+            } else {
+                components.append("experimental Zeez estimate not available")
             }
         } else if date < calendar.startOfDay(for: Date()) {
             components.append("no sleep data")
@@ -183,13 +188,10 @@ struct WeekDayArc: View {
     
     private var sleepDuration: Double {
         guard let session = session,
-              let startTime = session.startTime,
-              let endTime = session.endTime else {
+              let duration = session.derivedSleepMetrics.recordedSessionInterval.value else {
             return 0
         }
-        
-        // Use cached value if available
-        let duration = session.timeInSleep > 0 ? session.timeInSleep : endTime.timeIntervalSince(startTime)
+
         return duration / 3600 // Convert seconds to hours
     }
     
@@ -199,15 +201,7 @@ struct WeekDayArc: View {
     }
     
     private var ringColor: Color {
-        if sleepDuration == 0 { return Color.gray.opacity(0.2) }
-        
-        let percentage = sleepDuration / 8.0
-        switch percentage {
-        case 0..<0.5: return Color.red
-        case 0.5..<0.75: return Color.orange
-        case 0.75..<0.9: return Color.yellow
-        default: return Color.green
-        }
+        sleepDuration == 0 ? Color.gray.opacity(0.2) : .blue
     }
 
     var body: some View {
@@ -265,7 +259,7 @@ struct WeekDayArc: View {
         .opacity(date > Date() ? 0.4 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(dayArcAccessibilityLabel)
-        .accessibilityValue(sleepDuration > 0 ? "\(String(format: "%.1f", sleepDuration)) hours of sleep" : "no sleep data")
+        .accessibilityValue(sleepDuration > 0 ? "\(String(format: "%.1f", sleepDuration)) hours recorded session duration" : "no recorded session data")
         .accessibilityIdentifier("weekDayArc_\(calendar.component(.day, from: date))")
     }
     

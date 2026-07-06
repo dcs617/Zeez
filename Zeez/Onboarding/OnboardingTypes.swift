@@ -53,48 +53,21 @@ enum OnboardingStep: Identifiable, CaseIterable {
 }
 
 enum OnboardingError: LocalizedError, Equatable {
-    case healthKitNotAvailable
-    case healthKitPermissionDenied
-    case notificationsPermissionDenied
+    /// The only error that can be thrown during onboarding: saving preferences to Core Data.
+    /// HealthKit and notification access are optional and never block completion.
     case failedToSave(underlying: Error)
-    
-    var errorDescription: String? {
-        switch self {
-        case .healthKitNotAvailable:
-            return "Health data is not available on this device"
-        case .healthKitPermissionDenied:
-            return "Health access is required for sleep tracking"
-        case .notificationsPermissionDenied:
-            return "Notifications are required for sleep reminders"
-        case .failedToSave:
-            return "Failed to save your preferences"
-        }
-    }
-    
-    var recoverySuggestion: String? {
-        switch self {
-        case .healthKitNotAvailable:
-            return "Please try using a device that supports HealthKit"
-        case .healthKitPermissionDenied:
-            return "You can enable Health access in Settings"
-        case .notificationsPermissionDenied:
-            return "You can enable notifications in Settings"
-        case .failedToSave:
-            return "Please try again or contact support if the issue persists"
-        }
-    }
-    
+
+    var alertTitle: String { "Couldn't Save Settings" }
+
+    var errorDescription: String? { "Failed to save your preferences" }
+
+    var recoverySuggestion: String? { "Please try again or restart the app" }
+
     static func == (lhs: OnboardingError, rhs: OnboardingError) -> Bool {
-        switch (lhs, rhs) {
-        case (.healthKitNotAvailable, .healthKitNotAvailable),
-             (.healthKitPermissionDenied, .healthKitPermissionDenied),
-             (.notificationsPermissionDenied, .notificationsPermissionDenied):
-            return true
-        case (.failedToSave(let error1), .failedToSave(let error2)):
-            return error1.localizedDescription == error2.localizedDescription
-        default:
-            return false
+        if case .failedToSave(let e1) = lhs, case .failedToSave(let e2) = rhs {
+            return e1.localizedDescription == e2.localizedDescription
         }
+        return false
     }
 }
 

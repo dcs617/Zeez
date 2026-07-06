@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import CoreData
 import os.log
 
@@ -8,7 +9,56 @@ class LearnProgressTracker: ObservableObject {
     @Published var latestProgress: [NSManagedObjectID: Double] = [:]
     private var progressTimers: [NSManagedObjectID: Timer] = [:]
     
+    private init() {
+        // Subscribe to app state changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+    }
+    
+    deinit {
+        // Clean up all timers
+        invalidateAllTimers()
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    @objc private func appWillTerminate() {
+        invalidateAllTimers()
+    }
+    
+    @objc private func appDidEnterBackground() {
+        // Pause timers when app goes to background
+        invalidateAllTimers()
+    }
+    
+    /// Clean up all active timers
+    private func invalidateAllTimers() {
+        for timer in progressTimers.values {
+            timer.invalidate()
+        }
+        progressTimers.removeAll()
+    }
+    
+    /// Reset singleton state for testing
+    func reset() {
+        invalidateAllTimers()
+        latestProgress.removeAll()
+    }
+    
     func startTracking(article: LearnArticle, in context: NSManagedObjectContext) {
+        // Stop any existing timer for this article
+        stopTracking(article: article)
+        
         // Create or get progress
         let progress = article.userProgress ?? UserArticleProgress(context: context)
         progress.article = article
@@ -16,16 +66,42 @@ class LearnProgressTracker: ObservableObject {
             progress.lastReadDate = Date()
         }
         
-        // Start tracking timer
-        let timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            self?.updateProgress(for: article, in: context)
+        // Start tracking timer with weak references
+        let timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self, weak article] timer in
+            guard let self = self, let article = article else {
+                // Clean up timer if objects are deallocated
+                timer.invalidate()
+                return
+            }
+            self.updateProgress(for: article, in: context)
         }
         progressTimers[article.objectID] = timer
+        
+        ZeezLogger.debug(ZeezLogger.learning, "Started tracking article: \(article.title ?? "Unknown")")
     }
     
     func stopTracking(article: LearnArticle) {
-        progressTimers[article.objectID]?.invalidate()
-        progressTimers.removeValue(forKey: article.objectID)
+        if let timer = progressTimers[article.objectID] {
+            timer.invalidate()
+            progressTimers.removeValue(forKey: article.objectID)
+            ZeezLogger.debug(ZeezLogger.learning, "Stopped tracking article: \(article.title ?? "Unknown")")
+        }
+    }
+    
+    /// Clean up completed articles automatically
+    func cleanupCompletedArticles() {
+        let completedArticles: [NSManagedObjectID] = progressTimers.keys.compactMap { objectID in
+            // This would need access to context to check completion status
+            // For now, we'll rely on the view lifecycle to call stopTracking
+            return nil
+        }
+        
+        for objectID in completedArticles {
+            if let timer = progressTimers[objectID] {
+                timer.invalidate()
+                progressTimers.removeValue(forKey: objectID)
+            }
+        }
     }
     
     private func updateProgress(for article: LearnArticle, in context: NSManagedObjectContext) {

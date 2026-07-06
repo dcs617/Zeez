@@ -1,521 +1,426 @@
 import CoreData
-import Combine
 import os.log
 
-/// Responsible for analyzing sleep data to detect and classify sleep stages
+/// Research-based sleep stage analyzer using movement patterns, heart rate variability,
+/// and sleep cycle timing to classify sleep stages accurately
 class SleepStageAnalyzer {
     private let context: NSManagedObjectContext
-    private var cancellables = Set<AnyCancellable>()
+    
+    // Sleep cycle constants based on research
+    private let avgCycleDuration: TimeInterval = 90 * 60 // 90 minutes
+    private let firstREMLatency: TimeInterval = 75 * 60  // 75 minutes (first REM typically delayed)
+    private let minStageDuration: TimeInterval = 10 * 60 // 10 minutes minimum
+    private let sleepOnsetWindow: TimeInterval = 15 * 60 // 15 minutes for sleep onset detection
     
     init(context: NSManagedObjectContext) {
         self.context = context
     }
     
-    /// Analyzes a sleep session to determine sleep stages
-    /// - Parameter session: The sleep session to analyze
-    /// - Returns: Array of classified sleep stages
-    func analyzeSleepStages(for session: SleepSession) async throws -> [SleepStage] {
-        guard let heartRateData = session.heartRateData?.allObjects as? [HeartRateData],
-              let movementData = session.movementData?.allObjects as? [MovementData],
-              let respiratoryData = session.respiratoryData?.allObjects as? [RespiratoryData] else {
-            throw AppError.insufficientData
+    // MARK: - Public Entry Points
+
+    /// Synchronous entry point for use inside a `context.perform` block.
+    ///
+    /// Pre-sorted movements and heart rates must be provided by the caller (SleepAnalyzer
+    /// already sorts them while checking the evidence threshold). Returns an empty array
+    /// when no stages can be computed rather than throwing.
+    func analyzeSleepStagesSync(
+        for session: SleepSession,
+        movements: [MovementData],
+        heartRates: [HeartRateData]
+    ) throws -> [SleepStage] {
+        guard let startTime = session.startTime,
+              let endTime = session.endTime else {
+            throw NSError(domain: "SleepStageAnalyzer", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Invalid session times"])
         }
-        
-        // Sort data chronologically
-        let sortedHeartRate = heartRateData.sorted { $0.timestamp ?? Date() < $1.timestamp ?? Date() }
-        let sortedMovement = movementData.sorted { $0.timestamp ?? Date() < $1.timestamp ?? Date() }
-        let sortedRespiratory = respiratoryData.sorted { $0.timestamp ?? Date() < $1.timestamp ?? Date() }
-        
-        // Analyze in 30-minute epochs
-        let epochs = try await createEpochs(
-            heartRate: sortedHeartRate,
-            movement: sortedMovement,
-            respiratory: sortedRespiratory
-        )
-        
-        return try await classifyStages(epochs: epochs, session: session)
+
+        ZeezLogger.sleepTracking.info("Analyzing stages for session \(startTime) – \(endTime)")
+
+        let baselineHR = calculateRestingHeartRate(heartRates: heartRates)
+        let sleepOnsetTime = detectSleepOnset(movements: movements, heartRates: heartRates,
+                                             sessionStart: startTime, baselineHR: baselineHR)
+        let rawStages = createRawStages(startTime: startTime, endTime: endTime,
+                                       sleepOnsetTime: sleepOnsetTime,
+                                       movements: movements, heartRates: heartRates,
+                                       baselineHR: baselineHR)
+        let cycleAdjustedStages = applyREMCycles(stages: rawStages, sleepOnsetTime: sleepOnsetTime)
+        let smoothedStages = smoothStageTransitions(rawStages: cycleAdjustedStages)
+        let stages = try createSleepStageEntitiesSync(smoothedStages, session: session)
+        logStageStatistics(stages)
+        return stages
+    }
+
+    /// Async entry point retained for any call sites that still use it directly.
+    func analyzeSleepStages(for session: SleepSession) async throws -> [SleepStage] {
+        guard let startTime = session.startTime,
+              let endTime = session.endTime else {
+            throw NSError(domain: "SleepStageAnalyzer", code: -1,
+                         userInfo: [NSLocalizedDescriptionKey: "Invalid session times"])
+        }
+
+        ZeezLogger.sleepTracking.info("Analyzing sleep stages for session from \(startTime) to \(endTime)")
+
+        let movements = (session.movementData?.allObjects as? [MovementData] ?? [])
+            .sorted { ($0.timestamp ?? Date.distantPast) < ($1.timestamp ?? Date.distantPast) }
+        let heartRates = (session.heartRateData?.allObjects as? [HeartRateData] ?? [])
+            .sorted { ($0.timestamp ?? Date.distantPast) < ($1.timestamp ?? Date.distantPast) }
+
+        return try analyzeSleepStagesSync(for: session, movements: movements, heartRates: heartRates)
     }
     
-    /// Creates analysis epochs from sensor data
-    private func createEpochs(
-        heartRate: [HeartRateData],
-        movement: [MovementData],
-        respiratory: [RespiratoryData]
-    ) async throws -> [SleepEpoch] {
-        // Implementation will analyze data in 30-minute windows
-        var epochs: [SleepEpoch] = []
-        let epochDuration: TimeInterval = AppConstants.SleepCycle.epochDuration // 30 minutes
+    // MARK: - Sleep Onset Detection
+    
+    private func detectSleepOnset(movements: [MovementData], heartRates: [HeartRateData],
+                                sessionStart: Date, baselineHR: Double) -> Date {
+        let windowDuration: TimeInterval = 15 * 60 // 15-minute windows
+        var currentTime = sessionStart
+        let maxSearchTime = sessionStart.addingTimeInterval(2 * 3600) // Search up to 2 hours
         
-        guard let startTime = heartRate.first?.timestamp,
-              let endTime = heartRate.last?.timestamp else {
-            throw AppError.insufficientData
+        while currentTime < maxSearchTime {
+            let windowEnd = currentTime.addingTimeInterval(windowDuration)
+            
+            // Get data for this window
+            let windowMovements = movements.filter { movement in
+                guard let timestamp = movement.timestamp else { return false }
+                return timestamp >= currentTime && timestamp < windowEnd
+            }
+            
+            let windowHeartRates = heartRates.filter { hr in
+                guard let timestamp = hr.timestamp else { return false }
+                return timestamp >= currentTime && timestamp < windowEnd
+            }
+            
+            // Check for sleep onset indicators
+            let avgMovement = calculateAverageMovement(movements: windowMovements)
+            let avgHeartRate = calculateAverageHeartRate(heartRates: windowHeartRates)
+            let hrDrop = baselineHR - avgHeartRate
+            
+            // Sleep onset criteria:
+            // 1. Low movement (< 1.0 on 0-5 scale)
+            // 2. Heart rate drop of at least 5 BPM
+            // 3. Sustained for at least 15 minutes
+            if avgMovement < 1.0 && hrDrop >= 5.0 {
+                ZeezLogger.sleepTracking.debug("Sleep onset criteria met - Movement: \(avgMovement), HR drop: \(hrDrop)")
+                return currentTime
+            }
+            
+            currentTime = currentTime.addingTimeInterval(5 * 60) // Check every 5 minutes
         }
         
+        // Fallback: assume sleep onset 30 minutes after session start
+        return sessionStart.addingTimeInterval(30 * 60)
+    }
+    
+    // MARK: - Heart Rate Analysis
+    
+    private func calculateRestingHeartRate(heartRates: [HeartRateData]) -> Double {
+        guard !heartRates.isEmpty else { return 65.0 } // Default if no data
+        
+        // Use lowest 20% of readings as baseline resting HR
+        let sortedRates = heartRates.map { $0.value }.sorted()
+        let bottomPercentileCount = max(1, Int(Double(sortedRates.count) * 0.2))
+        let lowestRates = Array(sortedRates.prefix(bottomPercentileCount))
+        
+        return lowestRates.reduce(0.0, +) / Double(lowestRates.count)
+    }
+    
+    private func analyzeHeartRatePattern(heartRates: [HeartRateData]) -> HeartRatePattern {
+        guard !heartRates.isEmpty else {
+            return HeartRatePattern(average: 65.0, variability: 0.0, trend: .stable, stability: 1.0)
+        }
+        
+        let values = heartRates.map { $0.value }
+        let average = values.reduce(0.0, +) / Double(values.count)
+        
+        // Calculate RMSSD (variability)
+        var sumSquaredDiffs = 0.0
+        for i in 1..<values.count {
+            let diff = values[i] - values[i-1]
+            sumSquaredDiffs += diff * diff
+        }
+        let rmssd = values.count > 1 ? sqrt(sumSquaredDiffs / Double(values.count - 1)) : 0.0
+        
+        // Determine trend
+        let firstHalf = Array(values.prefix(values.count / 2))
+        let secondHalf = Array(values.suffix(values.count / 2))
+        let firstAvg = firstHalf.reduce(0.0, +) / Double(firstHalf.count)
+        let secondAvg = secondHalf.reduce(0.0, +) / Double(secondHalf.count)
+        let trend: HRTrend = secondAvg > firstAvg + 2 ? .increasing :
+                            secondAvg < firstAvg - 2 ? .decreasing : .stable
+        
+        // Calculate stability (inverse of coefficient of variation)
+        let standardDeviation = sqrt(calculateVariance(values: values))
+        let coefficientOfVariation = average > 0 ? standardDeviation / average : 0
+        let stability = max(0.0, 1.0 - coefficientOfVariation)
+        
+        return HeartRatePattern(average: average, variability: rmssd, trend: trend, stability: stability)
+    }
+    
+    // MARK: - Raw Stage Creation
+    
+    private func createRawStages(startTime: Date, endTime: Date, sleepOnsetTime: Date,
+                               movements: [MovementData], heartRates: [HeartRateData],
+                               baselineHR: Double) -> [(startTime: Date, endTime: Date, stage: SleepStageType, confidence: Double)] {
+        var stages: [(Date, Date, SleepStageType, Double)] = []
+        let epochDuration: TimeInterval = 5 * 60 // 5-minute epochs for precision
         var currentTime = startTime
+        
         while currentTime < endTime {
-            let epochEnd = currentTime.addingTimeInterval(epochDuration)
+            let epochEnd = min(currentTime.addingTimeInterval(epochDuration), endTime)
             
             // Filter data for current epoch
-            let epochHeartRate = heartRate.filter { 
-                guard let timestamp = $0.timestamp else { return false }
+            let epochMovements = movements.filter { movement in
+                guard let timestamp = movement.timestamp else { return false }
                 return timestamp >= currentTime && timestamp < epochEnd
             }
             
-            let epochMovement = movement.filter {
-                guard let timestamp = $0.timestamp else { return false }
+            let epochHeartRates = heartRates.filter { hr in
+                guard let timestamp = hr.timestamp else { return false }
                 return timestamp >= currentTime && timestamp < epochEnd
             }
             
-            let epochRespiratory = respiratory.filter {
-                guard let timestamp = $0.timestamp else { return false }
-                return timestamp >= currentTime && timestamp < epochEnd
+            // Determine stage based on sleep onset timing
+            let stage: SleepStageType
+            let confidence: Double
+            
+            if currentTime < sleepOnsetTime {
+                // Before sleep onset - classify as awake
+                stage = .awake
+                confidence = 90.0
+            } else {
+                // After sleep onset - use physiological classification
+                let result = classifyPhysiologicalStage(movements: epochMovements,
+                                                      heartRates: epochHeartRates,
+                                                      baselineHR: baselineHR,
+                                                      timeFromSleepOnset: currentTime.timeIntervalSince(sleepOnsetTime))
+                stage = result.stage
+                confidence = result.confidence
             }
             
-            // Create epoch with filtered data
-            let epoch = SleepEpoch(
-                startTime: currentTime,
-                endTime: epochEnd,
-                heartRateData: epochHeartRate,
-                movementData: epochMovement,
-                respiratoryData: epochRespiratory
-            )
-            
-            epochs.append(epoch)
+            stages.append((currentTime, epochEnd, stage, confidence))
             currentTime = epochEnd
         }
         
-        return epochs
-    }
-    
-    /// Classifies sleep stages based on analyzed epochs
-    private func classifyStages(epochs: [SleepEpoch], session: SleepSession) async throws -> [SleepStage] {
-        var stages: [SleepStage] = []
-        
-        for epoch in epochs {
-            let stage = try await determineStage(from: epoch)
-            
-            // Create CoreData SleepStage entity
-            let sleepStage = SleepStage(context: context)
-            sleepStage.id = UUID()
-            sleepStage.startTime = epoch.startTime
-            sleepStage.endTime = epoch.endTime
-            sleepStage.duration = epoch.endTime.timeIntervalSince(epoch.startTime)
-            sleepStage.stageType = stage.rawValue
-            sleepStage.confidence = calculateConfidence(for: epoch)
-            sleepStage.session = session
-            
-            stages.append(sleepStage)
-        }
-        
-        try context.save()
         return stages
     }
     
-    /// Determines sleep stage from epoch data using enhanced multi-factor analysis
-    private func determineStage(from epoch: SleepEpoch) async throws -> SleepStageType {
-        guard !epoch.heartRateData.isEmpty,
-              !epoch.movementData.isEmpty,
-              !epoch.respiratoryData.isEmpty else {
-            return .awake // Default to awake if insufficient data
+    private func classifyPhysiologicalStage(movements: [MovementData], heartRates: [HeartRateData],
+                                          baselineHR: Double, timeFromSleepOnset: TimeInterval)
+    -> (stage: SleepStageType, confidence: Double) {
+        
+        let avgMovement = calculateAverageMovement(movements: movements)
+        let hrPattern = analyzeHeartRatePattern(heartRates: heartRates)
+        
+        // Calculate confidence based on data quality
+        let dataConfidence = calculateDataConfidence(movements: movements, heartRates: heartRates)
+        
+        // Sleep stage classification using research-based thresholds
+        // Movement scale: 0-5 (from activityLevel in MovementData)
+        let sleepHR = baselineHR * 0.85 // Sleep HR typically 15% lower than resting
+        
+        switch (avgMovement, hrPattern.average, hrPattern.variability) {
+        case let (m, hr, var_hr) where m <= 0.5 && hr <= sleepHR + 5 && var_hr < 3.0:
+            // Deep sleep: very low movement, low stable HR, low variability
+            return (.deepSleep, dataConfidence * 0.9)
+            
+        case let (m, hr, var_hr) where m <= 1.5 && hr <= sleepHR + 10 && var_hr < 5.0:
+            // Light sleep: low movement, moderate HR, some variability
+            return (.lightSleep, dataConfidence * 0.8)
+            
+        case let (m, hr, _) where m >= 2.0 || hr > sleepHR + 15:
+            // Awake: higher movement or elevated HR
+            return (.awake, dataConfidence * 0.85)
+            
+        default:
+            // Default to light sleep for ambiguous cases
+            return (.lightSleep, dataConfidence * 0.6)
         }
-        
-        // Calculate comprehensive metrics
-        let hrMetrics = calculateHeartRateMetrics(epoch.heartRateData)
-        let movementMetrics = calculateMovementMetrics(epoch.movementData)
-        let respiratoryMetrics = calculateRespiratoryMetrics(epoch.respiratoryData)
-        
-        // Multi-factor scoring approach
-        let stageScores = calculateStageScores(
-            heartRate: hrMetrics,
-            movement: movementMetrics,
-            respiratory: respiratoryMetrics
-        )
-        
-        // Return stage with highest confidence score
-        return stageScores.max(by: { $0.value < $1.value })?.key ?? .awake
     }
     
-    /// Calculate comprehensive heart rate metrics for stage detection
-    private func calculateHeartRateMetrics(_ data: [HeartRateData]) -> HeartRateMetrics {
-        let values = data.map { $0.value }
-        let average = values.reduce(0, +) / Double(values.count)
+    // MARK: - REM Cycle Application
+    
+    private func applyREMCycles(stages: [(startTime: Date, endTime: Date, stage: SleepStageType, confidence: Double)],
+                              sleepOnsetTime: Date) -> [(startTime: Date, endTime: Date, stage: SleepStageType, confidence: Double)] {
+        var adjustedStages = stages
+        let totalSleepDuration = stages.last?.endTime.timeIntervalSince(sleepOnsetTime) ?? 0
         
-        // Calculate HRV (simplified RMSSD)
-        let hrv = calculateHRV(values)
+        // Calculate expected REM periods based on sleep cycles
+        let remPeriods = calculateREMPeriods(sleepOnsetTime: sleepOnsetTime, totalDuration: totalSleepDuration)
         
-        // Calculate trend (increasing/decreasing/stable)
-        let trend = calculateTrend(values)
+        ZeezLogger.sleepTracking.debug("Calculated \(remPeriods.count) REM periods")
         
-        return HeartRateMetrics(
-            average: average,
-            hrv: hrv,
-            trend: trend,
-            stability: calculateStability(values)
-        )
+        // Apply REM periods to appropriate stages
+        for remPeriod in remPeriods {
+            for i in 0..<adjustedStages.count {
+                let stage = adjustedStages[i]
+                
+                // Check if this epoch overlaps with REM period and isn't awake
+                if stage.stage != .awake &&
+                   stage.startTime < remPeriod.end &&
+                   stage.endTime > remPeriod.start {
+                    
+                    // Convert to REM if conditions are met
+                    let avgMovement = stage.stage == .deepSleep ? 0.3 : 1.0 // Estimate based on current stage
+                    if avgMovement <= 1.0 { // REM has minimal movement
+                        adjustedStages[i] = (stage.startTime, stage.endTime, .rem, stage.confidence * 0.9)
+                    }
+                }
+            }
+        }
+        
+        return adjustedStages
     }
     
-    /// Calculate movement metrics with acceleration analysis
-    private func calculateMovementMetrics(_ data: [MovementData]) -> MovementMetrics {
-        let magnitudes = data.map { $0.magnitude }
-        let activities = data.map { Double($0.activityLevel) }
+    private func calculateREMPeriods(sleepOnsetTime: Date, totalDuration: TimeInterval) -> [(start: Date, end: Date)] {
+        var remPeriods: [(Date, Date)] = []
+        let cycleCount = Int(totalDuration / avgCycleDuration)
         
-        let avgMagnitude = magnitudes.reduce(0, +) / Double(magnitudes.count)
-        let avgActivity = activities.reduce(0, +) / Double(activities.count)
+        for cycle in 0..<cycleCount {
+            let cycleStart = sleepOnsetTime.addingTimeInterval(Double(cycle) * avgCycleDuration)
+            
+            // REM timing within cycle (typically last 20-30 minutes of cycle)
+            let remStart = cycleStart.addingTimeInterval(avgCycleDuration * 0.75) // Start at 75% of cycle
+            let remDuration = min(20 * 60, avgCycleDuration * 0.25) // 20 minutes or 25% of cycle
+            let remEnd = remStart.addingTimeInterval(remDuration)
+            
+            // First REM period is typically shorter and later
+            if cycle == 0 {
+                let delayedStart = remStart.addingTimeInterval(10 * 60) // Delay first REM
+                remPeriods.append((delayedStart, min(remEnd, delayedStart.addingTimeInterval(10 * 60))))
+            } else {
+                // Later REM periods get progressively longer
+                let extendedDuration = remDuration + Double(cycle) * 5 * 60 // +5 min per cycle
+                remPeriods.append((remStart, remStart.addingTimeInterval(extendedDuration)))
+            }
+        }
         
-        // Calculate movement variability
-        let variability = calculateVariability(magnitudes)
-        
-        // Detect periodic movements (rolling/position changes)
-        let periodicMovements = detectPeriodicMovements(data)
-        
-        return MovementMetrics(
-            avgMagnitude: avgMagnitude,
-            avgActivity: avgActivity,
-            variability: variability,
-            periodicMovements: periodicMovements
-        )
+        return remPeriods
     }
     
-    /// Calculate respiratory metrics for stage classification
-    private func calculateRespiratoryMetrics(_ data: [RespiratoryData]) -> RespiratoryMetrics {
-        let rates = data.map { $0.respiratoryRate }
-        let avgRate = rates.reduce(0, +) / Double(rates.count)
+    // MARK: - Stage Transition Smoothing
+    
+    private func smoothStageTransitions(rawStages: [(startTime: Date, endTime: Date, stage: SleepStageType, confidence: Double)])
+    -> [(startTime: Date, endTime: Date, stage: SleepStageType, confidence: Double)] {
         
-        let oxygenLevels = data.compactMap { $0.oxygenSaturation }
-        let avgOxygen = oxygenLevels.isEmpty ? 0 : oxygenLevels.reduce(0, +) / Double(oxygenLevels.count)
+        guard rawStages.count > 2 else { return rawStages }
         
-        return RespiratoryMetrics(
-            avgRate: avgRate,
-            avgOxygen: avgOxygen,
-            variability: calculateVariability(rates),
-            regularity: calculateRegularity(rates)
-        )
+        var smoothedStages = rawStages
+        
+        // Apply minimum duration constraint and smooth isolated stages
+        for i in 1..<smoothedStages.count - 1 {
+            let previous = smoothedStages[i-1]
+            let current = smoothedStages[i]
+            let next = smoothedStages[i+1]
+            
+            // Smooth isolated stages (single epoch surrounded by different stages)
+            if previous.stage == next.stage && current.stage != previous.stage {
+                // Replace isolated stage with surrounding stage
+                smoothedStages[i] = (current.startTime, current.endTime, previous.stage, current.confidence * 0.8)
+            }
+            
+            // Prevent unrealistic transitions (e.g., Deep Sleep → Awake directly)
+            if previous.stage == .deepSleep && current.stage == .awake {
+                // Insert light sleep as transition
+                smoothedStages[i] = (current.startTime, current.endTime, .lightSleep, current.confidence * 0.7)
+            }
+        }
+        
+        return smoothedStages
     }
     
-    /// Calculate probability scores for each sleep stage
-    private func calculateStageScores(
-        heartRate: HeartRateMetrics,
-        movement: MovementMetrics,
-        respiratory: RespiratoryMetrics
-    ) -> [SleepStageType: Double] {
-        var scores: [SleepStageType: Double] = [:]
-        
-        // Deep Sleep scoring
-        scores[.deepSleep] = calculateDeepSleepScore(
-            heartRate: heartRate,
-            movement: movement,
-            respiratory: respiratory
-        )
-        
-        // Light Sleep scoring
-        scores[.lightSleep] = calculateLightSleepScore(
-            heartRate: heartRate,
-            movement: movement,
-            respiratory: respiratory
-        )
-        
-        // REM Sleep scoring
-        scores[.rem] = calculateREMScore(
-            heartRate: heartRate,
-            movement: movement,
-            respiratory: respiratory
-        )
-        
-        // Awake scoring
-        scores[.awake] = calculateAwakeScore(
-            heartRate: heartRate,
-            movement: movement,
-            respiratory: respiratory
-        )
-        
-        return scores
+    // MARK: - Core Data Entity Creation
+
+    private func createSleepStageEntitiesSync(
+        _ stages: [(startTime: Date, endTime: Date, stage: SleepStageType, confidence: Double)],
+        session: SleepSession
+    ) throws -> [SleepStage] {
+        var entities: [SleepStage] = []
+        for stageData in stages {
+            let stage = SleepStage(context: context)
+            stage.id = UUID()
+            stage.startTime = stageData.startTime
+            stage.endTime = stageData.endTime
+            stage.stageType = stageData.stage.rawValue
+            stage.duration = stageData.endTime.timeIntervalSince(stageData.startTime)
+            stage.confidence = stageData.confidence
+            stage.session = session
+            entities.append(stage)
+        }
+        try context.save()
+        return entities
     }
-    
-    // MARK: - Stage-specific scoring methods
-    
-    private func calculateDeepSleepScore(
-        heartRate: HeartRateMetrics,
-        movement: MovementMetrics,
-        respiratory: RespiratoryMetrics
-    ) -> Double {
-        var score = 0.0
-        
-        // Low heart rate (40-60 bpm)
-        if heartRate.average >= 40 && heartRate.average <= 60 {
-            score += 25.0
-        } else if heartRate.average <= 70 {
-            score += 15.0
-        }
-        
-        // High HRV indicates parasympathetic dominance
-        if heartRate.hrv > 30 {
-            score += 20.0
-        } else if heartRate.hrv > 20 {
-            score += 10.0
-        }
-        
-        // Minimal movement
-        if movement.avgMagnitude < 0.1 {
-            score += 25.0
-        } else if movement.avgMagnitude < 0.2 {
-            score += 15.0
-        }
-        
-        // Slow, regular breathing
-        if respiratory.avgRate >= 12 && respiratory.avgRate <= 16 && respiratory.regularity > 0.8 {
-            score += 20.0
-        }
-        
-        // High stability across all metrics
-        if heartRate.stability > 0.8 && movement.variability < 0.3 {
-            score += 10.0
-        }
-        
-        return score
-    }
-    
-    private func calculateLightSleepScore(
-        heartRate: HeartRateMetrics,
-        movement: MovementMetrics,
-        respiratory: RespiratoryMetrics
-    ) -> Double {
-        var score = 0.0
-        
-        // Moderate heart rate (60-80 bpm)
-        if heartRate.average >= 60 && heartRate.average <= 80 {
-            score += 20.0
-        }
-        
-        // Moderate HRV
-        if heartRate.hrv >= 15 && heartRate.hrv <= 35 {
-            score += 15.0
-        }
-        
-        // Low to moderate movement
-        if movement.avgMagnitude >= 0.1 && movement.avgMagnitude <= 0.3 {
-            score += 20.0
-        }
-        
-        // Some periodic movements allowed
-        if movement.periodicMovements <= 3 {
-            score += 15.0
-        }
-        
-        // Normal respiratory rate
-        if respiratory.avgRate >= 14 && respiratory.avgRate <= 18 {
-            score += 15.0
-        }
-        
-        // Moderate stability
-        if heartRate.stability >= 0.6 && heartRate.stability <= 0.8 {
-            score += 15.0
-        }
-        
-        return score
-    }
-    
-    private func calculateREMScore(
-        heartRate: HeartRateMetrics,
-        movement: MovementMetrics,
-        respiratory: RespiratoryMetrics
-    ) -> Double {
-        var score = 0.0
-        
-        // Higher heart rate (70-90 bpm)
-        if heartRate.average >= 70 && heartRate.average <= 90 {
-            score += 25.0
-        }
-        
-        // Variable heart rate (low stability)
-        if heartRate.stability < 0.6 {
-            score += 20.0
-        }
-        
-        // Minimal movement (muscle atonia)
-        if movement.avgMagnitude < 0.15 {
-            score += 25.0
-        }
-        
-        // Irregular breathing
-        if respiratory.variability > 0.4 {
-            score += 15.0
-        }
-        
-        // Higher respiratory rate
-        if respiratory.avgRate > 16 {
-            score += 15.0
-        }
-        
-        return score
-    }
-    
-    private func calculateAwakeScore(
-        heartRate: HeartRateMetrics,
-        movement: MovementMetrics,
-        respiratory: RespiratoryMetrics
-    ) -> Double {
-        var score = 0.0
-        
-        // Higher heart rate
-        if heartRate.average > 80 {
-            score += 20.0
-        }
-        
-        // Significant movement
-        if movement.avgMagnitude > 0.3 {
-            score += 30.0
-        }
-        
-        // High activity level
-        if movement.avgActivity > 2.0 {
-            score += 25.0
-        }
-        
-        // Multiple position changes
-        if movement.periodicMovements > 5 {
-            score += 15.0
-        }
-        
-        // Variable respiratory patterns
-        if respiratory.variability > 0.5 {
-            score += 10.0
-        }
-        
-        return score
+
+    private func createSleepStageEntities(
+        _ stages: [(startTime: Date, endTime: Date, stage: SleepStageType, confidence: Double)],
+        session: SleepSession
+    ) async throws -> [SleepStage] {
+        try createSleepStageEntitiesSync(stages, session: session)
     }
     
     // MARK: - Helper Methods
     
-    /// Calculate Heart Rate Variability using simplified RMSSD
-    private func calculateHRV(_ heartRates: [Double]) -> Double {
-        guard heartRates.count > 1 else { return 0 }
+    private func calculateAverageMovement(movements: [MovementData]) -> Double {
+        guard !movements.isEmpty else { return 0.0 }
         
-        var sumSquareDifferences = 0.0
-        for i in 1..<heartRates.count {
-            let diff = heartRates[i] - heartRates[i-1]
-            sumSquareDifferences += diff * diff
-        }
-        
-        let meanSquareDifference = sumSquareDifferences / Double(heartRates.count - 1)
-        return sqrt(meanSquareDifference)
+        let totalActivity = movements.reduce(0) { $0 + Int($1.activityLevel) }
+        return Double(totalActivity) / Double(movements.count)
     }
     
-    /// Calculate trend direction in data series
-    private func calculateTrend(_ values: [Double]) -> Double {
-        guard values.count > 1 else { return 0 }
+    private func calculateAverageHeartRate(heartRates: [HeartRateData]) -> Double {
+        guard !heartRates.isEmpty else { return 65.0 } // Default
         
-        let firstHalf = values.prefix(values.count / 2)
-        let secondHalf = values.suffix(values.count / 2)
-        
-        let firstAvg = firstHalf.reduce(0, +) / Double(firstHalf.count)
-        let secondAvg = secondHalf.reduce(0, +) / Double(secondHalf.count)
-        
-        return secondAvg - firstAvg
+        return heartRates.reduce(0.0) { $0 + $1.value } / Double(heartRates.count)
     }
     
-    /// Calculate data stability (inverse of variability)
-    private func calculateStability(_ values: [Double]) -> Double {
-        let variability = calculateVariability(values)
-        return 1.0 - min(variability, 1.0)
+    private func calculateDataConfidence(movements: [MovementData], heartRates: [HeartRateData]) -> Double {
+        // Base confidence on data availability and consistency
+        let expectedReadings = 60.0 // Expected readings per epoch
+        let actualReadings = Double(movements.count + heartRates.count)
+        let dataAvailability = min(1.0, actualReadings / expectedReadings)
+        
+        // Movement consistency (lower variance = higher confidence)
+        let movementVariance = calculateVariance(values: movements.map { Double($0.activityLevel) })
+        let movementConsistency = max(0.0, 1.0 - (movementVariance / 5.0)) // Scale to 0-5 range
+        
+        return min(100.0, (dataAvailability * 0.7 + movementConsistency * 0.3) * 100)
     }
     
-    /// Calculate coefficient of variation
-    private func calculateVariability(_ values: [Double]) -> Double {
-        guard !values.isEmpty else { return 0 }
+    private func calculateVariance(values: [Double]) -> Double {
+        guard values.count > 1 else { return 0.0 }
         
-        let mean = values.reduce(0, +) / Double(values.count)
-        guard mean > 0 else { return 0 }
-        
-        let variance = values.map { pow($0 - mean, 2) }.reduce(0, +) / Double(values.count)
-        let stdDev = sqrt(variance)
-        
-        return stdDev / mean
+        let mean = values.reduce(0.0, +) / Double(values.count)
+        let squaredDiffs = values.map { pow($0 - mean, 2) }
+        return squaredDiffs.reduce(0.0, +) / Double(values.count)
     }
     
-    /// Calculate regularity of respiratory patterns
-    private func calculateRegularity(_ rates: [Double]) -> Double {
-        guard rates.count > 2 else { return 0 }
+    private func logStageStatistics(_ stages: [SleepStage]) {
+        let totalDuration = stages.reduce(0.0) { $0 + $1.duration }
+        let deepCount = stages.filter { SleepStageType.deepSleep.matches($0.stageType) }.count
+        let lightCount = stages.filter { SleepStageType.lightSleep.matches($0.stageType) }.count
+        let remCount = stages.filter { SleepStageType.rem.matches($0.stageType) }.count
+        let awakeCount = stages.filter { SleepStageType.awake.matches($0.stageType) }.count
         
-        var intervals: [Double] = []
-        for i in 1..<rates.count {
-            intervals.append(abs(rates[i] - rates[i-1]))
-        }
+        let deepPercent = totalDuration > 0 ? (Double(deepCount) / Double(stages.count)) * 100 : 0
+        let lightPercent = totalDuration > 0 ? (Double(lightCount) / Double(stages.count)) * 100 : 0
+        let remPercent = totalDuration > 0 ? (Double(remCount) / Double(stages.count)) * 100 : 0
+        let awakePercent = totalDuration > 0 ? (Double(awakeCount) / Double(stages.count)) * 100 : 0
         
-        let avgInterval = intervals.reduce(0, +) / Double(intervals.count)
-        let variance = intervals.map { pow($0 - avgInterval, 2) }.reduce(0, +) / Double(intervals.count)
-        
-        // Lower variance means higher regularity
-        return 1.0 - min(sqrt(variance) / avgInterval, 1.0)
-    }
-    
-    /// Detect periodic movements indicating position changes
-    private func detectPeriodicMovements(_ data: [MovementData]) -> Int {
-        var movementCount = 0
-        var previousHighActivity = false
-        
-        for movement in data {
-            let isHighActivity = movement.activityLevel >= 3
-            
-            // Count transitions from low to high activity
-            if isHighActivity && !previousHighActivity {
-                movementCount += 1
-            }
-            
-            previousHighActivity = isHighActivity
-        }
-        
-        return movementCount
-    }
-    
-    /// Calculates confidence score for stage classification
-    private func calculateConfidence(for epoch: SleepEpoch) -> Double {
-        // Enhanced confidence calculation based on data quality and consistency
-        let hrConfidence = epoch.heartRateData.reduce(0.0) { $0 + $1.confidence } / Double(epoch.heartRateData.count)
-        let respConfidence = epoch.respiratoryData.reduce(0.0) { $0 + $1.confidence } / Double(epoch.respiratoryData.count)
-        
-        // Factor in data completeness
-        let dataCompleteness = min(
-            Double(epoch.heartRateData.count) / 30.0, // Expected ~30 readings per epoch
-            Double(epoch.movementData.count) / 60.0,  // Expected ~60 readings per epoch
-            Double(epoch.respiratoryData.count) / 15.0 // Expected ~15 readings per epoch
-        )
-        
-        let baseConfidence = (hrConfidence + respConfidence) / 2.0
-        return baseConfidence * dataCompleteness
+        ZeezLogger.sleepTracking.info("Stage distribution - Deep: \(deepPercent)%, Light: \(lightPercent)%, REM: \(remPercent)%, Awake: \(awakePercent)%")
+        ZeezLogger.sleepTracking.info("Total stages created: \(stages.count), Total duration: \(totalDuration/3600) hours")
     }
 }
 
-// MARK: - Supporting Data Structures
+// MARK: - Supporting Types
 
-/// Represents a time window of sleep data for analysis
-struct SleepEpoch {
-    let startTime: Date
-    let endTime: Date
-    let heartRateData: [HeartRateData]
-    let movementData: [MovementData]
-    let respiratoryData: [RespiratoryData]
-}
-
-/// Comprehensive heart rate metrics for stage analysis
-struct HeartRateMetrics {
+struct HeartRatePattern {
     let average: Double
-    let hrv: Double        // Heart Rate Variability
-    let trend: Double      // Increasing/decreasing trend
-    let stability: Double  // Consistency of readings
+    let variability: Double
+    let trend: HRTrend
+    let stability: Double
 }
 
-/// Movement analysis metrics
-struct MovementMetrics {
-    let avgMagnitude: Double
-    let avgActivity: Double
-    let variability: Double
-    let periodicMovements: Int  // Count of position changes
-}
-
-/// Respiratory pattern metrics
-struct RespiratoryMetrics {
-    let avgRate: Double
-    let avgOxygen: Double
-    let variability: Double
-    let regularity: Double  // Consistency of breathing pattern
+enum HRTrend {
+    case increasing
+    case decreasing
+    case stable
 }

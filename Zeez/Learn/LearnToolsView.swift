@@ -15,7 +15,7 @@ struct LearnToolsView: View {
                         title: "Brain Activity",
                         icon: "brain.head.profile",
                         color: .blue,
-                        description: "Explore brain wave patterns during sleep",
+                        description: "Educational brain wave illustration",
                         delay: 0.0
                     )
                 }
@@ -41,7 +41,7 @@ struct LearnToolsView: View {
                         title: "Environmental",
                         icon: "thermometer.sun",
                         color: .green,
-                        description: "Impact of environment on sleep",
+                        description: "Learn about sleep environments",
                         delay: 0.2
                     )
                 }
@@ -64,15 +64,15 @@ struct LearnToolsView: View {
                 
                 NavigationLink(destination: LearnSleepDebtView()) {
                     ToolGridCard(
-                        title: "Sleep Debt",
+                        title: "Goal Shortfall",
                         icon: "chart.pie",
                         color: .red,
-                        description: "Calculate and recover sleep debt",
+                        description: "Compare recordings with your goal",
                         delay: 0.4
                     )
                 }
-                .accessibilityLabel("Sleep debt tool")
-                .accessibilityHint("Learn how to calculate and recover from sleep debt")
+                .accessibilityLabel("Sleep goal shortfall tool")
+                .accessibilityHint("Compare recorded sleep duration with your selected goal")
                 .accessibilityIdentifier("sleepDebtTool")
                 
                 NavigationLink(destination: LearnSleepStageComparisonView()) {

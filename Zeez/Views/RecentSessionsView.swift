@@ -26,7 +26,7 @@ struct RecentSessionsView: View {
                 }
                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 .accessibilityLabel("Sleep session \(index + 1), \(sessionAccessibilityLabel(session))")
-                .accessibilityHint("Tap to view detailed sleep analysis")
+                .accessibilityHint("Tap to view recorded session details")
                 .accessibilityIdentifier("sleepSession_\(index)")
             }
         }
@@ -50,8 +50,10 @@ struct RecentSessionsView: View {
             components.append("ended \(endTime.formatted(date: .abbreviated, time: .shortened))")
         }
         
-        if session.qualityScore > 0 {
-            components.append("quality score \(Int(session.qualityScore))")
+        if session.hasDisplayableScore {
+            components.append("experimental Zeez estimated sleep score \(Int(session.qualityScore))")
+        } else {
+            components.append("experimental Zeez estimate not available")
         }
         
         return components.joined(separator: ", ")

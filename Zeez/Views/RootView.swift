@@ -4,8 +4,11 @@ import os.log
 
 struct RootView: View {
     @StateObject private var onboardingManager = OnboardingManager.shared
+    @StateObject private var modalCoordinator = ModalCoordinator.shared
+    @StateObject private var permissionManager = AlarmPermissionManager.shared
     @State private var activeAlarm: AlarmConfiguration?
     @State private var showingActiveAlarm = false
+    @State private var showingPermissionDenied = false
     
     var body: some View {
         Group {
@@ -18,6 +21,25 @@ struct RootView: View {
             }
         }
         .accessibilityIdentifier("rootView")
+        .sheet(item: $modalCoordinator.activeModal, onDismiss: {
+            // Notify that modal was dismissed - Settings can refresh its data status
+            NotificationCenter.default.post(name: NSNotification.Name("ModalDismissed"), object: nil)
+        }) { modal in
+            switch modal {
+            case .dataImport:
+                SimpleDataImportView()
+                    .interactiveDismissDisabled(false)
+            case .healthKitError:
+                // TODO: Create HealthKitErrorView if needed
+                Text("HealthKit Error")
+            case .settings:
+                // Only if you want to present settings as a sheet
+                Text("Settings Modal")
+            case .debug:
+                // TODO: Create DebugToolsView if needed
+                Text("Debug Tools")
+            }
+        }
         .fullScreenCover(isPresented: $showingActiveAlarm) {
             if let alarm = activeAlarm {
                 ActiveAlarmView(
@@ -49,8 +71,50 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowActiveAlarm"))) { notification in
             if let alarm = notification.object as? AlarmConfiguration {
-                activeAlarm = alarm
-                showingActiveAlarm = true
+                // Prevent UI conflicts: dismiss any active sheets first
+                dismissActiveModals()
+                
+                // Small delay to ensure dismissal completes before showing alarm
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    activeAlarm = alarm
+                    showingActiveAlarm = true
+                }
+            }
+        }
+        .overlay {
+            // Permission Explainer
+            if permissionManager.showPermissionExplainer {
+                AlarmPermissionExplainerView(
+                    onAllow: {
+                        permissionManager.handleExplainerAllow()
+                    },
+                    onDismiss: {
+                        permissionManager.handleExplainerDismiss()
+                    }
+                )
+                .transition(.opacity.animation(.easeInOut))
+                .zIndex(1000)
+            }
+            
+            // Permission Denied
+            if showingPermissionDenied {
+                AlarmPermissionDeniedView(
+                    onOpenSettings: {
+                        permissionManager.openSettings()
+                        showingPermissionDenied = false
+                    },
+                    onDismiss: {
+                        showingPermissionDenied = false
+                    }
+                )
+                .transition(.opacity.animation(.easeInOut))
+                .zIndex(1000)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AlarmPermissionDenied"))) { _ in
+            // Show denied permission flow when user tries to enable alarm without permissions
+            if permissionManager.isDenied {
+                showingPermissionDenied = true
             }
         }
     }
@@ -59,9 +123,10 @@ struct RootView: View {
         showingActiveAlarm = false
         activeAlarm = nil // Clear the active alarm reference
         
-        // Schedule snooze (9 minutes from now)
-        let snoozeTime = Date().addingTimeInterval(9 * 60)
-        scheduleSnoozeNotification(for: alarm, at: snoozeTime)
+        // Use the new centralized snooze scheduling
+        if let alarmId = alarm.id?.uuidString {
+            AlarmNotificationUtils.scheduleSnooze(for: alarmId)
+        }
         
         // Ensure UI responsiveness
         DispatchQueue.main.async {
@@ -70,7 +135,7 @@ struct RootView: View {
             }
         }
         
-        ZeezLogger.info(ZeezLogger.alarm, "Alarm snoozed for 9 minutes")
+        ZeezLogger.info(ZeezLogger.alarm, "Alarm snoozed for \(alarm.snoozeDurationMinutes) minutes")
     }
     
     private func handleDismiss(_ alarm: AlarmConfiguration) {
@@ -88,27 +153,25 @@ struct RootView: View {
         ZeezLogger.info(ZeezLogger.alarm, "Alarm dismissed")
     }
     
-    private func scheduleSnoozeNotification(for alarm: AlarmConfiguration, at time: Date) {
-        let content = UNMutableNotificationContent()
-        content.title = alarm.name ?? "Alarm"
-        content.body = "Snooze time's up!"
-        content.sound = .defaultCritical // Use reliable critical alert sound
-        
-        let timeInterval = time.timeIntervalSinceNow
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: timeInterval, repeats: false)
-        
-        let request = UNNotificationRequest(
-            identifier: "snooze-\(alarm.id?.uuidString ?? UUID().uuidString)",
-            content: content,
-            trigger: trigger
-        )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule snooze", error: error)
-            }
+    /// Dismiss any active modals to prevent UI conflicts with alarm display
+    private func dismissActiveModals() {
+        // Dismiss permission explainer
+        if permissionManager.showPermissionExplainer {
+            permissionManager.handleExplainerDismiss()
         }
+        
+        // Dismiss permission denied view
+        if showingPermissionDenied {
+            showingPermissionDenied = false
+        }
+        
+        // Dismiss any modal coordinator sheets
+        modalCoordinator.activeModal = nil
+        
+        ZeezLogger.debug(ZeezLogger.alarm, "🔄 Dismissed active modals for alarm display")
     }
+    
+    // Removed scheduleSnoozeNotification - now handled by AlarmNotificationUtils
 }
 
 #if DEBUG

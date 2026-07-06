@@ -172,7 +172,7 @@ struct SleepGoalSettingsView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Weekly sleep debt \(calculateWeeklySleepDebt())")
-            .accessibilityHint("Amount of sleep you need to catch up on this week")
+            .accessibilityHint("Recorded sleep duration below your selected goal during the past seven days")
             .accessibilityIdentifier("weeklySleepDebt")
             
             HStack {
@@ -195,10 +195,14 @@ struct SleepGoalSettingsView: View {
     }
     
     private var formattedSleepDuration: String {
-        let duration = targetWakeTime.timeIntervalSince(targetBedtime)
+        let duration = targetDuration
         let hours = Int(duration) / 3600
         let minutes = Int(duration) / 60 % 60
         return String(format: "%dh %02dm", hours, minutes)
+    }
+
+    private var targetDuration: TimeInterval {
+        SleepGoalPolicy.duration(from: targetBedtime, to: targetWakeTime)
     }
     
     private func savePreferences() {
@@ -209,7 +213,7 @@ struct SleepGoalSettingsView: View {
         prefs.sleepGoalEnabled = sleepGoalEnabled
         prefs.targetBedtime = targetBedtime
         prefs.targetWakeTime = targetWakeTime
-        prefs.targetSleepDuration = targetWakeTime.timeIntervalSince(targetBedtime)
+        prefs.targetSleepDuration = targetDuration
         prefs.modifiedAt = Date()
         
         if prefs.createdAt == nil {
@@ -226,13 +230,24 @@ struct SleepGoalSettingsView: View {
     }
     
     private func calculateWeeklySleepDebt() -> String {
-        // To be implemented with actual sleep data
-        return "2h 30m"
+        guard let summary = SleepDebtCalculator.shared.summary(context: viewContext),
+              summary.coveredDayCount > 0 else {
+            return "No data"
+        }
+        return formatDuration(summary.totalShortfall)
     }
-    
+
     private func calculateMonthlyAverage() -> String {
-        // To be implemented with actual sleep data
-        return "7h 15m"
+        guard let summary = SleepDebtCalculator.shared.summary(forDays: 30, context: viewContext),
+              summary.coveredDayCount > 0 else {
+            return "No data"
+        }
+        return formatDuration(summary.averageComparedDuration)
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration.rounded()) / 60
+        return "\(minutes / 60)h \(minutes % 60)m"
     }
 }
 

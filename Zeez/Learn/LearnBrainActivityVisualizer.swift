@@ -15,13 +15,22 @@ struct LearnBrainActivityVisualizer: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundStyle(.orange)
+                    Text("Educational illustration only. Zeez does not measure your brain activity.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(10)
+                .background(Color.orange.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Educational illustration only. Zeez does not measure your brain activity.")
+
                 stageSelector
                 
                 waveformSection
-                
-                if let session = currentSession {
-                    currentSessionInfo(session)
-                }
                 
                 stageDescription
                 
@@ -31,7 +40,6 @@ struct LearnBrainActivityVisualizer: View {
         }
         .onAppear {
             updateWaveform()
-            loadCurrentSession()
         }
         .onReceive(timer) { _ in
             if isAnimating {
@@ -69,6 +77,10 @@ struct LearnBrainActivityVisualizer: View {
             waveformView
                 .frame(height: 200)
                 .padding(.horizontal)
+
+            Text("Illustrative waveform, not recorded data")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             
             HStack {
                 Label("\(getFrequencyRange()) Hz", systemImage: "waveform")

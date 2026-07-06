@@ -74,7 +74,7 @@ struct LearnSettingsView: View {
             
             if notificationsEnabled {
                 DatePicker("Reminder Time", selection: $reminderTime, displayedComponents: .hourAndMinute)
-                    .onChange(of: reminderTime) {
+                    .onChange(of: reminderTime) { _, _ in
                         updateNotificationSchedule()
                     }
                     .accessibilityLabel("Reminder time")

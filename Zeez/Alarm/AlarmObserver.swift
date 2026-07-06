@@ -16,6 +16,36 @@ class AlarmObserver: NSObject {
     override private init() {
         super.init()
         setupAppLifecycleObservers()
+        
+        // Subscribe to app termination for cleanup
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillTerminate),
+            name: UIApplication.willTerminateNotification,
+            object: nil
+        )
+    }
+    
+    deinit {
+        // Clean up resources
+        cleanup()
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    @objc private func appWillTerminate() {
+        cleanup()
+    }
+    
+    /// Clean up all resources
+    private func cleanup() {
+        reschedulingTimer?.invalidate()
+        reschedulingTimer = nil
+        cancellables.removeAll()
+    }
+    
+    /// Reset singleton state for testing
+    func reset() {
+        cleanup()
     }
     
     func startObserving(context: NSManagedObjectContext) {
@@ -123,22 +153,37 @@ class AlarmObserver: NSObject {
     
     /// Debounce alarm rescheduling to prevent multiple rapid calls
     private func debouncedReschedule(context: NSManagedObjectContext) {
-        // Cancel any existing timer
-        if reschedulingTimer?.isValid == true {
-            ZeezLogger.debug(ZeezLogger.alarm, "⏱️ Canceling previous reschedule timer (debouncing)")
-            reschedulingTimer?.invalidate()
-        }
-        
-        // Schedule a new timer with a longer delay to reduce excessive rescheduling
-        reschedulingTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+        // Use serial queue to ensure atomic operations
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            ZeezLogger.info(ZeezLogger.alarm, "🔄 Rescheduling alarms after debounce delay")
-            self.scheduler.scheduleAllAlarms(context: context)
+            // Cancel any existing timer atomically
+            if let existingTimer = self.reschedulingTimer, existingTimer.isValid {
+                ZeezLogger.debug(ZeezLogger.alarm, "⏱️ Canceling previous reschedule timer (debouncing)")
+                existingTimer.invalidate()
+            }
             
-            // Debug: Show what was scheduled (after a brief delay)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                self.scheduler.debugScheduledAlarms()
+            // Schedule a new timer with a longer delay to reduce excessive rescheduling
+            self.reschedulingTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] timer in
+                guard let self = self else { 
+                    timer.invalidate()
+                    return 
+                }
+                
+                ZeezLogger.info(ZeezLogger.alarm, "🔄 Rescheduling alarms after debounce delay")
+                
+                // Clear the timer reference since it's completing
+                if self.reschedulingTimer === timer {
+                    self.reschedulingTimer = nil
+                }
+                
+                // Perform the actual scheduling
+                self.scheduler.scheduleAllAlarms(context: context)
+                
+                // Debug: Show what was scheduled (after a brief delay)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self.scheduler.debugScheduledAlarms()
+                }
             }
         }
     }

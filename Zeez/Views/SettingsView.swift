@@ -13,8 +13,12 @@ struct SettingsView: View {
         animation: .default
     ) private var preferences
     
-    @State private var showingHealthKitAlert = false
     @State private var healthKitError: Error?
+    @State private var importStatus: String = ""
+    @State private var isImporting = false
+    @State private var hasRealDataCached: Bool = false
+    
+    @StateObject private var modalCoordinator = ModalCoordinator.shared
     
     private var preferencesArray: [UserPreferences] {
         Array(preferences)
@@ -37,6 +41,7 @@ struct SettingsView: View {
             personalizationSection
             notificationSection
             healthKitSection
+            dataImportSection
             alarmSection
             
             #if DEBUG
@@ -44,29 +49,23 @@ struct SettingsView: View {
             #endif
         }
         .navigationTitle("Settings")
-        .alert("HealthKit Error", isPresented: $showingHealthKitAlert) {
-            Button("OK", role: .cancel) {}
-                .accessibilityLabel("OK")
-                .accessibilityHint("Dismiss HealthKit error message")
-        } message: {
-            if let error = healthKitError {
-                Text(error.localizedDescription)
-            }
-        }
     }
     
     private var sleepGoalSection: some View {
         Section("Sleep Goal") {
             Toggle("Enable Sleep Goal", isOn: binding(\.sleepGoalEnabled))
                 .accessibilityLabel("Enable sleep goal tracking")
-                .accessibilityHint("When enabled, set target bedtime and wake time for sleep recommendations")
+                .accessibilityHint("When enabled, compare recorded sleep duration with your selected goal")
                 .accessibilityIdentifier("sleepGoalToggle")
             
             if userPreferences.sleepGoalEnabled {
                 DatePicker("Target Bedtime",
                           selection: Binding(
                               get: { self.userPreferences.targetBedtime ?? Date() },
-                              set: { self.userPreferences.targetBedtime = $0 }
+                              set: {
+                                  self.userPreferences.targetBedtime = $0
+                                  updateTargetSleepDuration()
+                              }
                           ),
                           displayedComponents: .hourAndMinute)
                     .accessibilityLabel("Target bedtime")
@@ -76,7 +75,10 @@ struct SettingsView: View {
                 DatePicker("Target Wake Time",
                           selection: Binding(
                               get: { self.userPreferences.targetWakeTime ?? Date() },
-                              set: { self.userPreferences.targetWakeTime = $0 }
+                              set: {
+                                  self.userPreferences.targetWakeTime = $0
+                                  updateTargetSleepDuration()
+                              }
                           ),
                           displayedComponents: .hourAndMinute)
                     .accessibilityLabel("Target wake time")
@@ -92,7 +94,7 @@ struct SettingsView: View {
                 PersonalizationSettingsView()
             }
             .accessibilityLabel("Sleep analysis personalization")
-            .accessibilityHint("Manage your personalized sleep analysis settings and view your sleep patterns")
+            .accessibilityHint("View the current availability of personalization features")
             .accessibilityIdentifier("personalizationSettingsLink")
         }
     }
@@ -109,16 +111,93 @@ struct SettingsView: View {
     
     private var healthKitSection: some View {
         Section("Health Integration") {
-            Toggle("Sync with Health App",
+            Toggle("Import from Apple Health",
                    isOn: binding(\.healthKitSyncEnabled))
-                .accessibilityLabel("Sync with Health app")
-                .accessibilityHint("Share sleep data with Apple Health for comprehensive health tracking")
+                .accessibilityLabel("Import from Apple Health")
+                .accessibilityHint("Enable importing sleep and health data from Apple Health")
                 .accessibilityIdentifier("healthKitSyncToggle")
             .onChange(of: userPreferences.healthKitSyncEnabled) { oldValue, newValue in
-                if newValue {
+                if newValue, !modalCoordinator.isPresenting(.dataImport) {
                     requestHealthKitPermissions()
                 }
             }
+        }
+    }
+    
+    private var dataImportSection: some View {
+        Section("Sleep Data") {
+            let dataManager = RealDataManager.shared
+            let dataSources = dataManager.getDataSources()
+            
+            VStack(alignment: .leading, spacing: 8) {
+                if hasRealDataCached {
+                    Label("Using your real sleep data", systemImage: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                } else {
+                    Label("Using simulated data", systemImage: "waveform.path")
+                        .foregroundColor(.orange)
+                }
+                
+                // Data source summary
+                if let healthKitCount = dataSources[.healthKit]?.count, healthKitCount > 0 {
+                    Text("HealthKit: \(healthKitCount) sessions")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                if let pillowCount = dataSources[.pillow]?.count, pillowCount > 0 {
+                    Text("Pillow: \(pillowCount) sessions")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                if let mockCount = dataSources[.mock]?.count, mockCount > 0 {
+                    Text("Mock: \(mockCount) sessions")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Data source information")
+            
+            Button("Import Sleep Data") {
+                // Prevent rapid taps and ensure no other modal is active
+                guard modalCoordinator.canPresent() && !isImporting else { 
+                    ZeezLogger.debug(ZeezLogger.coreData, "Import button tap blocked - canPresent: \(modalCoordinator.canPresent()), isImporting: \(isImporting)")
+                    return 
+                }
+                ZeezLogger.info(ZeezLogger.coreData, "📱 User tapped Import Sleep Data in Settings")
+                modalCoordinator.present(.dataImport)
+            }
+            .disabled(isImporting || !modalCoordinator.canPresent())
+            .accessibilityLabel("Import sleep data")
+            .accessibilityHint("Import sleep data from Apple Health")
+            
+            if !importStatus.isEmpty {
+                Text(importStatus)
+                    .font(.caption)
+                    .foregroundColor(importStatus.contains("Error") ? .red : .green)
+                    .accessibilityLabel("Import status: \(importStatus)")
+            }
+            
+            // Show Clear Mock Data button when mock data exists
+            let mockCount = dataSources[.mock]?.count ?? 0
+            if mockCount > 0 {
+                Button("Clear Mock Data (\(mockCount) sessions)") {
+                    clearMockData()
+                }
+                .foregroundColor(.red)
+                .accessibilityLabel("Clear simulated data")
+                .accessibilityHint("Remove all \(mockCount) generated test sessions")
+            }
+            
+        }
+        .onAppear {
+            updateRealDataStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ModalDismissed"))) { _ in
+            // Refresh data status when modal is dismissed
+            updateRealDataStatus()
         }
     }
     
@@ -136,6 +215,34 @@ struct SettingsView: View {
     #if DEBUG
     private var debugSection: some View {
         Section("🐛 Debug Tools") {
+            // New alarm system testing
+            Button("🔔 Test New Alarm System (10s)") {
+                AlarmScheduler.shared.scheduleTestNotification()
+            }
+            .accessibilityLabel("Test new alarm system")
+            .accessibilityHint("Sends a test notification using the new alarm system in 10 seconds")
+            
+            Button("🔄 Test Follow-Up Notifications") {
+                testFollowUpNotifications()
+            }
+            .accessibilityLabel("Test follow-up notifications")
+            .accessibilityHint("Tests the continuous ringing simulation with follow-ups")
+            
+            Button("😴 Test Heavy Sleeper Mode") {
+                testHeavySleeperMode()
+            }
+            .accessibilityLabel("Test heavy sleeper mode")
+            .accessibilityHint("Tests faster follow-up notifications for heavy sleepers")
+            
+            Button("🔊 Test Audio Controller") {
+                testAudioController()
+            }
+            .accessibilityLabel("Test audio controller")
+            .accessibilityHint("Tests the continuous alarm audio playback")
+            
+            Divider()
+            
+            // Legacy testing
             Button("Test Notification (10s)") {
                 testNotificationSystem()
             }
@@ -148,17 +255,26 @@ struct SettingsView: View {
             .accessibilityLabel("Check notification permissions")
             .accessibilityHint("Displays current notification authorization status")
             
+            Button("Test Full-Screen Alarm") {
+                testFullScreenAlarm()
+            }
+            .accessibilityLabel("Test full-screen alarm interface")
+            .accessibilityHint("Shows the full-screen alarm experience")
+            
+            Divider()
+            
+            // Debug info
             Button("Debug Scheduled Alarms") {
                 debugScheduledAlarms()
             }
             .accessibilityLabel("Debug scheduled alarms")
             .accessibilityHint("Shows all currently scheduled alarm notifications in console")
             
-            Button("Test Full-Screen Alarm") {
-                testFullScreenAlarm()
+            Button("🔍 Validate Alarm Data") {
+                validateAlarmData()
             }
-            .accessibilityLabel("Test full-screen alarm interface")
-            .accessibilityHint("Shows the full-screen alarm experience")
+            .accessibilityLabel("Validate alarm data")
+            .accessibilityHint("Runs data validation and migration for alarm configurations")
             
             Button("Clear All Scheduled Alarms") {
                 clearAllScheduledAlarms()
@@ -225,6 +341,77 @@ struct SettingsView: View {
             AlarmScheduler.shared.debugScheduledAlarms()
         }
     }
+    
+    private func testFollowUpNotifications() {
+        // Create a test notification that will trigger follow-ups
+        let content = UNMutableNotificationContent()
+        content.title = "Test Alarm Follow-Ups"
+        content.body = "This will test the follow-up notification system"
+        content.categoryIdentifier = AlarmNotificationRegistrar.categoryId
+        content.interruptionLevel = .timeSensitive
+        content.sound = .default
+        content.userInfo = [
+            "alarmID": "test-follow-up-\(UUID().uuidString)",
+            "type": "main"  // This triggers follow-up logic
+        ]
+        
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 10, repeats: false)
+        let request = UNNotificationRequest(identifier: "test-follow-ups", content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule follow-up test", error: error)
+            } else {
+                ZeezLogger.info(ZeezLogger.alarm, "🔄 Follow-up test scheduled! Expect follow-ups every 60s after main notification")
+            }
+        }
+    }
+    
+    private func testHeavySleeperMode() {
+        // Create a test notification simulating heavy sleeper mode
+        let content = UNMutableNotificationContent()
+        content.title = "Heavy Sleeper Test"
+        content.body = "This will test faster follow-ups (31s intervals)"
+        content.categoryIdentifier = AlarmNotificationRegistrar.categoryId
+        content.interruptionLevel = .timeSensitive
+        content.sound = .default
+        content.userInfo = [
+            "alarmID": "test-heavy-sleeper-\(UUID().uuidString)",
+            "type": "main"
+        ]
+        
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+        let request = UNNotificationRequest(identifier: "test-heavy-sleeper", content: content, trigger: trigger)
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule heavy sleeper test", error: error)
+            } else {
+                ZeezLogger.info(ZeezLogger.alarm, "😴 Heavy sleeper test scheduled! Expect follow-ups every 31s")
+            }
+        }
+    }
+    
+    private func testAudioController() {
+        if AlarmAudioController.shared.isPlaying {
+            AlarmAudioController.shared.stop()
+            ZeezLogger.info(ZeezLogger.alarm, "🔇 Stopped audio controller test")
+        } else {
+            if AlarmAudioController.shared.canPlay(bundledName: AlarmNotificationUtils.longInAppBundledName) {
+                AlarmAudioController.shared.startLooping(bundledName: AlarmNotificationUtils.longInAppBundledName)
+                ZeezLogger.info(ZeezLogger.alarm, "🔊 Started continuous audio test - tap again to stop")
+            } else {
+                // Test with a fallback
+                AlarmAudioController.shared.startLooping(bundledName: "test_sound", fileExtension: "caf")
+                ZeezLogger.info(ZeezLogger.alarm, "🔊 Started audio test with fallback - tap again to stop")
+            }
+        }
+    }
+    
+    private func validateAlarmData() {
+        AlarmDataMigrationHelper.performMigrationAndValidation(context: viewContext)
+        ZeezLogger.info(ZeezLogger.alarm, "🔍 Alarm data validation completed - check console for details")
+    }
     #endif
     
     /// Creates a binding for UserPreferences properties
@@ -245,14 +432,23 @@ struct SettingsView: View {
             }
         )
     }
+
+    private func updateTargetSleepDuration() {
+        guard let bedtime = userPreferences.targetBedtime,
+              let wakeTime = userPreferences.targetWakeTime else { return }
+        userPreferences.targetSleepDuration = SleepGoalPolicy.duration(from: bedtime, to: wakeTime)
+        userPreferences.modifiedAt = Date()
+        do {
+            try viewContext.save()
+        } catch {
+            ZeezLogger.error(ZeezLogger.ui, "Failed to save sleep goal duration", error: error)
+        }
+    }
     
-    /// Requests HealthKit permissions when sync is enabled
+    /// Requests HealthKit permissions when sync is enabled (only when import modal isn't active)
     private func requestHealthKitPermissions() {
         SleepSessionManager.shared.requestHealthKitAuthorization { success, error in
             if !success {
-                healthKitError = error
-                showingHealthKitAlert = true
-                
                 // Revert toggle if permission denied
                 viewContext.perform {
                     userPreferences.healthKitSyncEnabled = false
@@ -262,9 +458,32 @@ struct SettingsView: View {
                         ZeezLogger.error(ZeezLogger.ui, "Failed to revert HealthKit setting", error: error)
                     }
                 }
+                
+                // Log error instead of showing modal to avoid conflicts
+                if let error = error {
+                    ZeezLogger.error(ZeezLogger.error, "HealthKit permission denied: \(error.localizedDescription)")
+                }
             }
         }
     }
+    
+    private func clearMockData() {
+        RealDataManager.shared.clearMockData { result in
+            switch result {
+            case .success(let count):
+                importStatus = "Cleared \(count) mock sessions"
+            case .failure(let error):
+                importStatus = "Error clearing data: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    private func updateRealDataStatus() {
+        hasRealDataCached = RealDataManager.shared.hasRealData()
+    }
+    
+    #if DEBUG
+    #endif
 }
 
 #Preview {

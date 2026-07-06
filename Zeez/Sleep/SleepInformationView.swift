@@ -63,7 +63,7 @@ struct SleepInformationView: View {
     
     private func durationSection(_ session: SleepSession) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sleep Duration")
+            Text("Recorded Session Duration")
                 .font(.headline)
             
             HStack(spacing: 20) {
@@ -76,18 +76,13 @@ struct SleepInformationView: View {
                 
                 VStack(alignment: .leading, spacing: 8) {
                     MetricRow(
-                        label: "Total Sleep",
+                        label: "Session Duration",
                         value: formatDuration(session.timeInSleep)
                     )
-                    
+
                     MetricRow(
-                        label: "Time in Bed",
-                        value: formatDuration(timeInBed(session))
-                    )
-                    
-                    MetricRow(
-                        label: "Sleep Goal",
-                        value: "8h 00m"
+                        label: "Reference Goal",
+                        value: formatDuration(AppConstants.Sleep.targetDuration)
                     )
                 }
             }
@@ -98,8 +93,8 @@ struct SleepInformationView: View {
                 .fill(Color(UIColor.secondarySystemBackground))
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Sleep duration section: Total sleep \(formatDuration(session.timeInSleep)), Time in bed \(formatDuration(timeInBed(session))), Goal 8 hours")
-        .accessibilityHint("Shows your sleep duration compared to your goal")
+        .accessibilityLabel("Recorded session duration section: Session duration \(formatDuration(session.timeInSleep)), reference sleep goal \(formatDuration(AppConstants.Sleep.targetDuration))")
+        .accessibilityHint("Shows the recorded session interval alongside your reference sleep goal")
         .accessibilityIdentifier("sleepDurationSection")
     }
     
@@ -140,28 +135,37 @@ struct SleepInformationView: View {
     
     private func sleepEfficiencySection(_ session: SleepSession) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sleep Efficiency")
+            let (efficiency, hasEfficiencyInputs) = calculateEfficiency(session)
+            let sectionTitle = hasEfficiencyInputs ? "Sleep Efficiency (Est.)" : "Session Duration"
+
+            Text(sectionTitle)
                 .font(.headline)
-            
-            let efficiency = calculateEfficiency(session)
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(Int(efficiency))%")
+
+            if hasEfficiencyInputs {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(Int(efficiency))%")
+                            .font(.title)
+                            .bold()
+                        Text("Based on recorded awake time")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    CircularProgressView(value: efficiency, total: 100, lineWidth: 8, size: 60)
+                }
+            } else {
+                HStack {
+                    let hours = Int(session.timeInSleep / 3600)
+                    let minutes = Int((session.timeInSleep.truncatingRemainder(dividingBy: 3600)) / 60)
+                    Text("\(hours)h \(minutes)m")
                         .font(.title)
                         .bold()
-                    Text(efficiencyRating(efficiency))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("Efficiency unavailable")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                
-                Spacer()
-                
-                CircularProgressView(
-                    value: efficiency,
-                    total: 100,
-                    lineWidth: 8,
-                    size: 60
-                )
             }
         }
         .padding()
@@ -221,26 +225,29 @@ struct SleepInformationView: View {
         return end.timeIntervalSince(start)
     }
     
-    private func calculateEfficiency(_ session: SleepSession) -> Double {
+    /// Efficiency requires an explicit recorded awake interval.
+    private func calculateEfficiency(_ session: SleepSession) -> (Double, Bool) {
         let bedTime = timeInBed(session)
-        guard bedTime > 0 else { return 0 }
-        return (session.timeInSleep / bedTime) * 100
+        guard bedTime > 0 else { return (0, false) }
+
+        let stages = session.sleepStages?.allObjects as? [SleepStage] ?? []
+        let storedStages = stages.map {
+            StoredSleepStageDuration(type: $0.stageType, duration: $0.duration)
+        }
+        guard hasRecordedAwakeInterval(in: storedStages) else { return (0, false) }
+
+        let awakeTime = stages
+            .filter { SleepStageType.awake.matches($0.stageType) }
+            .reduce(0.0) { $0 + $1.duration }
+        let actualSleep = bedTime - awakeTime
+        return ((actualSleep / bedTime) * 100, true)
     }
-    
+
     private func timeInStage(_ session: SleepSession, stage: String) -> TimeInterval {
         guard let stages = session.sleepStages?.allObjects as? [SleepStage] else { return 0 }
         return stages
-            .filter { $0.stageType == stage }
+            .filter { SleepStageType.normalize(stage) == SleepStageType.normalize($0.stageType) }
             .reduce(0) { $0 + $1.duration }
-    }
-    
-    private func efficiencyRating(_ efficiency: Double) -> String {
-        switch efficiency {
-        case 90...100: return "Excellent"
-        case 80..<90: return "Good"
-        case 70..<80: return "Fair"
-        default: return "Poor"
-        }
     }
     
     private func formatDuration(_ duration: TimeInterval) -> String {

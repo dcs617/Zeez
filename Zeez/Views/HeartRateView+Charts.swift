@@ -22,7 +22,7 @@ extension HeartRateView {
     
     private var timeRangeHeader: some View {
         HStack {
-            Text("Heart Rate Trend")
+            Text("Recorded Heart Rate")
                 .font(.headline)
             
             Spacer()

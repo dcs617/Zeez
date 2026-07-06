@@ -34,14 +34,22 @@ struct MonthlyTrendsView: View {
                         .accessibilityIdentifier("metricsBreakdown")
                     
                     if selectedDataPoint?.sleepDebt ?? 0 > 0 {
-                        NavigationLink(destination: LearnSleepDebtAnalysisView(debtHours: 14400, recoveryDays: 7, recommendedHours: 8.0)) {
-                            SleepDebtEducationCard(
-                                debt: selectedDataPoint?.sleepDebt ?? 0,
-                                severity: getSeverity(selectedDataPoint?.sleepDebt ?? 0)
-                            )
+                        NavigationLink(destination: LearnSleepDebtView()) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Sleep Goal Shortfall")
+                                    .font(.headline)
+                                Text("View tracked shortfall and calculation details")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding()
+                            .background {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(UIColor.secondarySystemBackground))
+                            }
                         }
-                        .accessibilityLabel("Learn about sleep debt analysis")
-                        .accessibilityHint("Navigate to educational content about sleep debt recovery")
+                        .accessibilityLabel("View sleep goal shortfall")
+                        .accessibilityHint("Navigate to recorded sleep comparison details and sleep debt education")
                         .accessibilityIdentifier("sleepDebtEducationLink")
                     }
                 }
@@ -58,7 +66,7 @@ struct MonthlyTrendsView: View {
     private func monthlyChart(_ dataPoints: [MonthlyDataPoint]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Sleep Quality Trend")
+                Text("Estimated Score Trend")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("qualityTrendHeader")
@@ -79,12 +87,12 @@ struct MonthlyTrendsView: View {
                 data: dataPoints.map { point in
                     (date: point.month, value: point.metrics.averageQuality)
                 },
-                valueLabel: "Quality",
-                color: .purple
+                valueLabel: "Score",
+                color: .blue
             )
             .frame(height: 200)
-            .accessibilityLabel("Monthly sleep quality trend chart showing \(dataPoints.count) months of data")
-            .accessibilityHint("Chart displaying sleep quality trends over time")
+            .accessibilityLabel("Monthly estimated sleep score trend chart showing \(dataPoints.count) months of data")
+            .accessibilityHint("Chart displaying experimental estimated scores over time")
             .accessibilityIdentifier("trendChart")
         }
         .padding()
@@ -158,14 +166,14 @@ struct MonthlyTrendsView: View {
                         .accessibilityIdentifier("durationMetric")
                         
                         GridRow {
-                            metricLabel("Sleep Quality")
+                            metricLabel("Est. Score")
                                 .accessibilityIdentifier("qualityLabel")
                             Text(String(format: "%.1f", point.metrics.averageQuality))
-                                .accessibilityLabel("Quality score \(String(format: "%.1f", point.metrics.averageQuality)) out of 100")
+                                .accessibilityLabel("Estimated score \(String(format: "%.1f", point.metrics.averageQuality)) out of 100")
                                 .accessibilityIdentifier("qualityValue")
                         }
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Sleep quality \(String(format: "%.1f", point.metrics.averageQuality)) out of 100")
+                        .accessibilityLabel("Estimated sleep score \(String(format: "%.1f", point.metrics.averageQuality)) out of 100")
                         .accessibilityIdentifier("qualityMetric")
                         
                         GridRow {
@@ -180,25 +188,25 @@ struct MonthlyTrendsView: View {
                         .accessibilityIdentifier("consistencyMetric")
                         
                         GridRow {
-                            metricLabel("Sleep Debt")
+                            metricLabel("Goal Shortfall")
                                 .accessibilityIdentifier("debtLabel")
                             HStack {
                                 Text(formattedDuration(point.sleepDebt))
-                                    .accessibilityLabel("Sleep debt \(formattedDuration(point.sleepDebt))")
+                                    .accessibilityLabel("Sleep goal shortfall \(formattedDuration(point.sleepDebt))")
                                 if point.sleepDebt > 0 {
-                                    NavigationLink(destination: LearnSleepDebtAnalysisView(debtHours: 14400, recoveryDays: 7, recommendedHours: 8.0)) {
+                                    NavigationLink(destination: LearnSleepDebtView()) {
                                         Image(systemName: "info.circle")
                                             .foregroundColor(.blue)
                                     }
-                                    .accessibilityLabel("Learn about sleep debt analysis")
-                                    .accessibilityHint("Navigate to sleep debt education")
+                                    .accessibilityLabel("View sleep goal shortfall details")
+                                    .accessibilityHint("Navigate to goal comparison and sleep debt education")
                                     .accessibilityIdentifier("sleepDebtInfoLink")
                                 }
                             }
                             .accessibilityIdentifier("debtValue")
                         }
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Sleep debt \(formattedDuration(point.sleepDebt))")
+                        .accessibilityLabel("Sleep goal shortfall \(formattedDuration(point.sleepDebt))")
                         .accessibilityIdentifier("debtMetric")
                         
                         GridRow {

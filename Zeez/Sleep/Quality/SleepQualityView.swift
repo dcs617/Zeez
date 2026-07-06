@@ -1,160 +1,72 @@
 import SwiftUI
-import Charts
-import os.log
 
 struct SleepQualityView: View {
-    @Environment(\.managedObjectContext) private var viewContext
-    @State private var trendData: [TrendPoint] = []
-    @State private var selectedDate: Date?
-    @State private var showingTips = false
-    
     let session: SleepSession?
-    
-    private struct TrendPoint: Identifiable {
-        let id = UUID()
-        let date: Date
-        let score: Double
-    }
     
     var body: some View {
         ScrollView {
             if let session = session {
                 LazyVStack(spacing: 20) {
                     overallScoreSection(session)
-                    qualityTrendSection
-                    metricsSection(session)
-                    stagesSection(session)
-                    environmentSection(session)
+                    if session.hasDisplayableScore {
+                        metricsSection(session)
+                    }
                 }
                 .padding()
             } else {
                 noDataView
             }
         }
-        .navigationTitle("Sleep Quality")
+        .navigationTitle("Experimental Zeez Estimate")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                if let session = session {
-                    NavigationLink(destination: PersonalizedQualityView(session: session)) {
-                        Image(systemName: "person.fill")
-                    }
-                    .accessibilityLabel("Personalized analysis")
-                    .accessibilityHint("View detailed personalized sleep quality analysis")
-                }
-                
-                Button {
-                    showingTips = true
-                } label: {
-                    Image(systemName: "questionmark.circle")
-                }
-                .accessibilityLabel("Sleep quality tips")
-                .accessibilityHint("Get helpful tips for improving your sleep quality")
-                .accessibilityIdentifier("sleepQualityTipsButton")
-            }
-        }
-        .sheet(isPresented: $showingTips) {
-            SleepQualityTipsView()
-        }
-        .task {
-            loadTrendData()
-        }
     }
     
     private func overallScoreSection(_ session: SleepSession) -> some View {
         VStack(spacing: 16) {
-            QualityScoreRing(
-                score: session.qualityScore,
-                size: 160,
-                lineWidth: 12
-            )
-            
-            Text("Overall Sleep Quality")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 15)
-                .fill(Color(UIColor.secondarySystemBackground))
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Overall sleep quality score: \(Int(session.qualityScore))%")
-        .accessibilityHint("Your sleep quality rating based on duration, efficiency, and stages")
-        .accessibilityIdentifier("overallQualityScore")
-    }
-    
-    private var qualityTrendSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Quality Trend")
-                .font(.headline)
-            
-            if trendData.isEmpty {
-                Text("No trend data available")
-                    .font(.subheadline)
+            if session.hasDisplayableScore {
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 12)
+                        .frame(width: 160, height: 160)
+
+                    Circle()
+                        .trim(from: 0, to: session.qualityScore / 100.0)
+                        .stroke(Color.blue, lineWidth: 12)
+                        .frame(width: 160, height: 160)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.easeInOut, value: session.qualityScore)
+
+                    VStack {
+                        Text("\(Int(session.qualityScore))")
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .foregroundColor(.blue)
+
+                        Text("EXPERIMENTAL")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Experimental Zeez estimated sleep score: \(Int(session.qualityScore)) points")
+
+                Text(scoreDescription(for: session))
+                    .font(.headline)
                     .foregroundColor(.secondary)
-                    .accessibilityLabel("No quality trend data available")
             } else {
-                Chart {
-                    ForEach(trendData) { point in
-                        LineMark(
-                            x: .value("Date", point.date),
-                            y: .value("Score", point.score)
-                        )
-                        .foregroundStyle(Color.blue.gradient)
-                        
-                        AreaMark(
-                            x: .value("Date", point.date),
-                            y: .value("Score", point.score)
-                        )
-                        .foregroundStyle(Color.blue.opacity(0.1))
-                        
-                        if let selected = selectedDate,
-                           Calendar.current.isDate(point.date, inSameDayAs: selected) {
-                            PointMark(
-                                x: .value("Date", point.date),
-                                y: .value("Score", point.score)
-                            )
-                            .foregroundStyle(.blue)
-                            .annotation {
-                                Text("\(Int(point.score))%")
-                                    .font(.caption)
-                                    .padding(6)
-                                    .background(.ultraThinMaterial)
-                                    .cornerRadius(8)
-                            }
-                        }
-                    }
+                VStack(spacing: 8) {
+                    Image(systemName: "bed.double.circle")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("Score Not Available")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    Text("An experimental Zeez estimate appears only when Zeez has sufficient inputs for scoring.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                .frame(height: 200)
-                .chartYScale(domain: 0...100)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .day)) { value in
-                        if let date = value.as(Date.self) {
-                            AxisGridLine()
-                            AxisValueLabel {
-                                Text(date.formatted(.dateTime.weekday(.short)))
-                                    .font(.caption)
-                            }
-                        }
-                    }
-                }
-                .chartOverlay { proxy in
-                    GeometryReader { geometry in
-                        Rectangle()
-                            .fill(.clear)
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        let x = value.location.x
-                                        if let date: Date = proxy.value(atX: x) {
-                                            selectedDate = date
-                                        }
-                                    }
-                            )
-                    }
-                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Experimental Zeez estimate not available")
             }
         }
         .padding()
@@ -165,57 +77,24 @@ struct SleepQualityView: View {
     }
     
     private func metricsSection(_ session: SleepSession) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Quality Metrics")
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Supporting Data")
                 .font(.headline)
             
-            LazyVGrid(columns: [GridItem(.flexible())], spacing: 12) {
-                let metrics = calculateMetrics(session)
+            VStack(spacing: 12) {
+                supportingDataRow(title: "Recorded Interval", value: formatDuration(session))
                 
-                MetricCard(
-                    title: "Sleep Duration",
-                    score: metrics.duration,
-                    icon: "clock.fill",
-                    description: "Sleep duration relative to your target"
+                supportingDataRow(
+                    title: session.hasSourceReportedStages
+                        ? "Apple Health-Reported Stage Summary"
+                        : "Experimental Zeez Stage Summary",
+                    value: stagesSummary(for: session)
                 )
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Sleep duration metric: \(Int(metrics.duration))%")
-                .accessibilityHint("Shows how your sleep duration compares to your target")
-                .accessibilityIdentifier("sleepDurationMetric")
-                
-                MetricCard(
-                    title: "Sleep Cycles",
-                    score: metrics.cycles,
-                    icon: "waveform.path.ecg",
-                    description: "Quality of your sleep cycle progression"
-                )
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Sleep cycles metric: \(Int(metrics.cycles))%")
-                .accessibilityHint("Quality rating of your sleep cycle progression")
-                .accessibilityIdentifier("sleepCyclesMetric")
-                
-                MetricCard(
-                    title: "Sleep Consistency",
-                    score: metrics.consistency,
-                    icon: "calendar",
-                    description: "Consistency of your sleep schedule"
-                )
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Sleep consistency metric: \(Int(metrics.consistency))%")
-                .accessibilityHint("How consistent your sleep schedule has been")
-                .accessibilityIdentifier("sleepConsistencyMetric")
-                
-                MetricCard(
-                    title: "Environment",
-                    score: session.environmentalScore,
-                    icon: "thermometer",
-                    description: "Quality of your sleep environment"
-                )
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Environment metric: \(Int(session.environmentalScore))%")
-                .accessibilityHint("Quality rating of your sleep environment conditions")
-                .accessibilityIdentifier("environmentMetric")
             }
+
+            Text("This estimate is not a clinical assessment and should not be used to evaluate a health condition.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .padding()
         .background {
@@ -224,146 +103,67 @@ struct SleepQualityView: View {
         }
     }
     
-    private func stagesSection(_ session: SleepSession) -> some View {
-        Group {
-            if let stages = session.sleepStages?.allObjects as? [SleepStage],
-               !stages.isEmpty {
-                SleepStageBreakdown(stages: stages)
+    private func supportingDataRow(title: String, value: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+
+                Text(value)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
+
+            Spacer()
         }
-    }
-    
-    private func environmentSection(_ session: SleepSession) -> some View {
-        Group {
-            if let readings = session.environmentalReadings?.allObjects as? [EnvironmentalReading],
-               !readings.isEmpty {
-                EnvironmentalFactors(readings: readings)
-            }
-        }
+        .padding(.horizontal)
     }
     
     private var noDataView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "moon.zzz.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(.blue)
+            Image(systemName: "bed.double.circle")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
             
-            Text("No Sleep Data Available")
-                .font(.headline)
+            Text("No Sleep Data")
+                .font(.title2)
+                .fontWeight(.medium)
             
-            Text("Start tracking your sleep to see quality metrics and insights.")
+            Text("Complete or import a sleep session to view an experimental Zeez estimate when available.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("No sleep data available")
-        .accessibilityHint("Start tracking your sleep to see quality metrics and insights")
-        .accessibilityIdentifier("noSleepDataView")
-    }
-    
-    private func loadTrendData() {
-        guard let session = session,
-              let sessionDate = session.startTime else { return }
-        
-        let calendar = Calendar.current
-        let weekStart = calendar.date(
-            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: sessionDate)
-        ) ?? sessionDate
-        
-        let request = SleepSession.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "startTime >= %@ AND startTime < %@ AND isActive == NO",
-            weekStart as NSDate,
-            calendar.date(byAdding: .day, value: 7, to: weekStart)! as NSDate
-        )
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \SleepSession.startTime, ascending: true)]
-        
-        if let sessions = try? viewContext.fetch(request) {
-            trendData = sessions.compactMap { session in
-                guard let date = session.startTime else { return nil }
-                return TrendPoint(date: date, score: session.qualityScore)
-            }
-            
-            if let sessionStart = session.startTime {
-                selectedDate = calendar.startOfDay(for: sessionStart)
-            }
-        }
-    }
-    
-    private func calculateMetrics(_ session: SleepSession) -> (duration: Double, cycles: Double, consistency: Double) {
-        let calculator = SleepQualityCalculator(session: session, context: viewContext)
-        let metrics = calculator.calculateMetrics()
-        return (metrics.durationScore, metrics.cycleScore, metrics.consistencyScore)
-    }
-}
-
-private struct MetricCard: View {
-    let title: String
-    let score: Double
-    let icon: String
-    let description: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(scoreColor)
-                
-                Text(title)
-                    .font(.headline)
-                
-                Spacer()
-                
-                Text("\(Int(score))%")
-                    .font(.title3)
-                    .bold()
-                    .foregroundStyle(scoreColor)
-            }
-            
-            Text(description)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: 6)
-                        .cornerRadius(3)
-                    
-                    Rectangle()
-                        .fill(scoreColor)
-                        .frame(width: geometry.size.width * CGFloat(score / 100), height: 6)
-                        .cornerRadius(3)
-                }
-            }
-            .frame(height: 6)
         }
         .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(UIColor.systemBackground))
-        }
     }
     
-    private var scoreColor: Color {
-        switch score {
-        case 90...: return .green
-        case 70..<90: return .blue
-        case 50..<70: return .yellow
-        default: return .red
+    // MARK: - Helper Methods
+    
+    private func scoreDescription(for session: SleepSession) -> String {
+        "Experimental Zeez Estimate"
+    }
+    
+    private func formatDuration(_ session: SleepSession) -> String {
+        guard let duration = session.derivedSleepMetrics.recordedSessionInterval.value else {
+            return "Unknown"
         }
-    }
-}
 
-#Preview {
-    NavigationView {
-        SleepQualityView(session: nil)
-            .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration) % 3600 / 60
+
+        return "\(hours)h \(minutes)m"
     }
+    
+    private func stagesSummary(for session: SleepSession) -> String {
+        guard let distribution = session.derivedSleepMetrics.asleepStageComposition.value else {
+            return "Not available"
+        }
+        let totalDuration = distribution.values.reduce(0, +)
+        guard totalDuration > 0 else { return "No stage data" }
+        let deepPercentage = Int((distribution[.deepSleep, default: 0] / totalDuration) * 100)
+
+        return "\(deepPercentage)% Deep Sleep"
+    }
+
 }

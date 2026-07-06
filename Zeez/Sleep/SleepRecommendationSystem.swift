@@ -11,6 +11,17 @@ final class SleepRecommendationSystem {
         self.persistenceController = .shared
     }
     
+    deinit {
+        // No explicit cleanup needed for persistenceController reference
+        // but provide deinit for consistency and future extensibility
+    }
+    
+    /// Reset singleton state for testing
+    func reset() {
+        // No mutable state to reset in this singleton
+        // but provide method for consistency
+    }
+    
     /// User age group categories for sleep recommendations
     enum AgeGroup {
         case youngAdult      // 18-25

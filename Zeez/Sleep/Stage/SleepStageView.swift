@@ -1,9 +1,6 @@
 import SwiftUI
 import CoreData
-import os.log
 
-/// Detailed view of sleep stages for a session
-/// Shows the progression of sleep stages over time with analysis
 struct SleepStageView: View {
     @ObservedObject var session: SleepSession
     
@@ -15,251 +12,176 @@ struct SleepStageView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                stageDistributionChart
-                    .accessibilityIdentifier("stageDistributionChart")
-                
-                stageBreakdown
-                    .accessibilityIdentifier("stageBreakdown")
-                
                 if !sortedStages.isEmpty {
-                    stageTimeline
-                        .accessibilityIdentifier("stageTimeline")
+                    stageDistributionSection
+                    stageTimelineSection
+                } else {
+                    noStageDataView
                 }
             }
             .padding()
         }
         .navigationTitle("Sleep Stages")
         .navigationBarTitleDisplayMode(.inline)
-        .accessibilityIdentifier("sleepStageView")
     }
     
-    private var stageDistributionChart: some View {
+    private var stageDistributionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Stage Distribution")
                 .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("stageDistributionHeader")
-            
-            let distribution = calculateDistribution()
-            
-            VStack(spacing: 8) {
-                ForEach(Array(distribution.sorted(by: { $0.key > $1.key }).enumerated()), id: \.element.key) { index, stageData in
-                    StageProgressBar(
-                        stage: stageData.key,
-                        percentage: stageData.value,
-                        color: stageColor(for: stageData.key)
-                    )
-                    .accessibilityLabel("\(stageData.key.capitalized) sleep stage \(Int(stageData.value)) percent")
-                    .accessibilityIdentifier("stageProgressBar_\(index)")
-                }
-            }
-        }
-        .padding()
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(10)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("stageDistributionContainer")
-    }
-    
-    private var stageBreakdown: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Stage Analysis")
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("stageAnalysisHeader")
-            
-            let stats = calculateStageStats()
-            
-            ForEach(Array(stats.sorted(by: { $0.key > $1.key }).enumerated()), id: \.element.key) { index, stageData in
-                HStack {
-                    Circle()
-                        .fill(stageColor(for: stageData.key))
-                        .frame(width: 12, height: 12)
-                        .accessibilityHidden(true)
-                    
-                    Text(stageData.key.capitalized)
-                    
-                    Spacer()
-                    
-                    Text("\(stageData.value / 60, specifier: "%.1f") hrs")
-                        .foregroundColor(.secondary)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(stageData.key.capitalized) sleep stage duration \(stageData.value / 3600, specifier: "%.1f") hours")
-                .accessibilityIdentifier("stageBreakdown_\(index)")
-            }
-        }
-        .padding()
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(10)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("stageBreakdownContainer")
-    }
-    
-    private var stageTimeline: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Timeline")
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("timelineHeader")
-            
-            TimelineChart(stages: sortedStages)
-                .frame(height: 100)
-                .accessibilityLabel("Sleep stage timeline chart showing progression through \(sortedStages.count) sleep stages")
-                .accessibilityHint("Visual timeline of your sleep stages throughout the night")
-                .accessibilityIdentifier("timelineChart")
-            
-            timeAxis
-                .accessibilityIdentifier("timeAxis")
-        }
-        .padding()
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(10)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("stageTimelineContainer")
-    }
-    
-    private var timeAxis: some View {
-        HStack {
-            if let start = session.startTime {
-                Text(start, style: .time)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .accessibilityLabel("Sleep session started at \(start, style: .time)")
-                    .accessibilityIdentifier("startTimeAxis")
-                
-                Spacer()
-                
-                if let end = session.endTime {
-                    Text(end, style: .time)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .accessibilityLabel("Sleep session ended at \(end, style: .time)")
-                        .accessibilityIdentifier("endTimeAxis")
-                }
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("timeAxisContainer")
-    }
-    
-    private func calculateDistribution() -> [String: Double] {
-        var distribution: [String: Double] = [:]
-        let totalDuration = sortedStages.reduce(0.0) { $0 + $1.duration }
-        
-        for stage in sortedStages {
-            if let type = stage.stageType {
-                distribution[type, default: 0] += (stage.duration / totalDuration) * 100
-            }
-        }
-        
-        return distribution
-    }
-    
-    private func calculateStageStats() -> [String: TimeInterval] {
-        var stats: [String: TimeInterval] = [:]
-        
-        for stage in sortedStages {
-            if let type = stage.stageType {
-                stats[type, default: 0] += stage.duration
-            }
-        }
-        
-        return stats
-    }
-    
-    private func stageColor(for type: String) -> Color {
-        switch type.lowercased() {
-        case "deep": return .blue
-        case "light": return .green
-        case "rem": return .purple
-        default: return .gray
-        }
-    }
-}
 
-/// Progress bar showing percentage of time in each sleep stage
-private struct StageProgressBar: View {
-    let stage: String
-    let percentage: Double
-    let color: Color
-    
-    var body: some View {
-        VStack(alignment: .leading) {
-            HStack {
-                Text(stage.capitalized)
-                Spacer()
-                Text("\(Int(percentage))%")
-                    .foregroundColor(.secondary)
-            }
-            .font(.subheadline)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(stage.capitalized) sleep stage \(Int(percentage)) percent")
-            .accessibilityIdentifier("stageLabel_\(stage.lowercased())")
+            Text(session.stageSourceDescription)
+                .font(.caption)
+                .foregroundColor(.secondary)
             
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    Rectangle()
-                        .fill(Color(UIColor.systemGray5))
-                    
-                    Rectangle()
-                        .fill(color)
-                        .frame(width: geometry.size.width * percentage / 100)
-                }
-            }
-            .frame(height: 8)
-            .cornerRadius(4)
-            .accessibilityElement(children: .ignore)
-            .accessibilityValue("\(Int(percentage)) percent")
-            .accessibilityIdentifier("progressBar_\(stage.lowercased())")
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("stageProgressBar_\(stage.lowercased())")
-    }
-}
+            if let distribution = calculateDistribution() {
+                VStack(spacing: 8) {
+                    ForEach(SleepStageType.allCases.filter { distribution[$0] != nil }, id: \.self) { stageType in
+                        let percentage = distribution[stageType] ?? 0
 
-/// Timeline chart showing sleep stage progression
-private struct TimelineChart: View {
-    let stages: [SleepStage]
-    
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
-                if let firstStage = stages.first?.startTime,
-                   let lastStage = stages.last?.endTime {
-                    let totalDuration = lastStage.timeIntervalSince(firstStage)
-                    
-                    ForEach(Array(stages.enumerated()), id: \.element.id) { index, stage in
-                        if let start = stage.startTime,
-                           let end = stage.endTime,
-                           let type = stage.stageType {
-                            let x = geometry.size.width * 
-                                   start.timeIntervalSince(firstStage) / totalDuration
-                            let width = geometry.size.width * 
-                                      end.timeIntervalSince(start) / totalDuration
-                            
-                            Rectangle()
-                                .fill(stageColor(for: type))
-                                .frame(width: max(1, width))
-                                .position(x: x + width/2, y: geometry.size.height/2)
-                                .accessibilityLabel("Sleep stage \(index + 1): \(type) sleep")
-                                .accessibilityHint("Duration \(Int(stage.duration / 60)) minutes")
-                                .accessibilityIdentifier("timelineStage_\(index)")
+                        HStack {
+                            Circle()
+                                .fill(stageColor(for: stageType.rawValue))
+                                .frame(width: 12, height: 12)
+
+                            Text(stageType.displayName(reportedByAppleHealth: session.hasSourceReportedStages))
+                                .font(.subheadline)
+
+                            Spacer()
+
+                            Text("\(Int(percentage))%")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.secondary)
                         }
+                        .padding(.horizontal)
                     }
                 }
+            } else {
+                Text(session.hasSourceReportedStages
+                     ? "Reported asleep-stage composition is not available for this session."
+                     : "Experimental Zeez stage composition is not available for this session.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("timelineChartContainer")
+        .padding()
+        .background {
+            RoundedRectangle(cornerRadius: 15)
+                .fill(Color(UIColor.secondarySystemBackground))
+        }
     }
     
+    private var stageTimelineSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Stage Timeline")
+                .font(.headline)
+            
+            VStack(spacing: 4) {
+                ForEach(sortedStages, id: \.id) { stage in
+                    stageTimelineRow(for: stage)
+                }
+            }
+        }
+        .padding()
+        .background {
+            RoundedRectangle(cornerRadius: 15)
+                .fill(Color(UIColor.secondarySystemBackground))
+        }
+    }
+    
+    private func stageTimelineRow(for stage: SleepStage) -> some View {
+        HStack(spacing: 12) {
+            Rectangle()
+                .fill(stageColor(for: stage.stageType ?? ""))
+                .frame(width: 4)
+                .frame(maxHeight: .infinity)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(stageDisplayName(for: stage.stageType ?? ""))
+                    .font(.subheadline.weight(.medium))
+
+                if let startTime = stage.startTime {
+                    Text(formatTime(startTime))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Text("Duration: \(formatDuration(stage.duration))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+        }
+        .frame(height: 60)
+        .padding(.horizontal)
+    }
+    
+    private var noStageDataView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "bed.double")
+                .font(.system(size: 60))
+                .foregroundColor(.secondary)
+
+            Text("No Stage Data")
+                .font(.title2)
+                .fontWeight(.medium)
+
+            Text("Stage data will appear here when Apple Health reports it or Zeez has sufficient inputs for an experimental estimate.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+    }
+
+    // MARK: - Helper Methods
+
+    private func calculateDistribution() -> [SleepStageType: Double]? {
+        guard let durations = session.derivedSleepMetrics.asleepStageComposition.value else {
+            return nil
+        }
+        let totalDuration = durations.values.reduce(0, +)
+        guard totalDuration > 0 else { return nil }
+
+        return durations.mapValues { ($0 / totalDuration) * 100 }
+    }
+
     private func stageColor(for type: String) -> Color {
         switch type.lowercased() {
-        case "deep": return .blue
-        case "light": return .green
+        case "deep": return .indigo
+        case "light": return .blue
+        case "asleepunspecified", "asleep_unspecified": return .teal
         case "rem": return .purple
+        case "awake": return .orange
         default: return .gray
+        }
+    }
+    
+    private func stageDisplayName(for type: String) -> String {
+        if let stageType = SleepStageType.normalize(type) {
+            return stageType.displayName(reportedByAppleHealth: session.hasSourceReportedStages)
+        }
+        switch type.lowercased() {
+        case "inbed": return "In Bed (Context)"
+        default: return "Unknown"
+        }
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration) % 3600 / 60
+
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
         }
     }
 }

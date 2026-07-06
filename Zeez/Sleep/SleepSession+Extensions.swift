@@ -52,6 +52,48 @@ extension SleepSession {
         return stageStart.timeIntervalSince(sessionStart)
     }
     
+    // MARK: - Score Display Policy
+
+    /// Returns `true` when this session has a quality value that can be displayed.
+    ///
+    /// - `qualityScore == 0`: awaiting analysis or source-only data with no score.
+    /// - `qualityScore == 1.0`: sentinel set by `SleepAnalyzer` for sessions with no sensor
+    ///   data; treated as unavailable by all UI consumers.
+    /// - `qualityScore > 1.0`: displayable only with a persisted Zeez estimate record.
+    /// - Debug mock sessions remain displayable in debug builds for intentional test-data review.
+    var hasDisplayableScore: Bool {
+        guard qualityScore > 1.0 else { return false }
+
+        #if DEBUG
+        if deviceIdentifier?.localizedCaseInsensitiveContains("Mock Data") == true {
+            return true
+        }
+        #endif
+
+        return hasZeezEstimatedScore
+    }
+
+    var hasZeezEstimatedScore: Bool {
+        (qualityScores?.count ?? 0) > 0
+    }
+
+    var hasSourceReportedStages: Bool {
+        deviceIdentifier?.contains("HealthKit") == true
+    }
+
+    var stageSourceDescription: String {
+        hasSourceReportedStages ? "Reported by Apple Health" : "Experimental Zeez-estimated stages"
+    }
+
+    /// Duration suitable for comparison against a user-selected sleep goal.
+    ///
+    /// Apple Health imports use asleep stage intervals and exclude `inBed`/awake
+    /// context rows. Sessions recorded by Zeez do not have source-reported sleep
+    /// duration, so their recorded interval is used as an estimate.
+    var durationForSleepGoalComparison: TimeInterval? {
+        derivedSleepMetrics.goalComparisonDuration.value
+    }
+
     // MARK: - Sleep Quality Calculations
     var sleepEfficiency: Double {
         guard timeInBed > 0 else { return 0 }
@@ -82,18 +124,11 @@ extension SleepSession {
     
     // MARK: - Sleep Stage Analysis
     var sleepStageDistribution: [(type: String, duration: TimeInterval)] {
-        guard let stages = sleepStages?.allObjects as? [SleepStage] else {
+        guard let displayable = derivedSleepMetrics.asleepStageComposition.value else {
             return []
         }
-        
-        var distribution: [String: TimeInterval] = [:]
-        
-        stages.forEach { stage in
-            let type = stage.stageType ?? "unknown"
-            distribution[type, default: 0] += stage.duration
-        }
-        
-        return distribution.map { ($0.key, $0.value) }
+
+        return displayable.map { ($0.key.rawValue, $0.value) }
             .sorted { $0.0 < $1.0 }
     }
     
@@ -102,9 +137,8 @@ extension SleepSession {
             return 0
         }
         
-        // A sleep cycle typically contains all sleep stages
-        // This is a simplified calculation
-        return stages.count / 4
+        let displayableCount = stages.filter { SleepStageType.normalize($0.stageType) != nil }.count
+        return displayableCount / 4
     }
     
     // MARK: - Environmental Analysis

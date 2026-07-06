@@ -3,12 +3,21 @@ import Charts
 import CoreData
 import os.log
 
-struct SleepCyclesChart: View {
+struct SleepStagesChart: View {
     let session: SleepSession
-    
+
+    private var metrics: DerivedSleepMetrics {
+        session.derivedSleepMetrics
+    }
+
+    private var hasHeartRateData: Bool {
+        (session.heartRateData?.count ?? 0) > 0
+    }
+
     internal var stageColors: [SleepStageType: Color] = [
         .awake: Color(red: 0.95, green: 0.8, blue: 0.5),      // Soft Yellow
         .lightSleep: Color(red: 0.7, green: 0.85, blue: 0.9), // Light Blue
+        .asleepUnspecified: Color(red: 0.55, green: 0.75, blue: 0.8),
         .deepSleep: Color(red: 0.5, green: 0.6, blue: 0.8),   // Deep Blue
         .rem: Color(red: 0.8, green: 0.7, blue: 0.9)          // Soft Purple
     ]
@@ -27,8 +36,7 @@ struct SleepCyclesChart: View {
         let stages = (session.sleepStages?.allObjects as? [SleepStage]) ?? []
         return stages.compactMap { stage in
             guard let startTime = stage.startTime,
-                  let stageType = stage.stageType,
-                  let type = SleepStageType(rawValue: stageType) else { return nil }
+                  let type = SleepStageType.normalize(stage.stageType) else { return nil }
             
             return (type, startTime, stage.duration)
         }.sorted { $0.startTime < $1.startTime }
@@ -36,8 +44,12 @@ struct SleepCyclesChart: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Sleep Cycles")
+            Text("Sleep Stages")
                 .font(.headline)
+
+            Text(session.stageSourceDescription)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             
             ZStack(alignment: .topLeading) {
                 if #available(iOS 16.0, *) {
@@ -62,9 +74,9 @@ struct SleepCyclesChart: View {
                                 .foregroundStyle(.gray.opacity(0.5))
                         }
                     }
-                    .chartYScale(domain: 0...3)
+                    .chartYScale(domain: 0...4)
                     .chartYAxis {
-                        AxisMarks(values: [0, 1, 2, 3]) { value in
+                        AxisMarks(values: [0, 1, 2, 3, 4]) { value in
                             AxisValueLabel {
                                 Text(stageLabelForValue(value.index))
                             }
@@ -77,38 +89,42 @@ struct SleepCyclesChart: View {
                 }
                 
                 // Heart Rate Stats Box
-                HeartRateStatsBox(stats: heartRateMetrics)
-                    .padding(8)
-                    .background(Color(UIColor.systemBackground).opacity(0.9))
-                    .cornerRadius(8)
-                    .padding(8)
+                if hasHeartRateData {
+                    HeartRateStatsBox(stats: heartRateMetrics)
+                        .padding(8)
+                        .background(Color(UIColor.systemBackground).opacity(0.9))
+                        .cornerRadius(8)
+                        .padding(8)
+                }
             }
             
             // Legend
             HStack(spacing: 16) {
                 ForEach(SleepStageType.allCases, id: \.self) { stage in
-                    SleepStageLegendItem(color: stageColors[stage] ?? .gray, label: stage.displayName)
+                    SleepStageLegendItem(
+                        color: stageColors[stage] ?? .gray,
+                        label: stage.displayName(reportedByAppleHealth: session.hasSourceReportedStages)
+                    )
                 }
             }
             .padding(.top, 8)
             
-            // Sleep Duration Info
-            if let startTime = session.startTime,
-               let endTime = session.endTime {
+            // Session and stage duration information
+            if let recordedInterval = metrics.recordedSessionInterval.value {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Sleep Duration")
+                    Text("Duration Summary")
                         .font(.subheadline)
                         .bold()
                     
                     HStack(spacing: 20) {
                         StatInfoItem(
-                            label: "Time in Bed",
-                            value: formatDuration(endTime.timeIntervalSince(startTime))
+                            label: "Recorded Interval",
+                            value: formatDuration(recordedInterval)
                         )
                         
                         StatInfoItem(
-                            label: "Total Sleep",
-                            value: formatDuration(calculateTotalSleepTime())
+                            label: session.hasSourceReportedStages ? "Reported Sleep" : "Experimental Zeez Sleep Estimate",
+                            value: formattedAsleepDuration
                         )
                     }
                 }
@@ -122,8 +138,9 @@ struct SleepCyclesChart: View {
     
     private func stageValueForType(_ type: SleepStageType) -> Int {
         switch type {
-        case .awake: return 3
-        case .rem: return 2
+        case .awake: return 4
+        case .rem: return 3
+        case .asleepUnspecified: return 2
         case .lightSleep: return 1
         case .deepSleep: return 0
         }
@@ -132,17 +149,21 @@ struct SleepCyclesChart: View {
     private func stageLabelForValue(_ value: Int) -> String {
         switch value {
         case 0: return "Deep"
-        case 1: return "Light"
-        case 2: return "REM"
-        case 3: return "Awake"
+        case 1: return session.hasSourceReportedStages ? "Core" : "Light"
+        case 2: return "Asleep Unspecified"
+        case 3: return "REM"
+        case 4: return "Awake"
         default: return ""
         }
     }
     
-    private func calculateTotalSleepTime() -> TimeInterval {
-        stageData
-            .filter { $0.stage != .awake }
-            .reduce(0) { $0 + $1.duration }
+    private var formattedAsleepDuration: String {
+        if session.hasSourceReportedStages {
+            guard let duration = metrics.qualifiedAsleepDuration.value else { return "Unavailable" }
+            return formatDuration(duration)
+        }
+        guard let composition = metrics.asleepStageComposition.value else { return "Unavailable" }
+        return formatDuration(composition.values.reduce(0, +))
     }
     
     private func formatDuration(_ duration: TimeInterval) -> String {
@@ -227,7 +248,7 @@ struct HeartRateStats {
 //#Preview {
 //    Group {
 //        if let session = try? PersistenceController.preview.container.viewContext.fetch(SleepSession.fetchRequest()).first {
-//            SleepCyclesChart(session: session)
+//            SleepStagesChart(session: session)
 //                .padding()
 //        } else {
 //            Text("No preview data available")

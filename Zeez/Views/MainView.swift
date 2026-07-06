@@ -10,7 +10,7 @@ struct MainView: View {
                         Label("Sleep", systemImage: "moon.zzz")
                     }
                     .accessibilityLabel("Sleep Dashboard")
-                    .accessibilityHint("View your sleep data, quality metrics, and recent sleep sessions")
+                    .accessibilityHint("View recorded sleep data, available estimates, and recent sessions")
                     .accessibilityIdentifier("sleepTab")
                 
                 AlarmSettingsView()

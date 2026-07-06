@@ -164,14 +164,14 @@ struct DashboardView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chart.pie")
                             .font(.caption)
-                        Text("View Sleep Debt")
+                        Text("Goal Shortfall")
                             .font(.caption)
                     }
                     .foregroundColor(.blue)
                     .lineLimit(1)
                 }
-                .accessibilityLabel("View Sleep Debt")
-                .accessibilityHint("Learn about your accumulated sleep debt and how to recover")
+                .accessibilityLabel("View Sleep Goal Shortfall")
+                .accessibilityHint("Compare recorded sleep duration with your selected goal")
                 .accessibilityIdentifier("viewSleepDebtLink")
             }
             
@@ -181,8 +181,8 @@ struct DashboardView: View {
                 .background(Color(UIColor.tertiarySystemBackground))
                 .cornerRadius(16)
                 .accessibilityElement(children: .contain)
-                .accessibilityLabel("Weekly Sleep Progress Chart")
-                .accessibilityHint("Shows your sleep duration for each day of the week")
+                .accessibilityLabel("Weekly recorded session duration chart")
+                .accessibilityHint("Shows recorded session duration for each day of the week")
         }
         .frame(maxWidth: .infinity)
     }
@@ -217,15 +217,15 @@ struct DashboardView: View {
                     SleepAverageCard(sessions: Array(sessionArray.prefix(7)))
                         .frame(width: cardWidth, height: cardWidth)
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Sleep Average Card")
-                        .accessibilityHint("Shows your average sleep duration for the past 7 days")
+                        .accessibilityLabel("Average recorded session duration card")
+                        .accessibilityHint("Shows the average duration of recorded sessions from the past 7 days")
                         .accessibilityIdentifier("sleepAverageCard")
                     
                     QualityScoreCard(session: selectedDaySession)
                         .frame(width: cardWidth, height: cardWidth)
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Sleep Quality Score Card")
-                        .accessibilityHint("Shows your sleep quality score for the selected day")
+                        .accessibilityLabel("Experimental Zeez Estimate Card")
+                        .accessibilityHint("Shows an experimental Zeez estimate for the selected day when available")
                         .accessibilityIdentifier("qualityScoreCard")
                 }
             }
@@ -423,7 +423,7 @@ private enum SleepCardType: CaseIterable {
     case quality
     case heartRate
     case information
-    case cycles
+    case stages
     
     @ViewBuilder
     func makeCard(session: SleepSession?) -> some View {
@@ -432,14 +432,14 @@ private enum SleepCardType: CaseIterable {
             NavigationLink(destination: SleepQualityView(session: session)) {
                 SummaryCard(
                     icon: "chart.bar.fill",
-                    title: "Sleep Quality",
+                    title: "Experimental Zeez Estimate",
                     hasData: session != nil,
                     session: session,
                     previewStat: session.flatMap(SleepQualityPreviewStats.getRandomStat)
                 )
             }
-            .accessibilityLabel("Sleep Quality")
-            .accessibilityHint("View detailed sleep quality analysis and metrics")
+            .accessibilityLabel("Experimental Zeez Estimate")
+            .accessibilityHint("View experimental Zeez estimate details when available")
             .accessibilityIdentifier("sleepQualityCard")
         case .heartRate:
             NavigationLink(destination: HeartRateView(session: session)) {
@@ -452,34 +452,58 @@ private enum SleepCardType: CaseIterable {
                 )
             }
             .accessibilityLabel("Heart Rate")
-            .accessibilityHint("View heart rate data and trends during sleep")
+            .accessibilityHint("View recorded heart rate values during the session")
             .accessibilityIdentifier("heartRateCard")
         case .information:
-            NavigationLink(destination: SleepInformationView(session: session)) {
+            if let session {
+                NavigationLink(destination: EnhancedSleepDetailsView(session: session)) {
+                    SummaryCard(
+                        icon: "moon.zzz.fill",
+                        title: "Session Details",
+                        hasData: true,
+                        session: session,
+                        previewStat: SleepInfoPreviewStats.getRandomStat(from: session)
+                    )
+                }
+                .accessibilityLabel("Session Details")
+                .accessibilityHint("View recorded session details and available measurements")
+                .accessibilityIdentifier("sleepInfoCard")
+            } else {
                 SummaryCard(
                     icon: "moon.zzz.fill",
-                    title: "Sleep Information",
-                    hasData: session != nil,
-                    session: session,
-                    previewStat: session.flatMap(SleepInfoPreviewStats.getRandomStat)
+                    title: "Session Details",
+                    hasData: false,
+                    session: nil,
+                    previewStat: nil
                 )
+                .accessibilityLabel("Session Details, no session selected")
+                .accessibilityIdentifier("sleepInfoCard")
             }
-            .accessibilityLabel("Sleep Information")
-            .accessibilityHint("View comprehensive sleep session details and statistics")
-            .accessibilityIdentifier("sleepInfoCard")
-        case .cycles:
-            NavigationLink(destination: SleepCyclesView(session: session)) {
+        case .stages:
+            if let session {
+                NavigationLink(destination: SleepStageView(session: session)) {
+                    SummaryCard(
+                        icon: "waveform.path.ecg",
+                        title: "Sleep Stages",
+                        hasData: session.sleepStages?.count ?? 0 > 0,
+                        session: session,
+                        previewStat: SleepStagesPreviewStats.getRandomStat(from: session)
+                    )
+                }
+                .accessibilityLabel("Sleep Stages")
+                .accessibilityHint("View Apple Health-reported or experimental Zeez-estimated sleep stage details when available")
+                .accessibilityIdentifier("sleepStagesCard")
+            } else {
                 SummaryCard(
                     icon: "waveform.path.ecg",
-                    title: "Sleep Cycles",
-                    hasData: session?.sleepStages?.count ?? 0 > 0,
-                    session: session,
-                    previewStat: session.flatMap(SleepCyclesPreviewStats.getRandomStat)
+                    title: "Sleep Stages",
+                    hasData: false,
+                    session: nil,
+                    previewStat: nil
                 )
+                .accessibilityLabel("Sleep Stages, no session selected")
+                .accessibilityIdentifier("sleepStagesCard")
             }
-            .accessibilityLabel("Sleep Cycles")
-            .accessibilityHint("View sleep stages and cycle analysis")
-            .accessibilityIdentifier("sleepCyclesCard")
         }
     }
 }
@@ -538,21 +562,23 @@ struct DebugMenuView: View {
     
     private func generateMockData() {
         isGeneratingData = true
-        clearAllData()
+        // MockDataGenerator.generateMockData calls clearMockData internally,
+        // which removes only mock-origin sessions. Real HealthKit data is preserved.
         MockDataGenerator.shared.generateMockData(for: selectedDays)
         defer { isGeneratingData = false }
-        
+
         do {
             try viewContext.save()
         } catch {
             ZeezLogger.error(ZeezLogger.ui, "Failed to save context after generating mock data", error: error)
         }
     }
-    
+
     private func clearAllData() {
+        // Explicit destructive action: delete ALL sleep sessions (user-initiated from debug menu).
         let fetchRequest: NSFetchRequest<NSFetchRequestResult> = SleepSession.fetchRequest()
         let batchDeleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
-        
+
         do {
             try viewContext.execute(batchDeleteRequest)
             try viewContext.save()

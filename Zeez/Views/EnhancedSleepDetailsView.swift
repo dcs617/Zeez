@@ -4,12 +4,7 @@ import os.log
 
 /// Comprehensive view displaying detailed sleep analysis for a session
 struct EnhancedSleepDetailsView: View {
-    @Environment(\.managedObjectContext) private var context
-    
     let session: SleepSession
-    
-    /// Tracks if sleep stage analysis is in progress
-    @State private var isAnalyzing = false
     
     /// Computed stages sorted by timestamp
     private var sortedStages: [SleepStage] {
@@ -17,12 +12,6 @@ struct EnhancedSleepDetailsView: View {
             return []
         }
         return stages.sorted { ($0.startTime ?? Date()) < ($1.startTime ?? Date()) }
-    }
-    
-    private var sessionDuration: TimeInterval {
-        guard let end = session.endTime,
-              let start = session.startTime else { return 0 }
-        return end.timeIntervalSince(start)
     }
     
     var body: some View {
@@ -35,8 +24,8 @@ struct EnhancedSleepDetailsView: View {
                 // Sleep Stage Analysis Section
                 Group {
                     if sortedStages.isEmpty {
-                        analyzeButton
-                            .accessibilityIdentifier("analyzeButton")
+                        noStagesView
+                            .accessibilityIdentifier("noStagesView")
                     } else {
                         stageAnalysisSection
                             .accessibilityIdentifier("stageAnalysisSection")
@@ -56,7 +45,7 @@ struct EnhancedSleepDetailsView: View {
             }
             .padding(.vertical)
         }
-        .navigationTitle("Sleep Analysis")
+        .navigationTitle("Session Details")
         .navigationBarTitleDisplayMode(.large)
         .accessibilityIdentifier("enhancedSleepDetailsView")
     }
@@ -78,23 +67,25 @@ struct EnhancedSleepDetailsView: View {
             .accessibilityLabel("Sleep session from \(session.startTime?.formatted(date: .abbreviated, time: .shortened) ?? "unknown time") to \(session.endTime?.formatted(date: .abbreviated, time: .shortened) ?? "unknown time")")
             .accessibilityIdentifier("sessionTimeRange")
             
-            HStack(spacing: 16) {
-                Label {
-                    Text("Sleep Quality")
-                } icon: {
-                    Image(systemName: "moon.stars.fill")
+            if session.hasDisplayableScore {
+                HStack(spacing: 16) {
+                    Label {
+                        Text("Experimental Zeez Estimate")
+                    } icon: {
+                        Image(systemName: "moon.stars.fill")
+                            .foregroundColor(.purple)
+                            .accessibilityHidden(true)
+                    }
+
+                    Text("\(Int(session.qualityScore))")
+                        .font(.title2)
+                        .fontWeight(.bold)
                         .foregroundColor(.purple)
-                        .accessibilityHidden(true)
                 }
-                
-                Text("\(Int(session.qualityScore))")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.purple)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Experimental Zeez estimated sleep score \(Int(session.qualityScore)) out of 100")
+                .accessibilityIdentifier("sleepQualityScore")
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Sleep quality score \(Int(session.qualityScore)) out of 100")
-            .accessibilityIdentifier("sleepQualityScore")
         }
         .padding()
         .background(Color(.systemBackground))
@@ -105,55 +96,32 @@ struct EnhancedSleepDetailsView: View {
         .accessibilityIdentifier("sessionOverviewContainer")
     }
     
-    private var analyzeButton: some View {
-        Button {
-            Task {
-                await analyzeSleepStages()
-            }
-        } label: {
-            HStack {
-                if isAnalyzing {
-                    ProgressView()
-                        .padding(.trailing, 4)
-                        .accessibilityLabel("Analyzing")
-                }
-                
-                Text(isAnalyzing ? "Analyzing Sleep Stages..." : "Analyze Sleep Stages")
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color.blue)
-            .foregroundColor(.white)
-            .cornerRadius(10)
-        }
-        .disabled(isAnalyzing)
-        .accessibilityLabel(isAnalyzing ? "Analyzing sleep stages" : "Analyze sleep stages")
-        .accessibilityHint(isAnalyzing ? "Sleep stage analysis is in progress" : "Start automatic analysis of sleep stages for this session")
-        .accessibilityIdentifier("analyzeSleepStagesButton")
-    }
-    
-    private var stageAnalysisSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Timeline visualization
-            SleepStageVisualizer(stages: sortedStages, totalDuration: sessionDuration)
-                .accessibilityLabel("Sleep stage timeline visualization")
-                .accessibilityHint("Visual representation of sleep stages throughout the night")
-                .accessibilityIdentifier("sleepStageVisualizer")
-            
-            Divider()
-                .accessibilityHidden(true)
-            
-            // Detailed breakdown
-            SleepStageMetrics(stages: sortedStages)
-                .accessibilityLabel("Sleep stage metrics breakdown")
-                .accessibilityIdentifier("sleepStageMetrics")
+    private var noStagesView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "waveform.path.ecg")
+                .font(.system(size: 40))
+                .foregroundColor(.secondary)
+            Text("Sleep Stage Analysis")
+                .font(.headline)
+            Text("Stage analysis requires sensor data from a wearable device or an Apple Health import that includes stage information.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
         }
         .padding()
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(radius: 2)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("stageAnalysisSectionContainer")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Sleep stage analysis not available. Stage analysis requires sensor data from a wearable device or Apple Health import.")
+    }
+    
+    private var stageAnalysisSection: some View {
+        SleepStagesChart(session: session)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Sleep stage timeline and summary")
+            .accessibilityHint("Shows Apple Health-reported or experimental Zeez-estimated sleep stages for this session")
+            .accessibilityIdentifier("stageAnalysisSectionContainer")
     }
     
     private var environmentalFactors: some View {
@@ -246,18 +214,6 @@ struct EnhancedSleepDetailsView: View {
         .shadow(radius: 2)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("biometricDataContainer")
-    }
-    
-    private func analyzeSleepStages() async {
-        isAnalyzing = true
-        defer { isAnalyzing = false }
-        
-        let analyzer = SleepStageAnalyzer(context: context)
-        do {
-            _ = try await analyzer.analyzeSleepStages(for: session)
-        } catch {
-            ZeezLogger.error(ZeezLogger.sleepTracking, "Error analyzing sleep stages", error: error)
-        }
     }
     
     private func aggregateEnvironmentalData(_ readings: [EnvironmentalReading]) -> [(label: String, value: String)] {

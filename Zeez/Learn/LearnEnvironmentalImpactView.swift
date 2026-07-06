@@ -13,30 +13,24 @@ struct LearnEnvironmentalImpactView: View {
     
     var body: some View {
         VStack(spacing: 20) {
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(.orange)
+                Text("Educational content only. Zeez is not currently measuring or evaluating your sleep environment.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .background(Color.orange.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Educational content only. Zeez is not currently measuring or evaluating your sleep environment.")
+
             factorSelector
-            
-            environmentalDisplay
-                .onTapGesture {
-                    showingDetail = true
-                }
-            
-            historicalTrend
-            
-            recommendationCard
+
+            educationalOverview
         }
         .padding()
-        .onAppear {
-            updateCurrentValue()
-        }
-        .onReceive(timer) { _ in
-            updateCurrentValue()
-        }
-        .sheet(isPresented: $showingDetail) {
-            NavigationView {
-                EnvironmentalDetailView(factor: selectedFactor)
-                    .environment(\.managedObjectContext, viewContext)
-            }
-        }
     }
     
     private var factorSelector: some View {
@@ -49,12 +43,36 @@ struct LearnEnvironmentalImpactView: View {
             }
         }
         .pickerStyle(.segmented)
-        .onChange(of: selectedFactor) {
-            updateCurrentValue()
-        }
         .accessibilityLabel("Select environmental factor")
-        .accessibilityHint("Choose which environmental factor to analyze")
+        .accessibilityHint("Choose an environmental factor to read about")
         .accessibilityIdentifier("environmentalFactorPicker")
+    }
+
+    private var educationalOverview: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(selectedFactor.rawValue)
+                .font(.headline)
+            Text(educationalText)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(selectedFactor.rawValue): \(educationalText)")
+    }
+
+    private var educationalText: String {
+        switch selectedFactor {
+        case .temperature:
+            return "Room temperature can affect comfort during sleep. This is general information, not a reading from your room."
+        case .light:
+            return "Light exposure can affect sleep routines. This is general information, not a measurement from your room."
+        case .sound:
+            return "Noise can disrupt sleep for some people. This is general information, not a measurement from your room."
+        }
     }
     
     private var environmentalDisplay: some View {

@@ -138,5 +138,5 @@ struct SoundRow: View {
 }
 
 #Preview {
-    AlarmSoundPickerView(selectedSound: .constant("default"))
+    AlarmSoundPickerView(selectedSound: .constant("Alarm_Classic.caf"))
 }

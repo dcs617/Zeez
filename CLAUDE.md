@@ -4,173 +4,111 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Zeez is an iOS sleep tracking and analysis application built with SwiftUI and Core Data. The app provides comprehensive sleep monitoring, educational content, alarm management, and includes a companion watchOS app.
-
-### Key Architecture Components
-
-- **SwiftUI + Core Data**: Modern iOS app using declarative UI with persistent data storage
-- **Multi-target project**: Main iOS app + watchOS companion app + test targets
-- **Modular organization**: Feature-based directory structure with clear separation of concerns
+Zeez is an iOS sleep tracking and analysis application built with SwiftUI and Core Data. The app provides sleep monitoring, educational content, and alarm management, plus a companion watchOS app.
 
 ## Development Commands
 
-### Building and Testing
 ```bash
-# Build the main iOS target
-xcodebuild -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 15 Pro' build
+# Build iOS target
+xcodebuild -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
 
-# Run tests using Swift Testing framework
-xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 15 Pro'
+# Run all tests
+xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
+
+# Run a specific test suite
+xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:ZeezTests/AlarmEndToEndTests
 
 # Build watch app
 xcodebuild -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'platform=watchOS Simulator,name=Apple Watch Series 9 (45mm)' build
 ```
 
-### Development Workflow
-- The app automatically generates 90 days of mock data in DEBUG builds when no valid sleep sessions exist
-- Use the debug menu (available in DEBUG builds) to generate test data or clear existing data
-- Core Data migration is handled automatically
-
 ## Core Architecture
 
+### App Entry Flow
+`App/ZeezApp.swift` → `Views/RootView.swift` → `Views/MainView.swift` (TabView: Sleep/Alarm/Learn)
+
+`RootView` checks `OnboardingManager.shared.hasCompletedOnboarding` to decide between `OnboardingView` and `MainView`. It also uses `ModalCoordinator.shared` (`Shared/ModalCoordinator.swift`) to present sheets globally (data import, settings, etc.).
+
+At startup, `ZeezApp.setupApp()` runs `AlarmDataMigrationHelper` and starts `AlarmObserver.shared`.
+
 ### Data Layer
-- **Core Data Stack**: Managed by `PersistenceController` singleton with automatic migration
-- **Primary Entity**: `SleepSession` - central entity containing sleep tracking data
-- **Key Relationships**: Sessions link to sleep stages, heart rate data, movement data, environmental readings, and quality scores
-- **Mock Data**: `MockDataGenerator` creates realistic test data with person-specific metrics
+- **Core Data stack**: `PersistenceController.shared` — use `.container.viewContext` for UI, `newBackgroundContext()` for heavy work. Migration is automatic via `CoreDataMigrationManager`.
+- **Primary entity**: `SleepSession` — links to `SleepStage`, `HeartRateData`, `MovementData`, `EnvironmentalReading`, `SleepQualityScore`.
+- **Generated classes**: All Core Data entity classes live in `CoreData/` (paired `+CoreDataClass.swift` / `+CoreDataProperties.swift`).
 
-### App Structure
-- **Entry Point**: `ZeezApp.swift` → `RootView.swift` → `MainView.swift` (TabView)
-- **Main Tabs**: Dashboard (Sleep), Alarm, Learn
-- **Navigation**: Uses NavigationView with stack style, supports deep linking to detail views
+### Sleep Analysis Pipeline
+`SleepAnalyzer.shared.analyzeSleepSession(_:)` orchestrates analysis in four steps:
+1. `SessionValidationService` — validates session has minimum data
+2. `SleepStageAnalyzer` (`Sleep/Stage/`) — detects stages from movement + heart rate
+3. `SleepQualityCalculator` (`Sleep/Quality/`) — scores duration, efficiency, stage distribution, fragmentation, latency (research-based weights)
+4. Updates session with results in a background context
 
-### Feature Organization
+**`QualityMetrics`** (from `SleepQualityCalculator`) is the primary quality model. The overall score is a weighted composite: efficiency 30%, duration 25%, stage distribution 25%, fragmentation 15%, latency 5%.
+
+### Directory Layout
 ```
 Zeez/
-├── Views/           # Main UI views and shared components
-├── Sleep/           # Sleep tracking, analysis, and quality components
-│   ├── Cycle/       # Sleep cycle analysis and visualization
-│   ├── Debt/        # Sleep debt calculation and education  
-│   ├── Quality/     # Sleep quality scoring and analysis
-│   └── Stage/       # Sleep stage detection and visualization
-├── Learn/           # Educational content system
-│   ├── Note/        # Note-taking and highlighting system
-│   ├── Quiz/        # Interactive quizzes and progress tracking
-│   └── Sleep/       # Sleep education specific content
-├── Environment/     # Environmental monitoring and analysis
-├── Alarm/           # Smart alarm and wake-up features
-├── Onboarding/      # User onboarding flow
-└── CoreData/        # Core Data model classes
+├── App/             # Entry point: ZeezApp, ApplicationDelegate, SceneDelegate, AppConstants
+├── Infrastructure/  # ZeezLogger, ErrorManager, BackgroundTaskManager, AnalyticsManager, ResourceMonitor
+├── Utilities/       # Extensions and helpers: Array+Statistics, DateHelper, FormatterUtils, CollectionExtensions
+├── Commerce/        # PremiumFeatures, PremiumFeatureGating, StoreKitManager, SubscriptionEvents
+├── DataImport/      # HealthKitDataImporter, PillowDataImporter, RealDataManager
+├── CoreData/        # Core Data entity class files (paired +CoreDataClass / +CoreDataProperties)
+├── Shared/          # ModalCoordinator and other cross-cutting components
+├── Watch/           # WatchConnectivityHandler, EnhancedWatchConnectivityHandler, WatchCommunicationSupport
+├── Widgets/         # Widget, WidgetContainer
+├── Development/     # DeveloperSettings
+│   └── Mocks/       # MockDataGenerator, MockSleepPatternGenerator
+├── Sleep/           # Sleep analysis and views
+│   ├── Cycle/       # Cycle chart and info views (visualization only)
+│   ├── Debt/        # SleepDebtMetrics
+│   ├── Quality/     # SleepQualityCalculator, SleepQualityView
+│   └── Stage/       # SleepStageAnalyzer, SleepStageTypes, SleepStageView
+├── Alarm/           # AlarmScheduler, AlarmObserver, AlarmAudioController, all alarm views
+├── Learn/           # Educational content: articles, quizzes, notes, progress tracking
+│   ├── Note/        # Note-taking and highlighting
+│   ├── Quiz/        # Interactive quizzes
+│   └── Sleep/       # Sleep-specific educational content
+├── Environment/     # EnvironmentalMonitor, EnvironmentalAnalyzer, views
+├── Onboarding/      # OnboardingManager, OnboardingView, OnboardingTypes, OnboardingModifiers
+├── Views/           # Screen-level views and shared UI
+│   ├── Dashboard/   # DashboardView components (metric cards, session rows, banners)
+│   ├── HeartRate/   # HeartRateView components and helpers
+│   └── Trends/      # TrendsView components (charts, stats, monthly data)
+└── Documentation/   # Internal documentation files
 ```
 
-### Key Systems
+### Key Singletons and Managers
+- `PersistenceController.shared` — Core Data stack
+- `AlarmObserver.shared` — notification and alarm lifecycle management
+- `BackgroundTaskManager.shared` — BGTask registration and execution for sleep data processing
+- `StoreKitManager.shared` — StoreKit 2 subscription handling (async/await, transaction listener)
+- `RealDataManager.shared` (`DataImport/`) — coordinates HealthKit and Pillow data import
+- `ErrorManager.shared` — centralized error tracking
+- `AnalyticsManager.shared` — analytics events
+- `ModalCoordinator.shared` — global sheet presentation from `RootView`
 
-**Sleep Analysis Pipeline**:
-1. `SleepAnalyzer` - Orchestrates analysis of sleep sessions
-2. Data collection from multiple sources (movement, heart rate, environmental)
-3. Quality scoring using weighted component analysis
-4. Sleep stage detection and cycle analysis
+### Premium Features
+`Commerce/PremiumFeatures.swift` defines `PremiumFeature` enum. `PremiumFeatureGating` checks entitlements. `StoreKitManager` manages subscription products and `purchasedSubscriptions`.
 
-**Mock Data System**:
-- Generates realistic sleep patterns with person-specific baselines
-- Creates coherent time series data for heart rate, movement, environmental factors
-- Maintains realistic sleep stage progressions and quality variations
+### Data Import
+Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImportView.swift`). `DataImport/HealthKitDataImporter` and `DataImport/PillowDataImporter` map to Core Data, coordinated by `DataImport/RealDataManager`. Mock data generation is manually triggered via the debug menu in DEBUG builds — it is **not** generated automatically at launch.
 
-**Learning System**:
-- Comprehensive educational content with articles, quizzes, and interactive elements
-- Progress tracking and achievement system
-- Note-taking with highlighting and cross-referencing
+### watchOS Companion
+`ZeezWatch Watch App/` is a separate target. iOS↔watch communication uses `Watch/WatchConnectivityHandler.swift` and `Watch/EnhancedWatchConnectivityHandler.swift` on the iOS side, mirrored by `WatchConnectivityManager.swift` / `EnhancedWatchConnectivityManager.swift` on the watch side.
 
 ## Development Guidelines
 
-### Core Data Usage
-- Always use `PersistenceController.shared.container.viewContext` for UI operations
-- Use background contexts for heavy data operations via `newBackgroundContext()`
-- Ensure proper save operations after data modifications
-- Leverage automatic Core Data migration for schema changes
+### Core Data
+- UI reads: `PersistenceController.shared.container.viewContext` with `@FetchRequest`
+- Heavy writes: `newBackgroundContext()`, always save and merge back
+- Previews: `PersistenceController.preview`
 
-### SwiftUI Patterns
-- Use `@FetchRequest` for Core Data integration in views
-- Implement proper preview contexts using `PersistenceController.preview`
-- Follow MVVM patterns with `@StateObject` and `@ObservedObject`
-- Use NavigationLink for view transitions and maintain proper navigation hierarchy
+### Testing
+Uses Swift Testing framework (`import Testing`, `@testable import Zeez`). Test suites: `AlarmEndToEndTests`, `AlarmRaceConditionTests`, `AlarmReliabilityTests`, `CoreDataMigrationTests`, `CoreDataModelTests`, `MockDataTests`.
 
-### Testing Strategy  
-- Uses Swift Testing framework (not XCTest)
-- Test files use `@testable import Zeez`
-- Mock data generation supports consistent testing scenarios
+### Logging
+Use `ZeezLogger` (`Infrastructure/ZeezLogger.swift`) — never `print`. Import `os.log`. Categories: `ZeezLogger.coreData`, `.sleepTracking`, `.alarm`, `.learning`, `.ui`, `.environment`, `.background`, `.analytics`, `.network`, `.mockData`, `.error`, `.app`. Debug logs are stripped from release builds.
 
-### Feature Development
-- Add new features following the existing modular structure
-- Create feature-specific directories under appropriate parent folders
-- Ensure Core Data entities have proper relationships and indexes
-- Use the debug menu for testing new features with generated data
-
-### Logging Guidelines
-- Use `ZeezLogger` for all logging instead of print statements
-- Import `os.log` in files that use logging
-- Choose appropriate logger categories:
-  - `ZeezLogger.coreData` - Core Data operations
-  - `ZeezLogger.sleepTracking` - Sleep analysis and tracking
-  - `ZeezLogger.learning` - Educational content system
-  - `ZeezLogger.alarm` - Alarm and wake-up features
-  - `ZeezLogger.ui` - User interface operations
-  - `ZeezLogger.error` - Error tracking and reporting
-- Use appropriate log levels: `.debug()`, `.info()`, `.error()`, `.fault()`
-- Debug logs are automatically excluded from release builds
-
-### Code Organization
-- Keep view files focused on UI presentation
-- Extract business logic into dedicated analyzer/manager classes
-- Use extensions to organize code by functionality
-- Follow Swift naming conventions and use meaningful file names
-
-## File Organization Notes
-
-### Recent Restructuring
-The codebase has undergone significant reorganization with many files moved to feature-based directories:
-- Many former root-level files now organized under `Views/`, `Sleep/`, `Learn/`, `Environment/`, `Alarm/`, and `Onboarding/`
-- Sleep-related functionality divided into specialized subdirectories: `Cycle/`, `Debt/`, `Quality/`, and `Stage/`
-- Learning system organized with `Note/`, `Quiz/`, and `Sleep/` subdirectories
-- Shared components and utilities grouped in `Shared/` directory
-
-### Key Entry Points
-- **Main App**: `ZeezApp.swift` → `RootView.swift` → `MainView.swift`
-- **Core Data**: `PersistenceController.swift` with model in `Zeez.xcdatamodeld/`
-- **Mock Data**: `MockDataGenerator.swift` for realistic test data generation
-- **Logging**: `ZeezLogger.swift` provides structured logging throughout the app
-
-## Accessibility Implementation
-
-### Current Status
-- **Coverage**: 95.5% of view files (84/88) have comprehensive accessibility support
-- **Implementation**: 1000+ accessibility modifiers across the entire app
-- **Testing**: Validated with VoiceOver, Dynamic Type, high contrast, and reduced motion
-
-### Accessibility Patterns
-- All interactive elements have descriptive `accessibilityLabel` and `accessibilityHint`
-- Complex UI components use `accessibilityElement(children: .combine)` for logical grouping
-- Data visualizations include `accessibilityValue` for meaningful announcements
-- Premium features and buttons have clear accessibility feedback
-- Chart data is presented in accessible text formats alongside visualizations
-
-### Testing Accessibility
-```bash
-# Enable VoiceOver in iOS Settings > Accessibility > VoiceOver
-# Test key navigation flows:
-# 1. Dashboard - sleep metrics and navigation
-# 2. Alarm creation and management
-# 3. Learn module - articles, quizzes, notes
-# 4. Settings and preferences
-
-# Test accessibility settings:
-# - Dynamic Type (up to 80% works well, 100% may have layout issues)
-# - High contrast mode
-# - Reduced motion
-```
-
-### Future Accessibility Development
-- Follow established patterns when adding new views
-- Test with VoiceOver enabled during development
-- Ensure all new interactive elements have proper accessibility labels
-- Use accessibility identifiers for UI testing: `accessibilityIdentifier("unique-id")`
+### Accessibility
+All interactive elements must have `accessibilityLabel` and `accessibilityHint`. Complex components use `accessibilityElement(children: .combine)`. Data visualizations expose values via `accessibilityValue`.

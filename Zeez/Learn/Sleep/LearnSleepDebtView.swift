@@ -1,235 +1,142 @@
 import SwiftUI
 import CoreData
-import Charts
-import os.log
 
 struct LearnSleepDebtView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @State private var debtHours: Double = 0
-    @State private var recommendedHours: Double = 8.0
-    @State private var actualHours: Double = 0
-    @State private var showingHistory = false
-    @State private var showingAnalysis = false
-    @State private var debtHistory: [(Date, Double)] = []
-    @State private var recoveryDays: Int = 0
-    
-    let timer = Timer.publish(every: 300, on: .main, in: .common).autoconnect()
-    
+
+    private var summary: SleepGoalShortfallSummary? {
+        SleepDebtCalculator.shared.summary(context: viewContext)
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                sleepSummary
-                
-                debtVisualization
-                
-                HStack {
-                    Button("View History") {
-                        showingHistory = true
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityLabel("View sleep debt history")
-                    .accessibilityHint("See historical sleep debt data and trends")
-                    .accessibilityIdentifier("viewSleepDebtHistoryButton")
-                    
-                    Button("View Analysis") {
-                        showingAnalysis = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityLabel("View detailed analysis")
-                    .accessibilityHint("See comprehensive sleep debt analysis and recovery plan")
-                    .accessibilityIdentifier("viewSleepDebtAnalysisButton")
-                }
-                
-                recoveryEstimate
-                
-                impactSection
+                trackingContent
+                educationalContent
             }
             .padding()
         }
-        .onAppear {
-            updateData()
-        }
-        .onReceive(timer) { _ in
-            updateData()
-        }
-        .sheet(isPresented: $showingHistory) {
-            NavigationView {
-                LearnSleepDebtHistoryView(
-                    history: debtHistory,
-                    recommendedHours: recommendedHours
-                )
+        .navigationTitle("Sleep Goal Shortfall")
+    }
+
+    @ViewBuilder
+    private var trackingContent: some View {
+        if let summary, summary.coveredDayCount > 0 {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Sleep Goal Shortfall")
+                    .font(.headline)
+
+                HStack(alignment: .firstTextBaseline) {
+                    Text(formatDuration(summary.totalShortfall))
+                        .font(.title2.weight(.semibold))
+                    Spacer()
+                    Text("\(summary.coveredDayCount) of \(summary.periodDays) days recorded")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    summaryRow(title: "Your goal", value: formatDuration(summary.goalDuration))
+                    Spacer()
+                    summaryRow(title: "Average recorded", value: formatDuration(summary.averageComparedDuration))
+                }
+
+                Text(summary.usesEstimatedDurations
+                     ? "Calculated against your selected goal using Apple Health-reported sleep where available and recorded Zeez session duration otherwise. Days without usable data are excluded."
+                     : "Calculated against your selected goal using Apple Health-reported sleep. Days without usable data are excluded.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("This is a tracking comparison, not an estimate of medical sleep need or recovery time.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+            .padding()
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Sleep goal shortfall \(formatDuration(summary.totalShortfall)) based on \(summary.coveredDayCount) recorded days in the last \(summary.periodDays) days")
+            .accessibilityIdentifier("sleepGoalShortfallSummary")
+        } else {
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle.fill")
+                    .foregroundStyle(.orange)
+                Text("Enable a sleep goal and record sleep sessions to calculate a seven-day goal shortfall. The content below is educational.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .background(Color.orange.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Sleep goal shortfall requires an enabled goal and recorded sleep data. Content below is educational.")
+            .accessibilityIdentifier("sleepDebtDataUnavailableBanner")
         }
-        .sheet(isPresented: $showingAnalysis) {
-            LearnSleepDebtAnalysisView(
-                debtHours: debtHours,
-                recoveryDays: recoveryDays,
-                recommendedHours: recommendedHours
+    }
+
+    private func summaryRow(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.medium))
+        }
+    }
+
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let minutes = Int(duration.rounded()) / 60
+        return "\(minutes / 60)h \(minutes % 60)m"
+    }
+
+    private var educationalContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            educationCard(
+                icon: "moon.zzz.fill",
+                title: "What Is Sleep Debt?",
+                body: "Sleep debt accumulates when you consistently sleep less than your body needs. Research shows that most adults require 7–9 hours per night. Falling short even by one hour nightly can add up over a week."
+            )
+
+            educationCard(
+                icon: "chart.line.downtrend.xyaxis",
+                title: "Effects of Sleep Debt",
+                body: "Accumulated sleep debt is associated with reduced cognitive performance, slower reaction time, impaired memory consolidation, and increased risk of mood disturbances. Chronic sleep debt may have longer-term health consequences."
+            )
+
+            educationCard(
+                icon: "arrow.triangle.2.circlepath",
+                title: "Recovery",
+                body: "Recovery from short-term sleep debt is possible with consistent, adequate sleep. Longer-term sleep debt may take more time to resolve. Weekend \"catch-up\" sleep partially offsets the effects but does not fully reverse all impacts."
+            )
+
+            educationCard(
+                icon: "bed.double.fill",
+                title: "Improving Sleep",
+                body: "Consistent sleep and wake times, a cool and dark environment, limiting screen exposure before bed, and avoiding caffeine in the afternoon are among the most evidence-supported strategies for better sleep."
             )
         }
     }
-    
-    private var sleepSummary: some View {
-        VStack(spacing: 16) {
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("Recommended")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Text("\(recommendedHours, specifier: "%.1f") hours")
-                        .font(.headline)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Recommended sleep: \(recommendedHours, specifier: "%.1f") hours")
-                .accessibilityIdentifier("recommendedSleepHours")
-                
-                Spacer()
-                
-                VStack(alignment: .trailing) {
-                    Text("Average")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Text("\(actualHours, specifier: "%.1f") hours")
-                        .font(.headline)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Average sleep: \(actualHours, specifier: "%.1f") hours")
-                .accessibilityIdentifier("averageSleepHours")
+
+    private func educationCard(icon: String, title: String, body: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(.blue)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.headline)
             }
-            
-            Divider()
-            
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("Current Debt")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Text("\(debtHours, specifier: "%.1f") hours")
-                        .font(.headline)
-                        .foregroundColor(getSeverity().color)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Current sleep debt: \(debtHours, specifier: "%.1f") hours")
-                .accessibilityIdentifier("currentSleepDebt")
-                
-                Spacer()
-                
-                Button(action: { showingHistory = true }) {
-                    Text("View History")
-                        .font(.subheadline)
-                        .foregroundColor(.blue)
-                }
-                .accessibilityLabel("View sleep debt history")
-                .accessibilityHint("See historical sleep debt data")
-                .accessibilityIdentifier("viewHistoryButton")
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-    }
-    
-    private var debtVisualization: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .stroke(Color(.systemGray5), lineWidth: 20)
-                    .frame(width: 200, height: 200)
-                
-                Circle()
-                    .trim(from: 0, to: min(debtHours / (recommendedHours * 7), 1))
-                    .stroke(getSeverity().color, style: StrokeStyle(lineWidth: 20, lineCap: .round))
-                    .frame(width: 200, height: 200)
-                    .rotationEffect(.degrees(-90))
-                
-                VStack {
-                    Text(getSeverity() == .minimal ? "Minimal" :
-                         getSeverity() == .moderate ? "Moderate" :
-                         getSeverity() == .significant ? "Significant" : "Severe")
-                        .font(.headline)
-                        .foregroundColor(getSeverity().color)
-                    Text("Sleep Debt")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Sleep debt severity: \(getSeverity() == .minimal ? "Minimal" : getSeverity() == .moderate ? "Moderate" : getSeverity() == .significant ? "Significant" : "Severe")")
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Sleep debt visualization showing \(getSeverity() == .minimal ? "minimal" : getSeverity() == .moderate ? "moderate" : getSeverity() == .significant ? "significant" : "severe") debt level")
-            .accessibilityHint("Tap to view detailed analysis")
-            .accessibilityIdentifier("sleepDebtVisualization")
-            
-            Text(getSeverity().description)
+            Text(body)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .accessibilityLabel(getSeverity().description)
-        }
-        .onTapGesture {
-            showingAnalysis = true
-        }
-        .accessibilityIdentifier("sleepDebtVisualizationSection")
-    }
-    
-    private var recoveryEstimate: some View {
-        VStack(spacing: 8) {
-            Text("Recovery Plan")
-                .font(.headline)
-                .accessibilityLabel("Recovery plan section")
-            
-            Text("It will take approximately \(recoveryDays) days to recover")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .accessibilityLabel("Estimated recovery time: \(recoveryDays) days")
-            
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(getSeverity().recommendations.prefix(3), id: \.self) { recommendation in
-                    Label(recommendation, systemImage: "arrow.right.circle")
-                        .font(.subheadline)
-                        .accessibilityLabel("Recommendation: \(recommendation)")
-                }
-            }
-            .padding(.top, 8)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(12)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("recoveryEstimateSection")
-    }
-    
-    private var impactSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Current Impact")
-                .font(.headline)
-                .accessibilityLabel("Current impact section")
-            
-            ForEach(getSeverity().impacts, id: \.self) { impact in
-                Label(impact, systemImage: "exclamationmark.circle")
-                    .font(.subheadline)
-                    .foregroundColor(getSeverity().color)
-                    .accessibilityLabel("Impact: \(impact)")
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("impactSection")
-    }
-    
-    private func updateData() {
-        debtHours = SleepDebtCalculator.shared.calculateCurrentDebt(context: viewContext)
-        recommendedHours = SleepDebtCalculator.shared.getRecommendedSleepDuration(context: viewContext)
-        actualHours = SleepDebtCalculator.shared.getAverageSleepTime(forDays: 7, context: viewContext)
-        debtHistory = SleepDebtCalculator.shared.getDebtHistory(forDays: 30, context: viewContext)
-        recoveryDays = SleepDebtCalculator.shared.calculateRecoveryDays(debtHours: debtHours)
-    }
-    
-    private func getSeverity() -> DebtSeverity {
-        SleepDebtCalculator.shared.getDebtSeverity(debtHours: debtHours)
+        .accessibilityLabel("\(title): \(body)")
     }
 }
 

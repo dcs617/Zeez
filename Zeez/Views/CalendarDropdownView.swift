@@ -160,7 +160,7 @@ struct CalendarDropdownView: View {
             guard let startTime = session.startTime else { return false }
             return calendar.isDate(startTime, inSameDayAs: date)
         }) {
-            return session.qualityScore
+            return session.hasDisplayableScore ? session.qualityScore : nil
         }
         return nil
     }
@@ -197,10 +197,9 @@ struct CalendarDropdownView: View {
         
         if hasSleepData {
             if let quality = quality {
-                let qualityDescription = qualityDescription(for: quality)
-                label += ", has sleep data with \(qualityDescription) quality"
+                label += ", has sleep data with experimental Zeez estimated sleep score \(Int(quality))"
             } else {
-                label += ", has sleep data"
+                label += ", has sleep data, experimental Zeez estimate not available"
             }
         } else if date < Date() {
             label += ", no sleep data"
@@ -209,14 +208,6 @@ struct CalendarDropdownView: View {
         return label
     }
     
-    private func qualityDescription(for quality: Double) -> String {
-        switch quality {
-        case 0..<50: return "poor"
-        case 50..<70: return "fair"
-        case 70..<85: return "good"
-        default: return "excellent"
-        }
-    }
 }
 
 struct CalendarDayView: View {
@@ -229,13 +220,7 @@ struct CalendarDayView: View {
     let isFutureDate: Bool
     
     private var qualityColor: Color {
-        guard let quality = sleepQuality else { return .gray }
-        switch quality {
-        case 0..<50: return .red
-        case 50..<70: return .orange
-        case 70..<85: return .yellow
-        default: return .green
-        }
+        sleepQuality == nil ? .gray : .blue
     }
     
     var body: some View {
@@ -250,7 +235,7 @@ struct CalendarDayView: View {
                 .frame(width: 36, height: 36)
             
             // Quality indicator
-            if hasSleepData && !isSelected {
+            if hasSleepData && sleepQuality != nil && !isSelected {
                 Circle()
                     .fill(qualityColor.opacity(0.2))
                     .frame(width: 32, height: 32)

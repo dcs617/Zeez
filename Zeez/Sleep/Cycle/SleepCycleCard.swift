@@ -8,6 +8,7 @@ struct SleepCycleCard: View {
         .awake: .yellow.opacity(0.8),
         .rem: Color(red: 0.3, green: 0.2, blue: 0.5),   // Dark Purple
         .lightSleep: Color(red: 0.4, green: 0.8, blue: 0.6),  // Light Green
+        .asleepUnspecified: .teal.opacity(0.8),
         .deepSleep: Color(red: 0.2, green: 0.4, blue: 0.8)    // Deep Blue
     ]
     
@@ -72,7 +73,7 @@ struct SleepCycleCard: View {
         
         return stages.compactMap { stage in
             if let type = stage.stageType,
-               let stageType = SleepStageType(rawValue: type) {
+               let stageType = SleepStageType.normalize(type) {
                 return SleepStageInfo(
                     type: stageType,
                     duration: stage.duration,
@@ -170,4 +171,3 @@ struct SleepStageInfo: Identifiable {
     var startTime: Date
     var endTime: Date
 }
-

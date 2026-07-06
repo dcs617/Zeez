@@ -70,34 +70,27 @@ struct TrendsView: View {
     
     @ViewBuilder
     private var trendContent: some View {
-        if let metrics = sleepMetrics {
-            SleepDebtSection(
-                metrics: metrics,
-                showingRecommendations: $showingRecommendations
-            )
-            .padding(.horizontal)
-            .accessibilityLabel("Sleep debt analysis section")
-            .accessibilityIdentifier("sleepDebtSection")
-        }
+        // Sleep goal shortfall is presented in its dedicated destination where source and
+        // data coverage can be explained clearly.
         
-        // Quality Trends
+        // Experimental score trends
         TrendMetricCard(
-            title: "Sleep Quality",
+            title: "Estimated Score",
             subtitle: "Last \(selectedRange.rawValue)",
             value: "\(Int(averageQualityScore))%",
-            valueColor: qualityScoreColor
+            valueColor: .blue
         ) {
             TrendChartComponents.QualityChart(
                 data: fetchSleepQualities(),
                 height: 150
             )
-            .accessibilityLabel("Sleep quality trend chart showing \(fetchSleepQualities().count) data points")
-            .accessibilityValue("Average quality \(Int(averageQualityScore)) percent")
+            .accessibilityLabel("Estimated sleep score trend chart showing \(fetchSleepQualities().count) data points")
+            .accessibilityValue("Average estimated score \(Int(averageQualityScore)) percent")
             .accessibilityIdentifier("qualityChart")
         }
         .padding(.horizontal)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Sleep quality trends: Average \(Int(averageQualityScore)) percent over last \(selectedRange.rawValue)")
+        .accessibilityLabel("Estimated sleep score trends: Average \(Int(averageQualityScore)) percent over last \(selectedRange.rawValue)")
         .accessibilityIdentifier("qualityTrendCard")
         
         // Duration Trends
@@ -207,15 +200,6 @@ struct TrendsView: View {
         return qualities.reduce(0.0) { $0 + $1.value } / Double(qualities.count)
     }
     
-    private var qualityScoreColor: Color {
-        switch averageQualityScore {
-        case 80...100: return .green
-        case 60..<80: return .blue
-        case 40..<60: return .yellow
-        default: return .red
-        }
-    }
-    
     private var averageDurationFormatted: String {
         let durations = fetchSleepDurations()
         guard !durations.isEmpty else { return "0h 0m" }
@@ -230,20 +214,23 @@ struct TrendsView: View {
     private func loadData() async {
         isLoading = true
         defer { isLoading = false }
-        
-        do {
-            // Load sleep debt metrics
-            sleepMetrics = try await SleepDebtCalculator.shared.calculateSleepDebtMetrics()
-            
-            // Load monthly trends if needed
-            if selectedRange == .month {
+
+        // sleepMetrics intentionally left nil: fixed placeholder values have been removed.
+        // Real sleep-debt calculation is not yet implemented; the field is retained for
+        // future use when actual data is available.
+        sleepMetrics = nil
+
+        // Load monthly trends if needed
+        if selectedRange == .month {
+            do {
                 let provider = MonthlyTrendsDataProvider(context: viewContext)
                 monthlyData = try await provider.fetchMonthlyTrends()
-            } else {
+            } catch {
+                ErrorManager.shared.reportError(error)
                 monthlyData = nil
             }
-        } catch {
-            ErrorManager.shared.reportError(error)
+        } else {
+            monthlyData = nil
         }
     }
     
@@ -271,7 +258,8 @@ struct TrendsView: View {
     
     private func fetchSleepQualities() -> [(date: Date, value: Double)] {
         fetchSessions().compactMap { session -> (date: Date, value: Double)? in
-            guard let start = session.startTime else { return nil }
+            guard let start = session.startTime,
+                  session.hasDisplayableScore else { return nil }
             return (date: start, value: session.qualityScore)
         }
     }

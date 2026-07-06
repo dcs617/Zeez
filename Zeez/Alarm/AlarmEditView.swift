@@ -36,9 +36,10 @@ struct AlarmEditView: View {
     @State private var smartWakeWindow: Int16
     @State private var audioCapture: Bool
     
-    // Gestures
+    // Gestures & Snooze
     @State private var snoozeGesture: String
     @State private var deactivateGesture: String
+    @State private var snoozeDuration: Int16
     
     private let wakeTypes = ["Time", "Timer"]
     private let weekdays = Calendar.current.weekdaySymbols
@@ -57,8 +58,8 @@ struct AlarmEditView: View {
         _musicEnabled = State(initialValue: alarm?.musicEnabled ?? false)
         _musicSource = State(initialValue: alarm?.musicSource ?? "Dream")
         _musicVolume = State(initialValue: alarm?.musicVolume ?? 0.5)
-        _alarmSound = State(initialValue: alarm?.alarmSound ?? "default")
-        _alarmSoundSource = State(initialValue: alarm?.alarmSoundSource ?? "Default")
+        _alarmSound = State(initialValue: alarm?.alarmSound ?? "Alarm_Classic.caf")
+        _alarmSoundSource = State(initialValue: alarm?.alarmSoundSource ?? "Classic Alarm")
         
         _vibrationOnly = State(initialValue: alarm?.vibrationOnly ?? false)
         _allowVibrationsWithSound = State(initialValue: alarm?.allowVibrationsWithSound ?? true)
@@ -70,6 +71,7 @@ struct AlarmEditView: View {
         
         _snoozeGesture = State(initialValue: alarm?.snoozeGesture ?? "tap")
         _deactivateGesture = State(initialValue: alarm?.deactivateGesture ?? "long_press")
+        _snoozeDuration = State(initialValue: alarm?.snoozeDuration ?? 9)
         
         // Initialize selected days
         if let alarm = alarm,
@@ -138,6 +140,7 @@ struct AlarmEditView: View {
                 VStack(spacing: 2) {
                     scheduleCard
                     smartWakeCard
+                    heavySleeperCard
                     soundCard
                     gesturesCard
                     deviceSettingsCard
@@ -378,6 +381,25 @@ struct AlarmEditView: View {
         }
     }
     
+    private var heavySleeperCard: some View {
+        SettingsCard(title: "Heavy Sleeper", icon: "zzz") {
+            if let alarm = alarm {
+                HeavySleeperToggleView(alarm: alarm)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Heavy Sleeper Mode")
+                        .font(.headline)
+                    Text("More frequent notifications for deeper sleepers")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("Available after creating the alarm")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+        }
+    }
+    
     // MARK: - Helper Methods
     
     private var scheduleDaysString: String {
@@ -416,6 +438,24 @@ struct AlarmEditView: View {
     }
     
     private func saveAlarm() {
+        // Check if enabling an alarm but notifications are denied
+        if enabled {
+            AlarmPermissionManager.shared.requestPermissionsWithExplainer { granted in
+                if !granted {
+                    // Post notification to show denied permission flow
+                    NotificationCenter.default.post(name: NSNotification.Name("AlarmPermissionDenied"), object: nil)
+                    return
+                }
+                // Permissions granted, proceed with save
+                performSave()
+            }
+        } else {
+            // Just saving without enabling, no permission check needed
+            performSave()
+        }
+    }
+    
+    private func performSave() {
         let alarmToSave = alarm ?? AlarmConfiguration(context: viewContext)
         let isNewAlarm = alarm == nil
         
@@ -448,6 +488,7 @@ struct AlarmEditView: View {
         alarmToSave.watchHaptics = watchHaptics
         alarmToSave.snoozeGesture = snoozeGesture
         alarmToSave.deactivateGesture = deactivateGesture
+        alarmToSave.snoozeDuration = snoozeDuration
         alarmToSave.modifiedAt = Date()
         
         if let encodedDays = try? JSONEncoder().encode(selectedDays) {

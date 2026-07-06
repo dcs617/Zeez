@@ -13,23 +13,8 @@ struct HeartRateView: View {
                let heartRateData = session.heartRateData?.allObjects as? [HeartRateData],
                !heartRateData.isEmpty {
                 VStack(spacing: 20) {
-                    // Current Heart Rate Stats
                     currentStatsSection(data: heartRateData)
-                    
-                    // Heart Rate Chart
                     heartRateChartSection(data: heartRateData)
-                    
-                    // Heart Rate Variability
-                    heartRateVariabilitySection(data: heartRateData)
-                    
-                    // Heart Rate Zones
-                    heartRateZonesSection(data: heartRateData)
-                    
-                    // Sleep Stage Correlation
-                    if let stages = session.sleepStages?.allObjects as? [SleepStage],
-                       !stages.isEmpty {
-                        sleepStageCorrelationSection(heartRateData: heartRateData, stages: stages)
-                    }
                 }
                 .padding()
             } else {
@@ -65,42 +50,35 @@ struct HeartRateView: View {
     }
     
     private func currentStatsSection(data: [HeartRateData]) -> some View {
-        //let basicStats = calculateBasicStats(data: data)
-        let _ = calculateBasicStats(data: data)
-        let detailedStats = calculateDetailedStats(data: data)
+        let stats = calculateBasicStats(data: data)
         
         return VStack(alignment: .leading, spacing: 12) {
-            Text("Heart Rate Summary")
+            Text("Recorded Heart Rate Summary")
                 .font(.headline)
+
+            Text("Values recorded during this session. Zeez is not assessing cardiovascular health or recovery.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             
             LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 20) {
                 HeartRateStatCard(
                     title: "Average",
-                    value: detailedStats.average,
-                    trend: detailedStats.averageTrend,
+                    value: Int(stats.average),
                     color: .blue
                 )
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Average heart rate: \(Int(detailedStats.average)) beats per minute")
-                .accessibilityHint("Your average heart rate during sleep")
+                .accessibilityLabel("Recorded average heart rate: \(Int(stats.average)) beats per minute")
                 .accessibilityIdentifier("averageHeartRateCard")
                 
                 HeartRateStatCard(
-                    title: "Resting",
-                    value: detailedStats.resting,
-                    trend: detailedStats.restingTrend,
-                    color: .green
-                )
-                
-                HeartRateStatCard(
                     title: "Minimum",
-                    value: detailedStats.minimum,
+                    value: Int(stats.min),
                     color: .indigo
                 )
                 
                 HeartRateStatCard(
                     title: "Maximum",
-                    value: detailedStats.maximum,
+                    value: Int(stats.max),
                     color: .red
                 )
             }
@@ -122,24 +100,4 @@ struct HeartRateView: View {
         )
     }
     
-    // Calculates detailed stats with trends
-    private func calculateDetailedStats(data: [HeartRateData]) -> DetailedHeartRateStats {
-        let values = data.map { $0.value }
-        let average = values.reduce(0, +) / Double(values.count)
-        
-        // Calculate resting heart rate (average of lowest 20% of readings)
-        let sortedValues = values.sorted()
-        let restingCount = max(1, Int(Double(values.count) * 0.2))
-        let restingValues = Array(sortedValues.prefix(restingCount))
-        let resting = restingValues.reduce(0, +) / Double(restingValues.count)
-        
-        return DetailedHeartRateStats(
-            average: Int(average),
-            averageTrend: .neutral,
-            resting: Int(resting),
-            restingTrend: .down,
-            minimum: Int(values.min() ?? 0),
-            maximum: Int(values.max() ?? 0)
-        )
-    }
 }
