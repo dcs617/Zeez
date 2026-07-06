@@ -5,9 +5,24 @@ final class PersistenceController {
     static let shared = PersistenceController()
     let container: NSPersistentContainer
     private(set) var isStoreLoaded: Bool = false
-    
+
+    /// One model instance shared by every container. `NSPersistentContainer(name:)`
+    /// loads a fresh NSManagedObjectModel per container; duplicate models
+    /// re-register the NSManagedObject subclasses, making `+entity` lookup
+    /// ambiguous ("Failed to find a unique match for an NSEntityDescription")
+    /// and intermittently failing saves with 134020/133010. Everything that
+    /// needs the current model (containers, CoreDataMigrationManager, tests)
+    /// must use this instance (2.4).
+    static let model: NSManagedObjectModel = {
+        guard let url = Bundle.main.url(forResource: "Zeez", withExtension: "momd"),
+              let model = NSManagedObjectModel(contentsOf: url) else {
+            fatalError("Unable to load the Zeez managed object model from the bundle")
+        }
+        return model
+    }()
+
     private init() {
-        container = NSPersistentContainer(name: "Zeez")
+        container = NSPersistentContainer(name: "Zeez", managedObjectModel: Self.model)
         
         #if DEBUG
         // Enable Core Data debugging (removed private key access)
@@ -57,7 +72,7 @@ final class PersistenceController {
     }()
     
     init(inMemory: Bool = false) {
-        container = NSPersistentContainer(name: "Zeez")
+        container = NSPersistentContainer(name: "Zeez", managedObjectModel: Self.model)
         
         if inMemory {
             container.persistentStoreDescriptions.first?.url = URL(fileURLWithPath: "/dev/null")

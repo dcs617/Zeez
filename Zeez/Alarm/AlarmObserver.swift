@@ -7,13 +7,15 @@ import os.log
 /// Observes changes to alarms and ensures they are properly scheduled
 class AlarmObserver: NSObject {
     static let shared = AlarmObserver()
-    
-    private let scheduler = AlarmScheduler.shared
+
+    private let scheduler: AlarmScheduler
     private let watchHandler = WatchConnectivityHandler.shared
     private var cancellables = Set<AnyCancellable>()
     private var reschedulingTimer: Timer?
-    
-    override private init() {
+
+    /// Tests inject a scheduler built on a fake notification center (2.4).
+    init(scheduler: AlarmScheduler = .shared) {
+        self.scheduler = scheduler
         super.init()
         setupAppLifecycleObservers()
         

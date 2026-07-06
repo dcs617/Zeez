@@ -13,8 +13,9 @@ struct CoreDataMigrationTests {
     }
     
     @Test func requiresMigrationWithCurrentModel() async throws {
-        // Create a test store with current model
-        let container = NSPersistentContainer(name: "Zeez")
+        // Create a test store with current model (always the shared instance —
+        // duplicate loaded models make +entity resolution ambiguous, 2.4)
+        let container = NSPersistentContainer(name: "Zeez", managedObjectModel: PersistenceController.model)
         let description = NSPersistentStoreDescription()
         description.type = NSInMemoryStoreType
         container.persistentStoreDescriptions = [description]
@@ -149,33 +150,36 @@ struct CoreDataMigrationTests {
         #expect(controller.isStoreLoaded, "Store should load before testing data preservation")
         
         let context = controller.container.viewContext
-        
-        // Create test sleep session
-        let session = SleepSession(context: context)
-        session.id = UUID()
-        session.startTime = Date().addingTimeInterval(-8 * 3600) // 8 hours ago
-        session.endTime = Date()
-        session.qualityScore = 85.0
-        session.isActive = false
-        
-        // Create related heart rate data
-        let heartRateData = HeartRateData(context: context)
-        heartRateData.id = UUID()
-        heartRateData.timestamp = Date().addingTimeInterval(-4 * 3600) // 4 hours ago
-        heartRateData.value = 65.0
-        heartRateData.confidence = 95.0
-        heartRateData.session = session
-        
-        try context.save()
-        
-        // Verify data was saved
-        let fetchRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        let sessions = try context.fetch(fetchRequest)
-        #expect(sessions.count == 1, "Should have one sleep session")
-        
-        let fetchedSession = sessions.first!
-        #expect(fetchedSession.qualityScore == 85.0, "Quality score should be preserved")
-        #expect(fetchedSession.heartRateData?.count == 1, "Heart rate data should be related")
+
+        // viewContext is main-queue-confined; tests run off main (2.4).
+        try context.performAndWait {
+            // Create test sleep session
+            let session = SleepSession(context: context)
+            session.id = UUID()
+            session.startTime = Date().addingTimeInterval(-8 * 3600) // 8 hours ago
+            session.endTime = Date()
+            session.qualityScore = 85.0
+            session.isActive = false
+
+            // Create related heart rate data
+            let heartRateData = HeartRateData(context: context)
+            heartRateData.id = UUID()
+            heartRateData.timestamp = Date().addingTimeInterval(-4 * 3600) // 4 hours ago
+            heartRateData.value = 65.0
+            heartRateData.confidence = 95.0
+            heartRateData.session = session
+
+            try context.save()
+
+            // Verify data was saved
+            let fetchRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+            let sessions = try context.fetch(fetchRequest)
+            #expect(sessions.count == 1, "Should have one sleep session")
+
+            let fetchedSession = sessions.first!
+            #expect(fetchedSession.qualityScore == 85.0, "Quality score should be preserved")
+            #expect(fetchedSession.heartRateData?.count == 1, "Heart rate data should be related")
+        }
     }
     
     @Test func relationshipIntegrityAfterMigration() async throws {
@@ -188,35 +192,38 @@ struct CoreDataMigrationTests {
         }
         
         let context = controller.container.viewContext
-        
-        // Create user preferences with alarm configurations
-        let userPrefs = UserPreferences(context: context)
-        userPrefs.id = UUID()
-        userPrefs.targetSleepDuration = 8.0 * 3600 // 8 hours in seconds
-        userPrefs.sleepGoalEnabled = true
-        
-        let alarmConfig = AlarmConfiguration(context: context)
-        alarmConfig.id = UUID()
-        alarmConfig.name = "Test Alarm"
-        alarmConfig.enabled = true
-        alarmConfig.smartWakeEnabled = true
-        alarmConfig.time = Date()
-        alarmConfig.userPreferences = userPrefs
-        
-        try context.save()
-        
-        // Verify relationships
-        let prefsFetch: NSFetchRequest<UserPreferences> = UserPreferences.fetchRequest()
-        let preferences = try context.fetch(prefsFetch)
-        #expect(preferences.count == 1, "Should have one user preferences record")
-        
-        let fetchedPrefs = preferences.first!
-        #expect(fetchedPrefs.alarmConfigurations?.count == 1, "Should have one related alarm configuration")
-        
-        if let alarmSet = fetchedPrefs.alarmConfigurations as? Set<AlarmConfiguration> {
-            let alarm = alarmSet.first!
-            #expect(alarm.name == "Test Alarm", "Alarm name should be preserved")
-            #expect(alarm.userPreferences == fetchedPrefs, "Inverse relationship should be intact")
+
+        // viewContext is main-queue-confined; tests run off main (2.4).
+        try context.performAndWait {
+            // Create user preferences with alarm configurations
+            let userPrefs = UserPreferences(context: context)
+            userPrefs.id = UUID()
+            userPrefs.targetSleepDuration = 8.0 * 3600 // 8 hours in seconds
+            userPrefs.sleepGoalEnabled = true
+
+            let alarmConfig = AlarmConfiguration(context: context)
+            alarmConfig.id = UUID()
+            alarmConfig.name = "Test Alarm"
+            alarmConfig.enabled = true
+            alarmConfig.smartWakeEnabled = true
+            alarmConfig.time = Date()
+            alarmConfig.userPreferences = userPrefs
+
+            try context.save()
+
+            // Verify relationships
+            let prefsFetch: NSFetchRequest<UserPreferences> = UserPreferences.fetchRequest()
+            let preferences = try context.fetch(prefsFetch)
+            #expect(preferences.count == 1, "Should have one user preferences record")
+
+            let fetchedPrefs = preferences.first!
+            #expect(fetchedPrefs.alarmConfigurations?.count == 1, "Should have one related alarm configuration")
+
+            if let alarmSet = fetchedPrefs.alarmConfigurations as? Set<AlarmConfiguration> {
+                let alarm = alarmSet.first!
+                #expect(alarm.name == "Test Alarm", "Alarm name should be preserved")
+                #expect(alarm.userPreferences == fetchedPrefs, "Inverse relationship should be intact")
+            }
         }
     }
     
@@ -224,17 +231,21 @@ struct CoreDataMigrationTests {
     
     @Test func migrationErrorRecovery() async throws {
         let migrationManager = CoreDataMigrationManager.shared
-        
+
         // Test with completely invalid URLs
         let invalidSource = URL(fileURLWithPath: "/invalid/source.sqlite")
         let invalidDestination = URL(fileURLWithPath: "/invalid/destination.sqlite")
-        
+
         do {
             try migrationManager.migrateStore(from: invalidSource, to: invalidDestination)
             Issue.record("Migration should have failed with invalid URLs")
         } catch {
-            // Expected to fail
+            // migrateStore guards a nonexistent source with a typed error
+            // (previously NSCocoaErrorDomain 260 leaked from the backup step).
             #expect(error is CoreDataMigrationError, "Should throw CoreDataMigrationError")
+            if case CoreDataMigrationError.storeNotFound = error {} else {
+                Issue.record("Expected .storeNotFound, got \(error)")
+            }
         }
     }
     
@@ -254,17 +265,20 @@ struct CoreDataMigrationTests {
         
         // Verify we can create and save data
         let context = controller.container.viewContext
-        let testSession = SleepSession(context: context)
-        testSession.id = UUID()
-        testSession.startTime = Date()
-        testSession.isActive = false
-        
-        try context.save()
-        
-        // Verify data was saved
-        let fetchRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        let sessions = try context.fetch(fetchRequest)
-        #expect(sessions.count == 1, "Should have saved one session")
+        // viewContext is main-queue-confined; tests run off main (2.4).
+        try context.performAndWait {
+            let testSession = SleepSession(context: context)
+            testSession.id = UUID()
+            testSession.startTime = Date()
+            testSession.isActive = false
+
+            try context.save()
+
+            // Verify data was saved
+            let fetchRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+            let sessions = try context.fetch(fetchRequest)
+            #expect(sessions.count == 1, "Should have saved one session")
+        }
     }
     
     // MARK: - Performance Tests
@@ -279,47 +293,55 @@ struct CoreDataMigrationTests {
         }
         
         let context = controller.container.viewContext
-        
-        // Create a moderate dataset for performance testing
+
+        // Create a moderate dataset for performance testing.
+        // All Core Data work runs inside performAndWait: the viewContext is a
+        // main-queue context and Swift Testing runs tests off the main thread —
+        // unguarded access here was the source of this test's flaky SIGABRT.
         let startTime = CFAbsoluteTimeGetCurrent()
-        
-        for i in 0..<100 {
-            let session = SleepSession(context: context)
-            session.id = UUID()
-            session.startTime = Date().addingTimeInterval(TimeInterval(-i * 24 * 3600)) // i days ago
-            session.endTime = session.startTime?.addingTimeInterval(8 * 3600) // 8 hour sleep
-            session.qualityScore = Double.random(in: 60...100)
-            session.isActive = false
-            
-            // Add some related data
-            for j in 0..<5 {
-                let heartRate = HeartRateData(context: context)
-                heartRate.id = UUID()
-                heartRate.timestamp = session.startTime?.addingTimeInterval(TimeInterval(j * 3600)) // Every hour
-                heartRate.value = Double.random(in: 50...80)
-                heartRate.confidence = Double.random(in: 80...100)
-                heartRate.session = session
+
+        var creationTime: Double = 0
+        var sessionCount = 0
+        var heartRateCount = 0
+        try context.performAndWait {
+            for i in 0..<100 {
+                let session = SleepSession(context: context)
+                session.id = UUID()
+                session.startTime = Date().addingTimeInterval(TimeInterval(-i * 24 * 3600)) // i days ago
+                session.endTime = session.startTime?.addingTimeInterval(8 * 3600) // 8 hour sleep
+                session.qualityScore = Double.random(in: 60...100)
+                session.isActive = false
+
+                // Add some related data
+                for j in 0..<5 {
+                    let heartRate = HeartRateData(context: context)
+                    heartRate.id = UUID()
+                    heartRate.timestamp = session.startTime?.addingTimeInterval(TimeInterval(j * 3600)) // Every hour
+                    heartRate.value = Double.random(in: 50...80)
+                    heartRate.confidence = Double.random(in: 80...100)
+                    heartRate.session = session
+                }
+
+                // Save every 20 sessions to avoid memory buildup
+                if i % 20 == 0 {
+                    try context.save()
+                }
             }
-            
-            // Save every 20 sessions to avoid memory buildup
-            if i % 20 == 0 {
-                try context.save()
-            }
+
+            try context.save()
+
+            creationTime = CFAbsoluteTimeGetCurrent() - startTime
+
+            // Verify data was created
+            let sessionFetch: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+            sessionCount = try context.fetch(sessionFetch).count
+
+            let heartRateFetch: NSFetchRequest<HeartRateData> = HeartRateData.fetchRequest()
+            heartRateCount = try context.fetch(heartRateFetch).count
         }
-        
-        try context.save()
-        
-        let creationTime = CFAbsoluteTimeGetCurrent() - startTime
-        
-        // Verify data was created
-        let sessionFetch: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        let sessions = try context.fetch(sessionFetch)
-        #expect(sessions.count == 100, "Should have created 100 sessions")
-        
-        let heartRateFetch: NSFetchRequest<HeartRateData> = HeartRateData.fetchRequest()
-        let heartRateData = try context.fetch(heartRateFetch)
-        #expect(heartRateData.count == 500, "Should have created 500 heart rate records")
-        
+
+        #expect(sessionCount == 100, "Should have created 100 sessions")
+        #expect(heartRateCount == 500, "Should have created 500 heart rate records")
         #expect(creationTime < 5.0, "Large dataset creation should complete within 5 seconds")
     }
     

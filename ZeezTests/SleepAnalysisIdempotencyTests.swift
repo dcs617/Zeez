@@ -13,6 +13,10 @@ struct SleepAnalysisIdempotencyTests {
         PersistenceController(inMemory: true)
     }
 
+    // NOTE: viewContext is main-queue-confined and Swift Testing runs tests
+    // off the main thread — every arrange/save below runs inside
+    // `context.performAndWait` (2.4; unguarded access made this suite flaky).
+
     private func makeSession(in context: NSManagedObjectContext,
                               hours: Double = 7.5) -> SleepSession {
         let session = SleepSession(context: context)
@@ -44,10 +48,11 @@ struct SleepAnalysisIdempotencyTests {
     func noDataSessionReceivesSentinel() async throws {
         let controller = makeController()
         let context = controller.container.viewContext
-        let session = makeSession(in: context)
-        try context.save()
-
-        let objectID = session.objectID
+        let objectID = try context.performAndWait {
+            let session = makeSession(in: context)
+            try context.save()
+            return session.objectID
+        }
         try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID, container: controller.container)
 
         let bgContext = controller.container.newBackgroundContext()
@@ -70,10 +75,11 @@ struct SleepAnalysisIdempotencyTests {
     func noDataSessionHasNoDisplayableScore() async throws {
         let controller = makeController()
         let context = controller.container.viewContext
-        let session = makeSession(in: context)
-        try context.save()
-
-        let objectID = session.objectID
+        let objectID = try context.performAndWait {
+            let session = makeSession(in: context)
+            try context.save()
+            return session.objectID
+        }
         try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID, container: controller.container)
 
         let bgContext = controller.container.newBackgroundContext()
@@ -91,23 +97,23 @@ struct SleepAnalysisIdempotencyTests {
         let controller = makeController()
         let context = controller.container.viewContext
 
-        let session = makeSession(in: context)
-        session.deviceIdentifier = "HealthKit Import"
+        let (objectID, stageCountBefore) = try context.performAndWait {
+            let session = makeSession(in: context)
+            session.deviceIdentifier = "HealthKit Import"
 
-        // Add source-reported stages as an importer would
-        let stage = SleepStage(context: context)
-        stage.id = UUID()
-        stage.startTime = session.startTime
-        stage.endTime = session.endTime
-        stage.stageType = "deep"
-        stage.duration = 3600
-        stage.confidence = 85
-        stage.session = session
+            // Add source-reported stages as an importer would
+            let stage = SleepStage(context: context)
+            stage.id = UUID()
+            stage.startTime = session.startTime
+            stage.endTime = session.endTime
+            stage.stageType = "deep"
+            stage.duration = 3600
+            stage.confidence = 85
+            stage.session = session
 
-        try context.save()
-
-        let stageCountBefore = session.sleepStages?.count ?? 0
-        let objectID = session.objectID
+            try context.save()
+            return (session.objectID, session.sleepStages?.count ?? 0)
+        }
 
         // Analyzer should detect HealthKit origin and skip without touching stages
         try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID, container: controller.container)
@@ -130,11 +136,12 @@ struct SleepAnalysisIdempotencyTests {
     func analysisIsIdempotentForStages() async throws {
         let controller = makeController()
         let context = controller.container.viewContext
-        let session = makeSession(in: context)
-        addMovement(to: session, context: context)
-        try context.save()
-
-        let objectID = session.objectID
+        let objectID = try context.performAndWait {
+            let session = makeSession(in: context)
+            addMovement(to: session, context: context)
+            try context.save()
+            return session.objectID
+        }
 
         try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID, container: controller.container)
 
@@ -160,11 +167,12 @@ struct SleepAnalysisIdempotencyTests {
     func analysisIsIdempotentForQualityScores() async throws {
         let controller = makeController()
         let context = controller.container.viewContext
-        let session = makeSession(in: context)
-        addMovement(to: session, context: context)
-        try context.save()
-
-        let objectID = session.objectID
+        let objectID = try context.performAndWait {
+            let session = makeSession(in: context)
+            addMovement(to: session, context: context)
+            try context.save()
+            return session.objectID
+        }
 
         try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID, container: controller.container)
         try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID, container: controller.container)
@@ -185,19 +193,20 @@ struct SleepAnalysisIdempotencyTests {
     func heartRateOnlySessionRunsAnalysis() async throws {
         let controller = makeController()
         let context = controller.container.viewContext
-        let session = makeSession(in: context)
+        let objectID = try context.performAndWait {
+            let session = makeSession(in: context)
 
-        let start = session.startTime!
-        for i in 0..<10 {
-            let hr = HeartRateData(context: context)
-            hr.id = UUID()
-            hr.timestamp = start.addingTimeInterval(Double(i) * 2700)
-            hr.value = 60.0
-            hr.session = session
+            let start = session.startTime!
+            for i in 0..<10 {
+                let hr = HeartRateData(context: context)
+                hr.id = UUID()
+                hr.timestamp = start.addingTimeInterval(Double(i) * 2700)
+                hr.value = 60.0
+                hr.session = session
+            }
+            try context.save()
+            return session.objectID
         }
-        try context.save()
-
-        let objectID = session.objectID
         try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID, container: controller.container)
 
         let bgContext = controller.container.newBackgroundContext()

@@ -228,7 +228,7 @@ class AlarmScheduler: NSObject {
     private func armFollowUpChain(alarmID: String, nextFire: Date, cadence: TimeInterval,
                                   count: Int, selectedSound: String,
                                   vibrationOnly: Bool, chainStamp: Int) {
-        AlarmNotificationUtils.checkCriticalAlertsEnabled { [weak self] criticalEnabled in
+        notificationCenter.criticalAlertsEnabled { [weak self] criticalEnabled in
             guard let self = self else { return }
             let calendar = Calendar.current
 
@@ -345,7 +345,7 @@ class AlarmScheduler: NSObject {
         content.categoryIdentifier = AlarmNotificationRegistrar.categoryId
 
         // Critical sound/level only when the entitlement-backed setting is on
-        AlarmNotificationUtils.checkCriticalAlertsEnabled { [weak self] criticalEnabled in
+        notificationCenter.criticalAlertsEnabled { [weak self] criticalEnabled in
             content.sound = criticalEnabled ? .defaultCritical : .default
             content.interruptionLevel = criticalEnabled ? .critical : .timeSensitive
 
@@ -428,7 +428,7 @@ class AlarmScheduler: NSObject {
         let selectedSound = alarm.alarmSound ?? "default"
         
         // Check critical alert capability and set appropriate interruption level and sound
-        AlarmNotificationUtils.checkCriticalAlertsEnabled { [weak self] criticalEnabled in
+        notificationCenter.criticalAlertsEnabled { [weak self] criticalEnabled in
             if isSmartWake {
                 // The gentle pre-alarm is deliberately quieter than the real
                 // alarm: default sound, never critical. The backup alert at the

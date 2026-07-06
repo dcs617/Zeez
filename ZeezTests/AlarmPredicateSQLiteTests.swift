@@ -27,7 +27,7 @@ struct AlarmPredicateSQLiteTests {
         let storeURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("AlarmPredicateSQLiteTests-\(UUID().uuidString).sqlite")
 
-        let container = NSPersistentContainer(name: "Zeez")
+        let container = NSPersistentContainer(name: "Zeez", managedObjectModel: PersistenceController.model)
         let description = NSPersistentStoreDescription(url: storeURL)
         description.type = NSSQLiteStoreType
         container.persistentStoreDescriptions = [description]

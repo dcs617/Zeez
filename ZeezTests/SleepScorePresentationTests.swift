@@ -86,17 +86,24 @@ struct SleepScorePresentationTests {
 
     @Test("Debug mock session has a displayable qualityScore set by the generator")
     func mockSessionHasDisplayableQualityScore() throws {
-        let context = makeContext()
+        // Keep the controller alive for the whole test, and run the generator
+        // on the viewContext's own queue — it is main-queue-confined and
+        // Swift Testing runs tests off main (2.4).
+        let controller = PersistenceController(inMemory: true)
+        let context = controller.container.viewContext
         let generator = MockDataGenerator(context: context)
-        generator.generateMockData(for: 1)
 
-        let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        request.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", "Mock Data")
-        let sessions = try context.fetch(request)
+        try context.performAndWait {
+            generator.generateMockData(for: 1)
 
-        #expect(!sessions.isEmpty)
-        for session in sessions {
-            #expect(session.hasDisplayableScore, "Mock sessions should always have a displayable quality score")
+            let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+            request.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", "Mock Data")
+            let sessions = try context.fetch(request)
+
+            #expect(!sessions.isEmpty)
+            for session in sessions {
+                #expect(session.hasDisplayableScore, "Mock sessions should always have a displayable quality score")
+            }
         }
     }
 

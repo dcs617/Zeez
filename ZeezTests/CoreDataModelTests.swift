@@ -8,7 +8,7 @@ struct CoreDataModelTests {
     /// This validates the index fix for the Core Data model
     @Test func respiratoryDataEntityCreationAndQuery() async throws {
         // Create in-memory persistent store for testing
-        let container = NSPersistentContainer(name: "Zeez")
+        let container = NSPersistentContainer(name: "Zeez", managedObjectModel: PersistenceController.model)
         let description = NSPersistentStoreDescription()
         description.type = NSInMemoryStoreType
         container.persistentStoreDescriptions = [description]
@@ -57,7 +57,7 @@ struct CoreDataModelTests {
     
     /// Test that the index actually works for performance
     @Test func respiratoryDataIndexPerformance() async throws {
-        let container = NSPersistentContainer(name: "Zeez")
+        let container = NSPersistentContainer(name: "Zeez", managedObjectModel: PersistenceController.model)
         let description = NSPersistentStoreDescription()
         description.type = NSInMemoryStoreType
         container.persistentStoreDescriptions = [description]

@@ -10,6 +10,19 @@ protocol AlarmNotificationScheduling {
     func getPendingNotificationRequests(completionHandler: @escaping @Sendable ([UNNotificationRequest]) -> Void)
     func removePendingNotificationRequests(withIdentifiers identifiers: [String])
     func getNotificationSettings(completionHandler: @escaping @Sendable (UNNotificationSettings) -> Void)
+    /// Whether the entitlement-backed critical-alerts setting is enabled.
+    /// A separate requirement (not derived at call sites from
+    /// `getNotificationSettings`) because `UNNotificationSettings` cannot be
+    /// constructed in tests — fakes answer this directly.
+    func criticalAlertsEnabled(completionHandler: @escaping @Sendable (Bool) -> Void)
+}
+
+extension AlarmNotificationScheduling {
+    func criticalAlertsEnabled(completionHandler: @escaping @Sendable (Bool) -> Void) {
+        getNotificationSettings { settings in
+            completionHandler(settings.criticalAlertSetting == .enabled)
+        }
+    }
 }
 
 extension UNUserNotificationCenter: AlarmNotificationScheduling {}

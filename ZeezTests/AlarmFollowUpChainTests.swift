@@ -10,39 +10,7 @@ import UserNotifications
 @Suite("Pre-scheduled follow-up chains", .serialized)
 struct AlarmFollowUpChainTests {
 
-    // MARK: - Fake center
-
-    final class FakeNotificationCenter: AlarmNotificationScheduling, @unchecked Sendable {
-        private let lock = NSLock()
-        private var storage: [UNNotificationRequest] = []
-
-        var pending: [UNNotificationRequest] {
-            lock.lock(); defer { lock.unlock() }
-            return storage
-        }
-
-        func add(_ request: UNNotificationRequest, withCompletionHandler completionHandler: (@Sendable (Error?) -> Void)?) {
-            lock.lock()
-            storage.removeAll { $0.identifier == request.identifier }
-            storage.append(request)
-            lock.unlock()
-            completionHandler?(nil)
-        }
-
-        func getPendingNotificationRequests(completionHandler: @escaping @Sendable ([UNNotificationRequest]) -> Void) {
-            completionHandler(pending)
-        }
-
-        func removePendingNotificationRequests(withIdentifiers identifiers: [String]) {
-            lock.lock()
-            storage.removeAll { identifiers.contains($0.identifier) }
-            lock.unlock()
-        }
-
-        func getNotificationSettings(completionHandler: @escaping @Sendable (UNNotificationSettings) -> Void) {
-            // Not exercised by the scheduling paths under test.
-        }
-    }
+    // Uses the shared FakeNotificationCenter from AlarmTestSupport.swift.
 
     // MARK: - Helpers
 
@@ -65,11 +33,14 @@ struct AlarmFollowUpChainTests {
         return alarm
     }
 
-    /// Confirmation-based waiting on the fake (no fixed sleeps).
+    /// Confirmation-based waiting on the fake (no fixed sleeps). Returns as
+    /// soon as the predicate holds — never re-evaluates after a successful
+    /// loop exit (remove-then-add makes counts transiently dip).
     private func waitUntil(_ what: String, timeout: TimeInterval = 10,
                            _ predicate: @escaping () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(timeout)
-        while !predicate() && Date() < deadline {
+        while Date() < deadline {
+            if predicate() { return }
             try await Task.sleep(nanoseconds: 50_000_000)
         }
         #expect(predicate(), "Timed out waiting for \(what)")
@@ -171,7 +142,9 @@ struct AlarmFollowUpChainTests {
             self.chainIDs(fake, alarmID: alarmID).count == 6
         }
         try await Task.sleep(nanoseconds: 300_000_000)
-        #expect(chainIDs(fake, alarmID: alarmID).count == 6, "Chain must be replaced, not stacked")
+        try await waitUntil("chain replaced, not stacked, after settling") {
+            self.chainIDs(fake, alarmID: alarmID).count == 6
+        }
     }
 
     @Test func disabledAlarmArmsNothing() async throws {

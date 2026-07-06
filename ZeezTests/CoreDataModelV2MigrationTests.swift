@@ -23,13 +23,27 @@ struct CoreDataModelV2MigrationTests {
     }
 
     private func currentModel() throws -> NSManagedObjectModel {
-        try #require(NSManagedObjectModel(contentsOf: momdURL()))
+        // The app-wide shared instance — loading another copy of the current
+        // model makes subclass→entity resolution ambiguous process-wide (2.4).
+        PersistenceController.model
     }
 
-    /// The compiled v1 model ("Zeez.xcdatamodel" → "Zeez.mom" inside the momd).
+    /// The compiled v1 model ("Zeez.xcdatamodel" → "Zeez.mom" inside the momd),
+    /// loaded once and with its NSManagedObject-subclass claims removed: the v1
+    /// fixtures only ever use `insertNewObject(forEntityName:)` + KVC, and a
+    /// second model claiming `AlarmConfiguration` et al. would make `+entity`
+    /// ambiguous for every other suite running in parallel (2.4).
+    private static let neutralizedV1Model: NSManagedObjectModel? = {
+        guard let momd = Bundle.main.url(forResource: "Zeez", withExtension: "momd"),
+              let model = NSManagedObjectModel(contentsOf: momd.appendingPathComponent("Zeez.mom")) else {
+            return nil
+        }
+        model.entities.forEach { $0.managedObjectClassName = "NSManagedObject" }
+        return model
+    }()
+
     private func v1Model() throws -> NSManagedObjectModel {
-        let url = try momdURL().appendingPathComponent("Zeez.mom")
-        return try #require(NSManagedObjectModel(contentsOf: url))
+        try #require(Self.neutralizedV1Model)
     }
 
     // MARK: - Store helpers

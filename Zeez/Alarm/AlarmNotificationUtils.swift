@@ -4,6 +4,17 @@ import os.log
 
 /// Small helpers for follow-ups and snooze.
 enum AlarmNotificationUtils {
+    /// Injection seams for tests (2.4). Static because this type is a
+    /// namespace enum; tests that swap these MUST run serialized and restore
+    /// the previous values (see AlarmSnoozeAndHandlerTests).
+    static var notificationCenter: AlarmNotificationScheduling = UNUserNotificationCenter.current()
+    /// nil means PersistenceController.shared, resolved lazily at call time.
+    static var container: NSPersistentContainer?
+
+    private static var resolvedContainer: NSPersistentContainer {
+        container ?? PersistenceController.shared.container
+    }
+
     /// Default = 60s; you can switch to 31s for "Heavy Sleeper" mode.
     static var defaultCadenceSeconds: TimeInterval = 60
     /// Heavy sleeper cadence for more frequent follow-ups
@@ -45,7 +56,7 @@ enum AlarmNotificationUtils {
         // Called from notification-center callbacks (off the main thread), so
         // the alarm's settings are read via a snapshot on a background context
         // (item 1.6). Missing alarm falls back to the basic snooze.
-        AlarmSnapshot.fetch(idString: alarmId) { snapshot in
+        AlarmSnapshot.fetch(idString: alarmId, container: resolvedContainer) { snapshot in
             if let snapshot {
                 scheduleSnoozeWithAlarmSettings(alarm: snapshot, minutes: snapshot.snoozeDurationMinutes)
             } else {
@@ -84,7 +95,7 @@ enum AlarmNotificationUtils {
                 let id = "snooze-\(alarm.idString)-\(timestamp)"
                 let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
 
-                UNUserNotificationCenter.current().add(request) { error in
+                notificationCenter.add(request) { error in
                     if let error = error {
                         ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule proper snooze alarm", error: error)
                     } else {
@@ -125,7 +136,7 @@ enum AlarmNotificationUtils {
             )
             // "alarm-<uuid>-fu-" prefix keeps these targetable by cancelFollowUps
             let id = "alarm-\(alarm.idString)-fu-snz-\(n)-\(timestamp)"
-            UNUserNotificationCenter.current().add(.init(identifier: id, content: content, trigger: trigger))
+            notificationCenter.add(.init(identifier: id, content: content, trigger: trigger), withCompletionHandler: nil)
         }
         ZeezLogger.info(ZeezLogger.alarm, "📅 Pre-armed \(count) follow-ups behind snooze for alarm \(alarm.idString)")
     }
@@ -151,7 +162,7 @@ enum AlarmNotificationUtils {
             let id = "snooze-\(alarmId)-\(Int(Date().timeIntervalSince1970))"
             let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
 
-            UNUserNotificationCenter.current().add(request) { error in
+            notificationCenter.add(request) { error in
                 if let error = error {
                     ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule basic snooze", error: error)
                 } else {
@@ -162,11 +173,8 @@ enum AlarmNotificationUtils {
     }
     
     /// Check if user has critical alerts enabled
-    static func checkCriticalAlertsEnabled(completion: @escaping (Bool) -> Void) {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            let enabled = (settings.criticalAlertSetting == .enabled)
-            completion(enabled)
-        }
+    static func checkCriticalAlertsEnabled(completion: @escaping @Sendable (Bool) -> Void) {
+        notificationCenter.criticalAlertsEnabled(completionHandler: completion)
     }
     
     /// Get the appropriate interruption level based on device capabilities
@@ -207,7 +215,7 @@ enum AlarmNotificationUtils {
     
     /// Cancel pending follow-up notifications for a specific alarm
     private static func cancelPendingFollowUps(for alarmId: String) {
-        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+        notificationCenter.getPendingNotificationRequests { requests in
             let followUpIds = requests.compactMap { request -> String? in
                 // Match follow-up notifications for this alarm
                 if request.identifier.contains("alarm-\(alarmId)-fu-") {
@@ -215,9 +223,9 @@ enum AlarmNotificationUtils {
                 }
                 return nil
             }
-            
+
             if !followUpIds.isEmpty {
-                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: followUpIds)
+                notificationCenter.removePendingNotificationRequests(withIdentifiers: followUpIds)
                 ZeezLogger.info(ZeezLogger.alarm, "🙅 Snooze canceled \(followUpIds.count) pending follow-ups for alarm \(alarmId)")
             }
         }

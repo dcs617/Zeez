@@ -1,0 +1,42 @@
+# Unit-test CI (roadmap 2.4 step 5).
+#
+# Runs the ZeezTests bundle only: the suites are hermetic (in-memory Core
+# Data + injected fake notification center) and need no notification
+# permission or signing. UI tests are excluded — they need a booted, warm
+# simulator and are run locally/manually for now.
+#
+# NOTE: authored offline; the runner image's exact Xcode path may need a
+# bump when this first executes (see the xcode-select step).
+name: tests
+
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          # Prefer the newest Xcode 16.x on the runner image.
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          sudo xcode-select -s "${XCODE:-/Applications/Xcode.app}"
+          xcodebuild -version
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Zeez.xcodeproj \
+            -scheme Zeez \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -only-testing:ZeezTests

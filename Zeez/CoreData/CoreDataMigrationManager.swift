@@ -33,6 +33,12 @@ final class CoreDataMigrationManager {
     }
     
     func migrateStore(from sourceURL: URL, to destinationURL: URL) throws {
+        // Surface a typed error instead of letting the backup-copy step throw
+        // NSCocoaErrorDomain 260 for a nonexistent source (2.4).
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+            throw CoreDataMigrationError.storeNotFound(sourceURL)
+        }
+
         ZeezLogger.info(logger, "Starting Core Data migration from \(sourceURL.lastPathComponent) to \(destinationURL.lastPathComponent)")
         
         let startTime = CFAbsoluteTimeGetCurrent()
@@ -159,11 +165,9 @@ final class CoreDataMigrationManager {
     // MARK: - Model Management
     
     private func currentModel() -> NSManagedObjectModel {
-        guard let modelURL = Bundle.main.url(forResource: modelName, withExtension: "momd"),
-              let model = NSManagedObjectModel(contentsOf: modelURL) else {
-            fatalError("Could not load current Core Data model")
-        }
-        return model
+        // Always the shared instance — a second loaded copy of the current
+        // model makes NSManagedObject subclass→entity resolution ambiguous (2.4).
+        PersistenceController.model
     }
     
     private func model(for version: String) -> NSManagedObjectModel? {
@@ -260,14 +264,17 @@ struct MigrationStep {
 
 enum CoreDataMigrationError: Error, LocalizedError {
     case cannotReadMetadata
+    case storeNotFound(URL)
     case migrationFailed(underlying: Error)
     case backupFailed(underlying: Error)
     case restoreFailed(underlying: Error)
-    
+
     var errorDescription: String? {
         switch self {
         case .cannotReadMetadata:
             return "Cannot read Core Data store metadata"
+        case .storeNotFound(let url):
+            return "No Core Data store exists at \(url.lastPathComponent)"
         case .migrationFailed(let error):
             return "Core Data migration failed: \(error.localizedDescription)"
         case .backupFailed(let error):

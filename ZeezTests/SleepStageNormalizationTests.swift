@@ -105,18 +105,22 @@ struct SleepStageNormalizationTests {
     func dashboardPreviewReportsStageDistribution() {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        let session = SleepSession(context: context)
 
-        for (type, duration) in [("inBed", 8 * 3600.0), ("rem", 2 * 3600.0)] {
-            let stage = SleepStage(context: context)
-            stage.stageType = type
-            stage.duration = duration
-            stage.session = session
+        // viewContext is main-queue-confined; tests run off main (2.4).
+        context.performAndWait {
+            let session = SleepSession(context: context)
+
+            for (type, duration) in [("inBed", 8 * 3600.0), ("rem", 2 * 3600.0)] {
+                let stage = SleepStage(context: context)
+                stage.stageType = type
+                stage.duration = duration
+                stage.session = session
+            }
+
+            let stat = SleepStagesPreviewStats.getRandomStat(from: session)
+            #expect(stat?.label == "REM")
+            #expect(stat?.value == "100%")
         }
-
-        let stat = SleepStagesPreviewStats.getRandomStat(from: session)
-        #expect(stat?.label == "REM")
-        #expect(stat?.value == "100%")
     }
 
     @Test("In-bed or asleep rows alone do not support an estimated efficiency rating")

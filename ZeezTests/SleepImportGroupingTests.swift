@@ -111,22 +111,25 @@ struct SleepImportGroupingTests {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
 
-        let session = SleepSession(context: context)
-        session.id = UUID()
-        session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
-        session.endTime = Date()
-        session.deviceIdentifier = "HealthKit Import"
-        session.qualityScore = 0
+        // viewContext is main-queue-confined; tests run off main (2.4).
+        try context.performAndWait {
+            let session = SleepSession(context: context)
+            session.id = UUID()
+            session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
+            session.endTime = Date()
+            session.deviceIdentifier = "HealthKit Import"
+            session.qualityScore = 0
 
-        // Before obtainPermanentIDs, the ID should be temporary
-        #expect(session.objectID.isTemporaryID,
-                "Newly inserted object should have a temporary ID before permanentization")
+            // Before obtainPermanentIDs, the ID should be temporary
+            #expect(session.objectID.isTemporaryID,
+                    "Newly inserted object should have a temporary ID before permanentization")
 
-        // Obtain permanent IDs without saving
-        try context.obtainPermanentIDs(for: [session])
+            // Obtain permanent IDs without saving
+            try context.obtainPermanentIDs(for: [session])
 
-        #expect(!session.objectID.isTemporaryID,
-                "After obtainPermanentIDs, the session ID must be permanent and cross-context resolvable")
+            #expect(!session.objectID.isTemporaryID,
+                    "After obtainPermanentIDs, the session ID must be permanent and cross-context resolvable")
+        }
     }
 
     @Test("Importer parent-save step makes session resolvable before child attachment")
@@ -134,14 +137,17 @@ struct SleepImportGroupingTests {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
 
-        let session = SleepSession(context: context)
-        session.id = UUID()
-        session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
-        session.endTime = Date()
-        session.deviceIdentifier = "HealthKit Import"
-        session.qualityScore = 0
+        // viewContext is main-queue-confined; tests run off main (2.4).
+        let objectID = try context.performAndWait {
+            let session = SleepSession(context: context)
+            session.id = UUID()
+            session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
+            session.endTime = Date()
+            session.deviceIdentifier = "HealthKit Import"
+            session.qualityScore = 0
 
-        let objectID = try saveImportedSessionForRelatedData(session, in: context)
+            return try saveImportedSessionForRelatedData(session, in: context)
+        }
 
         let bgContext = controller.container.newBackgroundContext()
         let identifier = try await bgContext.perform {
@@ -159,30 +165,33 @@ struct SleepImportGroupingTests {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
 
-        let base = Date(timeIntervalSinceNow: -10 * 3600)
-        let start = base
-        let end = base.addingTimeInterval(8 * 3600)
+        // viewContext is main-queue-confined; tests run off main (2.4).
+        try context.performAndWait {
+            let base = Date(timeIntervalSinceNow: -10 * 3600)
+            let start = base
+            let end = base.addingTimeInterval(8 * 3600)
 
-        // Seed an existing HealthKit-imported session for this time range
-        let existingSession = SleepSession(context: context)
-        existingSession.id = UUID()
-        existingSession.startTime = start
-        existingSession.endTime = end
-        existingSession.deviceIdentifier = "HealthKit Import"
-        existingSession.qualityScore = 0
-        try context.save()
+            // Seed an existing HealthKit-imported session for this time range
+            let existingSession = SleepSession(context: context)
+            existingSession.id = UUID()
+            existingSession.startTime = start
+            existingSession.endTime = end
+            existingSession.deviceIdentifier = "HealthKit Import"
+            existingSession.qualityScore = 0
+            try context.save()
 
-        // Check using the same deduplication logic as the importer
-        let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        let margin: TimeInterval = 15 * 60
-        request.predicate = NSPredicate(
-            format: "deviceIdentifier == %@ AND startTime >= %@ AND startTime <= %@",
-            "HealthKit Import",
-            Date(timeInterval: -margin, since: start) as NSDate,
-            Date(timeInterval: margin, since: start) as NSDate
-        )
-        request.fetchLimit = 1
-        let count = try context.count(for: request)
-        #expect(count > 0, "Deduplication check should detect existing session and skip re-import")
+            // Check using the same deduplication logic as the importer
+            let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+            let margin: TimeInterval = 15 * 60
+            request.predicate = NSPredicate(
+                format: "deviceIdentifier == %@ AND startTime >= %@ AND startTime <= %@",
+                "HealthKit Import",
+                Date(timeInterval: -margin, since: start) as NSDate,
+                Date(timeInterval: margin, since: start) as NSDate
+            )
+            request.fetchLimit = 1
+            let count = try context.count(for: request)
+            #expect(count > 0, "Deduplication check should detect existing session and skip re-import")
+        }
     }
 }

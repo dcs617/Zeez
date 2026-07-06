@@ -58,7 +58,7 @@ struct NotificationBudgetTests {
 
     @Test func chainIsSkippedWhenBudgetIsTightButMainStillSchedules() async throws {
         let controller = PersistenceController(inMemory: true)
-        let fake = AlarmFollowUpChainTests.FakeNotificationCenter()
+        let fake = FakeNotificationCenter()
         let scheduler = AlarmScheduler(notificationCenter: fake)
 
         // Fill the fake near the cap: 58 unrelated requests. The main (1) fits;

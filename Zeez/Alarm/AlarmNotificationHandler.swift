@@ -11,9 +11,24 @@ import os.log
 final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate {
     static let shared = AlarmNotificationHandler()
 
-    private let center = UNUserNotificationCenter.current()
+    private let center: AlarmNotificationScheduling
+    /// Tests pass an in-memory container; nil means PersistenceController.shared
+    /// (resolved lazily so constructing the singleton never touches the store).
+    private let container: NSPersistentContainer?
     /// Prevent double follow-up scheduling if multiple notifications present nearly at once.
     private var followupsGuard: [String: Date] = [:]
+
+    /// Tests inject an in-memory fake center + container; production uses the real ones.
+    init(notificationCenter: AlarmNotificationScheduling = UNUserNotificationCenter.current(),
+         container: NSPersistentContainer? = nil) {
+        self.center = notificationCenter
+        self.container = container
+        super.init()
+    }
+
+    private var resolvedContainer: NSPersistentContainer {
+        container ?? PersistenceController.shared.container
+    }
 
     // MARK: Presentation while foregrounded
     func userNotificationCenter(_ center: UNUserNotificationCenter,
@@ -98,7 +113,7 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         // Delegate callbacks run off the main thread, so the alarm's settings
         // are read via a snapshot on a background context (item 1.6). Missing
         // alarm falls back to normal-mode defaults, matching prior behavior.
-        AlarmSnapshot.fetch(idString: alarmId) { [weak self] snapshot in
+        AlarmSnapshot.fetch(idString: alarmId, container: resolvedContainer) { [weak self] snapshot in
             guard let self = self else { return }
             let isHeavySleeper = snapshot?.heavySleeperMode ?? false
             let cadence = AlarmNotificationUtils.getCadence(isHeavySleeper: isHeavySleeper)
@@ -119,7 +134,8 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         }
     }
 
-    private func scheduleFollowUps(alarmId: String, cadence: TimeInterval, maxCount: Int, snapshot: AlarmSnapshot?) {
+    // Internal for tests (exercised via the injected fake center).
+    func scheduleFollowUps(alarmId: String, cadence: TimeInterval, maxCount: Int, snapshot: AlarmSnapshot?) {
         let alarmSound = snapshot?.alarmSound ?? "Alarm_Classic.caf"
         let vibrationOnly = snapshot?.vibrationOnly ?? false
         let watchHaptics = snapshot?.watchHaptics ?? false
@@ -129,9 +145,8 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
             startWatchHaptics()
         }
 
-        center.getNotificationSettings { [weak self] settings in
+        center.criticalAlertsEnabled { [weak self] useCritical in
             guard let self = self else { return }
-            let useCritical = (settings.criticalAlertSetting == .enabled)
             let base = Date().timeIntervalSince1970
 
             (1...maxCount).forEach { n in
@@ -151,7 +166,7 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
 
                 let trigger = UNTimeIntervalNotificationTrigger(timeInterval: cadence * Double(n), repeats: false)
                 let id = "alarm-\(alarmId)-fu-\(n)-\(Int(base))"
-                self.center.add(.init(identifier: id, content: content, trigger: trigger))
+                self.center.add(.init(identifier: id, content: content, trigger: trigger), withCompletionHandler: nil)
             }
             
             let mode = cadence == AlarmNotificationUtils.heavySleeperCadenceSeconds ? "Heavy Sleeper" : "Normal"
@@ -180,7 +195,8 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         }
     }
 
-    private func cancelFollowUps(for alarmId: String) {
+    // Internal for tests (exercised via the injected fake center).
+    func cancelFollowUps(for alarmId: String) {
         center.getPendingNotificationRequests { [weak self] reqs in
             let ids = reqs.map(\.identifier).filter { $0.contains("alarm-\(alarmId)-fu-") }
             if !ids.isEmpty {
@@ -211,8 +227,8 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         // on the main thread — delegate callbacks arrive off it (item 1.6).
         // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths in predicates
         guard let uuid = UUID(uuidString: alarmId) else { return }
-        DispatchQueue.main.async {
-            let context = PersistenceController.shared.container.viewContext
+        DispatchQueue.main.async { [self] in
+            let context = resolvedContainer.viewContext
             let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
             request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
 
