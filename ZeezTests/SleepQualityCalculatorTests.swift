@@ -95,7 +95,10 @@ struct SleepQualityCalculatorTests {
         #expect(m.stageDistributionScore == 75)  // no-stage default
         #expect(m.fragmentationScore == 85)      // no-stage default
         #expect(m.sleepLatencyScore == 85)       // no-stage default
-        let expected = 100 * 0.25 + 85 * 0.30 + 75 * 0.25 + 85 * 0.15 + 85 * 0.05
+        // Kept as explicit Double terms: the mixed-literal one-liner exceeded
+        // Xcode 16.4's type-check budget on the CI runner (first Actions run).
+        let weighted: [Double] = [100.0 * 0.25, 85.0 * 0.30, 75.0 * 0.25, 85.0 * 0.15, 85.0 * 0.05]
+        let expected = weighted.reduce(0, +)
         #expect(abs(m.overallScore - expected) < 0.0001)
     }
 
