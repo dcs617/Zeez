@@ -20,7 +20,7 @@ Within later phases, items are independent unless noted.
 ## Phase 0 — Critical fixes (each < 1 hour; do these first, in order)
 
 ### 0.1 Reconcile git index and commit the reorganization
-- [ ] Done
+- [x] Done
 - **Problem:** 214 dirty entries (86 deletions, 75 untracked files, 49 modified) — the entire
   directory reorganization exists only in the working tree. The index contains stale staged
   adds: `Zeez/Environment/ActiveAlarmView.swift` and `Zeez/Learn/ActiveAlarmView.swift` show
@@ -42,7 +42,7 @@ Within later phases, items are independent unless noted.
   app still builds.
 
 ### 0.2 Fix the four invalid `id.uuidString` Core Data predicates
-- [ ] Done
+- [x] Done
 - **Problem:** `AlarmConfiguration.id` is a **UUID** attribute (confirmed in
   `Zeez/Zeez.xcdatamodeld/Zeez.xcdatamodel/contents`). SQLite stores cannot evaluate the
   keypath `id.uuidString` — the fetch raises an ObjC `NSInvalidArgumentException` at runtime
@@ -65,7 +65,7 @@ Within later phases, items are independent unless noted.
   nothing.
 
 ### 0.3 Add a SQLite-backed regression test for alarm-ID predicates
-- [ ] Done
+- [x] Done
 - **Problem:** the existing alarm suites (`ZeezTests/AlarmEndToEndTests.swift` etc.) run
   against `PersistenceController.shared` or in-memory stores; in-memory predicate evaluation
   would not have caught 0.2. Without a SQLite-backed test this bug class returns.
@@ -86,7 +86,7 @@ Within later phases, items are independent unless noted.
 - **Verification:** suite passes from Xcode; predicate tests fail if someone reverts 0.2.
 
 ### 0.4 Add `NSMicrophoneUsageDescription` (or gate the environmental recorder)
-- [ ] Done
+- [x] Done
 - **Problem:** `Zeez/Environment/EnvironmentalMonitor.swift:92-95` creates an
   `AVAudioRecorder` and calls `.record()` for noise sampling. `Zeez/Info.plist` has **no**
   `NSMicrophoneUsageDescription`. iOS terminates the app the instant the mic is accessed
@@ -106,7 +106,7 @@ Within later phases, items are independent unless noted.
   app must not crash; if the key was added, the permission prompt shows the string.
 
 ### 0.5 Stop `AlarmScheduler` from wiping ALL pending notifications
-- [ ] Done
+- [x] Done
 - **Problem:** `Zeez/Alarm/AlarmScheduler.swift:50` — `scheduleAllAlarms` calls
   `notificationCenter.removeAllPendingNotificationRequests()`. This wipes pending snoozes,
   heavy-sleeper follow-ups, and Learn reminders. It runs on **every app launch**
@@ -136,7 +136,7 @@ Within later phases, items are independent unless noted.
   inspect pending requests).
 
 ### 0.6 Stop `LearnNotificationManager` from cancelling alarms
-- [ ] Done
+- [x] Done
 - **Problem:** `Zeez/Learn/LearnNotificationManager.swift:163-164` —
   `removeAllPendingNotifications()` calls the global
   `removeAllPendingNotificationRequests()`. It is invoked from
@@ -492,3 +492,4 @@ single-sourced.
 | Date | Items | Notes |
 |---|---|---|
 | 2026-07-05 | — | Roadmap created from audit. |
+| 2026-07-05 | 0.1–0.6 | Phase 0 complete, one commit per item (0.2+0.3 shared). 0.4 decision: KEEP noise monitoring — usage string added; recorder was also found persisting lossless audio to Documents from init, now metering-only to /dev/null behind an explicit permission request. 0.5: in-flight snoozes survive reschedules unless the owning alarm is disabled/deleted; also fixed scheduleSpecificAlarm's never-matching prefix filter and cancelAllAlarms' global wipe. New AlarmPredicateSQLiteTests passes 6/6. Pre-existing suites (EndToEnd/Reliability/RaceCondition) fail identically at the pre-change baseline commit — Core Data 132001 "recursively call -save:" from testing against PersistenceController.shared while the host app runs; that is item 2.4's scope, not a Phase 0 regression. Note: `grep -rn "id.uuidString" Zeez/` still matches 2 non-predicate serialization sites (Widget.swift, WatchCommunicationSupport.swift) — predicate-form matches are zero. |
