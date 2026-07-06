@@ -67,11 +67,26 @@ struct StoreKitTests {
 
     // MARK: - StoreKitTest-backed entitlement flows
 
+    /// ONE shared session for the whole suite. Creating a fresh SKTestSession per test
+    /// churns the local StoreKit-test server and flaked an entire run with
+    /// ASDErrorDomain 500 / AMS 400 ("Error enumerating all current transactions").
+    /// The suite is .serialized, so tests never share it concurrently.
+    @MainActor
+    private static let sharedSession: SKTestSession = {
+        let bundle = Bundle(for: StoreKitTestsBundleLocator.self)
+        guard let url = bundle.url(forResource: "Zeez", withExtension: "storekit") else {
+            fatalError("Zeez.storekit missing from the test bundle")
+        }
+        do {
+            return try SKTestSession(contentsOf: url)
+        } catch {
+            fatalError("Failed to create shared SKTestSession: \(error)")
+        }
+    }()
+
     @MainActor
     private func makeSession() throws -> SKTestSession {
-        let bundle = Bundle(for: StoreKitTestsBundleLocator.self)
-        let url = try #require(bundle.url(forResource: "Zeez", withExtension: "storekit"))
-        let session = try SKTestSession(contentsOf: url)
+        let session = Self.sharedSession
         session.resetToDefaultState()
         session.disableDialogs = true
         session.clearTransactions()

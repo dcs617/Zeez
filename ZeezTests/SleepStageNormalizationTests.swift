@@ -149,47 +149,51 @@ struct SleepStageNormalizationTests {
     func stagePercentsEquivalentAcrossCasings() throws {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        let session = SleepSession(context: context)
-        session.id = UUID()
-        session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
-        session.endTime = Date()
 
-        // Simulate uppercase (mock/analyzer-generated) stages
-        func makeStage(type: String, duration: TimeInterval) {
-            let stage = SleepStage(context: context)
-            stage.id = UUID()
-            stage.stageType = type
-            stage.duration = duration
-            stage.startTime = Date(timeIntervalSinceNow: -duration)
-            stage.endTime = Date()
-            stage.session = session
+        // viewContext is main-queue-confined; tests run off main (2.4).
+        try context.performAndWait {
+            let session = SleepSession(context: context)
+            session.id = UUID()
+            session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
+            session.endTime = Date()
+
+            // Simulate uppercase (mock/analyzer-generated) stages
+            func makeStage(type: String, duration: TimeInterval) {
+                let stage = SleepStage(context: context)
+                stage.id = UUID()
+                stage.stageType = type
+                stage.duration = duration
+                stage.startTime = Date(timeIntervalSinceNow: -duration)
+                stage.endTime = Date()
+                stage.session = session
+            }
+
+            // Two sessions: one with uppercase stages, one with lowercase
+            makeStage(type: "DEEP", duration: 90 * 60)
+            makeStage(type: "LIGHT", duration: 180 * 60)
+            makeStage(type: "REM", duration: 90 * 60)
+
+            try context.save()
+
+            let calcUpper = SleepQualityCalculator(session: session, context: context)
+            let metricsUpper = calcUpper.calculateMetrics()
+
+            // Reset stages to lowercase equivalents
+            if let stages = session.sleepStages?.allObjects as? [SleepStage] {
+                stages.forEach { context.delete($0) }
+            }
+            makeStage(type: "deep", duration: 90 * 60)
+            makeStage(type: "light", duration: 180 * 60)
+            makeStage(type: "rem", duration: 90 * 60)
+            try context.save()
+
+            let calcLower = SleepQualityCalculator(session: session, context: context)
+            let metricsLower = calcLower.calculateMetrics()
+
+            #expect(abs(metricsUpper.stageDistributionScore - metricsLower.stageDistributionScore) < 0.01,
+                    "Stage distribution scores must be identical for uppercase vs lowercase stored values")
+            #expect(abs(metricsUpper.fragmentationScore - metricsLower.fragmentationScore) < 0.01,
+                    "Fragmentation scores must be identical for uppercase vs lowercase stored values")
         }
-
-        // Two sessions: one with uppercase stages, one with lowercase
-        makeStage(type: "DEEP", duration: 90 * 60)
-        makeStage(type: "LIGHT", duration: 180 * 60)
-        makeStage(type: "REM", duration: 90 * 60)
-
-        try context.save()
-
-        let calcUpper = SleepQualityCalculator(session: session, context: context)
-        let metricsUpper = calcUpper.calculateMetrics()
-
-        // Reset stages to lowercase equivalents
-        if let stages = session.sleepStages?.allObjects as? [SleepStage] {
-            stages.forEach { context.delete($0) }
-        }
-        makeStage(type: "deep", duration: 90 * 60)
-        makeStage(type: "light", duration: 180 * 60)
-        makeStage(type: "rem", duration: 90 * 60)
-        try context.save()
-
-        let calcLower = SleepQualityCalculator(session: session, context: context)
-        let metricsLower = calcLower.calculateMetrics()
-
-        #expect(abs(metricsUpper.stageDistributionScore - metricsLower.stageDistributionScore) < 0.01,
-                "Stage distribution scores must be identical for uppercase vs lowercase stored values")
-        #expect(abs(metricsUpper.fragmentationScore - metricsLower.fragmentationScore) < 0.01,
-                "Fragmentation scores must be identical for uppercase vs lowercase stored values")
     }
 }

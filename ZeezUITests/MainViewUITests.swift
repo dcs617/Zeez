@@ -10,7 +10,7 @@ final class MainViewUITests: XCTestCase {
     }
 
     func testMainTabNavigation() throws {
-        XCTAssertTrue(app.tabBars.buttons["Sleep"].exists)
+        XCTAssertTrue(app.tabBars.buttons["Sleep"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Sleep"].tap()
 
         XCTAssertTrue(app.tabBars.buttons["Alarm"].exists)
@@ -21,7 +21,10 @@ final class MainViewUITests: XCTestCase {
     }
 
     func testSleepTabLoads() throws {
+        XCTAssertTrue(app.tabBars.buttons["Sleep"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Sleep"].tap()
-        XCTAssertTrue(app.staticTexts["Sleep Duration"].exists || app.otherElements["Sleep Dashboard"].exists)
+        // "Sleep Metrics" is a fixed dashboard section header, present regardless
+        // of whether any sleep data exists.
+        XCTAssertTrue(app.staticTexts["Sleep Metrics"].waitForExistence(timeout: 5))
     }
 }

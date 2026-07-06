@@ -49,31 +49,34 @@ struct OnboardingPersistenceTests {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
 
-        let targetHours: Double = 7.5
-        let wake = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date())!
+        // viewContext is main-queue-confined; keep all access on its queue (2.4).
+        try context.performAndWait {
+            let targetHours: Double = 7.5
+            let wake = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date())!
 
-        let prefs = UserPreferences(context: context)
-        prefs.id = UUID()
-        prefs.targetSleepDuration = targetHours * 3600
-        prefs.targetWakeTime = wake
-        prefs.targetBedtime = OnboardingManager.computeBedtime(wakeTime: wake, sleepHours: targetHours)
-        prefs.sleepGoalEnabled = true
-        prefs.createdAt = Date()
-        prefs.modifiedAt = Date()
-        try context.save()
+            let prefs = UserPreferences(context: context)
+            prefs.id = UUID()
+            prefs.targetSleepDuration = targetHours * 3600
+            prefs.targetWakeTime = wake
+            prefs.targetBedtime = OnboardingManager.computeBedtime(wakeTime: wake, sleepHours: targetHours)
+            prefs.sleepGoalEnabled = true
+            prefs.createdAt = Date()
+            prefs.modifiedAt = Date()
+            try context.save()
 
-        let fetched = try context.fetch(UserPreferences.fetchRequest())
-        let saved = try #require(fetched.first)
-        let bedtime = try #require(saved.targetBedtime)
-        let wakeTime = try #require(saved.targetWakeTime)
+            let fetched = try context.fetch(UserPreferences.fetchRequest())
+            let saved = try #require(fetched.first)
+            let bedtime = try #require(saved.targetBedtime)
+            let wakeTime = try #require(saved.targetWakeTime)
 
-        let interval = wakeTime.timeIntervalSince(bedtime)
-        #expect(abs(interval - targetHours * 3600) < 1,
-                "Persisted interval between wake and bedtime should be exactly 7.5 hours")
+            let interval = wakeTime.timeIntervalSince(bedtime)
+            #expect(abs(interval - targetHours * 3600) < 1,
+                    "Persisted interval between wake and bedtime should be exactly 7.5 hours")
 
-        let c = Calendar.current.dateComponents([.hour, .minute], from: bedtime)
-        #expect(c.hour == 23, "Bedtime hour should be 23 (11 PM)")
-        #expect(c.minute == 30, "Bedtime minute should be 30")
+            let c = Calendar.current.dateComponents([.hour, .minute], from: bedtime)
+            #expect(c.hour == 23, "Bedtime hour should be 23 (11 PM)")
+            #expect(c.minute == 30, "Bedtime minute should be 30")
+        }
     }
 
     @Test("targetBedtime is exactly targetSleepDuration seconds before targetWakeTime")
@@ -81,25 +84,28 @@ struct OnboardingPersistenceTests {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
 
-        let targetHours: Double = 6.5
-        let wake = Calendar.current.date(bySettingHour: 8, minute: 30, second: 0, of: Date())!
+        // viewContext is main-queue-confined; keep all access on its queue (2.4).
+        try context.performAndWait {
+            let targetHours: Double = 6.5
+            let wake = Calendar.current.date(bySettingHour: 8, minute: 30, second: 0, of: Date())!
 
-        let prefs = UserPreferences(context: context)
-        prefs.id = UUID()
-        prefs.targetSleepDuration = targetHours * 3600
-        prefs.targetWakeTime = wake
-        prefs.targetBedtime = OnboardingManager.computeBedtime(wakeTime: wake, sleepHours: targetHours)
-        prefs.createdAt = Date()
-        prefs.modifiedAt = Date()
-        try context.save()
+            let prefs = UserPreferences(context: context)
+            prefs.id = UUID()
+            prefs.targetSleepDuration = targetHours * 3600
+            prefs.targetWakeTime = wake
+            prefs.targetBedtime = OnboardingManager.computeBedtime(wakeTime: wake, sleepHours: targetHours)
+            prefs.createdAt = Date()
+            prefs.modifiedAt = Date()
+            try context.save()
 
-        let saved = try #require(try context.fetch(UserPreferences.fetchRequest()).first)
-        let wakeTime = try #require(saved.targetWakeTime)
-        let bedtime = try #require(saved.targetBedtime)
-        let storedDuration = saved.targetSleepDuration
+            let saved = try #require(try context.fetch(UserPreferences.fetchRequest()).first)
+            let wakeTime = try #require(saved.targetWakeTime)
+            let bedtime = try #require(saved.targetBedtime)
+            let storedDuration = saved.targetSleepDuration
 
-        #expect(abs(wakeTime.timeIntervalSince(bedtime) - storedDuration) < 1,
-                "Gap between wake and bedtime must equal targetSleepDuration")
+            #expect(abs(wakeTime.timeIntervalSince(bedtime) - storedDuration) < 1,
+                    "Gap between wake and bedtime must equal targetSleepDuration")
+        }
     }
 }
 
