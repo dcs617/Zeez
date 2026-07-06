@@ -152,19 +152,11 @@ final class PersistenceController {
         
         if migrationErrors.contains(nsError.code) {
             ZeezLogger.info(ZeezLogger.coreData, "Attempting migration recovery due to error: \(nsError.code)")
-            
-            // Check if this is an unversioned database (empty version identifier)
-            if nsError.code == 134100 {
-                if let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(ofType: NSSQLiteStoreType, at: storeURL, options: nil),
-                   let versionIds = metadata[NSStoreModelVersionIdentifiersKey] as? [String],
-                   versionIds.isEmpty || versionIds.first?.isEmpty == true {
-                    
-                    ZeezLogger.info(ZeezLogger.coreData, "Detected unversioned database - recreating store")
-                    self.handleUnversionedDatabase(storeURL: storeURL)
-                    return
-                }
-            }
-            
+
+            // NOTE: an empty NSStoreModelVersionIdentifiers entry does NOT mean the store is
+            // foreign/unversioned — every store created by model v1 has an empty identifier
+            // (Xcode's default). Always attempt migration first; handleMigrationFallback
+            // below still backs up and recreates stores that genuinely cannot be migrated.
             do {
                 // Try manual migration
                 try performManualMigration(storeURL: storeURL)
@@ -244,44 +236,6 @@ final class PersistenceController {
         
         if let error = loadError {
             throw error
-        }
-    }
-    
-    private func handleUnversionedDatabase(storeURL: URL) {
-        ZeezLogger.info(ZeezLogger.coreData, "Handling unversioned database - will recreate store")
-        
-        let backupURL = storeURL.appendingPathExtension("unversioned-backup-\(Date().timeIntervalSince1970)")
-        
-        do {
-            // Backup the unversioned database for potential data recovery
-            try FileManager.default.moveItem(at: storeURL, to: backupURL)
-            
-            // Also move associated files
-            let shmURL = storeURL.appendingPathExtension("shm")
-            let walURL = storeURL.appendingPathExtension("wal")
-            
-            if FileManager.default.fileExists(atPath: shmURL.path) {
-                try? FileManager.default.moveItem(at: shmURL, to: backupURL.appendingPathExtension("shm"))
-            }
-            
-            if FileManager.default.fileExists(atPath: walURL.path) {
-                try? FileManager.default.moveItem(at: walURL, to: backupURL.appendingPathExtension("wal"))
-            }
-            
-            ZeezLogger.info(ZeezLogger.coreData, "Unversioned database backed up to: \(backupURL.path)")
-            
-            // Enable automatic migration for the new store
-            if let description = container.persistentStoreDescriptions.first {
-                description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
-                description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
-            }
-            
-            // Try to load with a fresh store
-            try retryStoreLoad()
-            
-        } catch {
-            ZeezLogger.error(ZeezLogger.coreData, "Failed to handle unversioned database", error: error)
-            self.handleMigrationFallback(storeURL: storeURL)
         }
     }
     

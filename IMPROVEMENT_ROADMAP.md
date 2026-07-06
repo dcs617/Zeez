@@ -209,7 +209,7 @@ watch targets build, alarm test suites pass (now including the SQLite predicate 
   a proper launch screen.
 
 ### 1.3 Fix `AlarmConfiguration` model defaults — with model versioning
-- [ ] Done *(IN PROGRESS — see HANDOVER.md: v2 model + defaults created, verification pending)*
+- [x] Done
 - **Problem:** in `Zeez/Zeez.xcdatamodeld/Zeez.xcdatamodel/contents`,
   `smartWakeEnabled` (Boolean) has `defaultValueString="30"` and `smartWakeWindow` has
   default `9`. These look transposed (window should plausibly be 30 min; snooze-ish 9).
@@ -401,6 +401,12 @@ single-sourced.
   host app's observers react), plus downstream `isScheduled`/`isDeleted` expectation
   failures and one `checkNotificationPermissions` abrt. The in-memory + fake-center
   refactor below is the fix.
+  **Also pre-existing (verified 2026-07-06 at baseline c889047 in a worktree):**
+  `CoreDataMigrationTests.migrationErrorRecovery` (expects `CoreDataMigrationError` but
+  `migrateStore` surfaces NSCocoaErrorDomain 260 from the backup-copy step when the source
+  path doesn't exist) and `CoreDataMigrationTests.migrationPerformanceWithLargeDataset`
+  (flaky SIGABRT that crashes the runner, which then fails the whole suite's retry clone
+  at 0.000s). Fix both here.
 - **Steps:**
   1. Introduce a `NotificationScheduling` protocol wrapping the UNUserNotificationCenter
      calls used by `AlarmScheduler`/`AlarmNotificationHandler`/`AlarmNotificationUtils`;
@@ -536,3 +542,4 @@ single-sourced.
 | 2026-07-05 | — | Roadmap created from audit. |
 | 2026-07-05 | 0.1–0.6 | Phase 0 complete, one commit per item (0.2+0.3 shared). 0.4 decision: KEEP noise monitoring — usage string added; recorder was also found persisting lossless audio to Documents from init, now metering-only to /dev/null behind an explicit permission request. 0.5: in-flight snoozes survive reschedules unless the owning alarm is disabled/deleted; also fixed scheduleSpecificAlarm's never-matching prefix filter and cancelAllAlarms' global wipe. New AlarmPredicateSQLiteTests passes 6/6. Pre-existing suites (EndToEnd/Reliability/RaceCondition) fail identically at the pre-change baseline commit — Core Data 132001 "recursively call -save:" from testing against PersistenceController.shared while the host app runs; that is item 2.4's scope, not a Phase 0 regression. Note: `grep -rn "id.uuidString" Zeez/` still matches 2 non-predicate serialization sites (Widget.swift, WatchCommunicationSupport.swift) — predicate-form matches are zero. |
 | 2026-07-06 | 1.2, 1.7; 1.3 WIP | 1.2: UIBackgroundModes → processing only, armv7 key dropped, UILaunchScreen dict replaces phantom storyboard, time-sensitive entitlement added, critical-sound gating on scheduleBasicSnooze/scheduleTestNotification, all INFOPLIST_KEY_NSHealth* build settings removed (watch target now 0 warnings). 1.7: Option B — SmartWakeAnalyzer deleted, UI/notification copy relabeled to "Gentle Pre-Alarm", pre-alert now genuinely quieter (default sound, .timeSensitive, never critical). 1.3 WIP: "Zeez 2.xcdatamodel" created (smartWakeEnabled=NO, smartWakeWindow=30), .xccurrentversion → v2, AlarmEditView new-alarm default false — NOT yet built/tested; see HANDOVER.md. Branch pushed to origin. |
+| 2026-07-06 | 1.3 | Completed and verified. Key finding: default-value-only changes don't alter Core Data version hashes, so v1 stores are **directly compatible** with model v2 — no migration runs at all; existing rows keep stored values, new rows get corrected defaults (best-case upgrade). Verified by new `CoreDataModelV2MigrationTests` (4 tests: v1-store compatibility, v1 data readable under v2, `migrateStore` round-trip for future structural hops, new-alarm defaults enabled=false/window=30). While confirming the hop, found and removed a latent data-wipe: `handleMigrationError` treated empty `NSStoreModelVersionIdentifiers` as "unversioned DB" and recreated the store — but every v1 store has an empty identifier (Xcode default), so a future structural migration would have wiped user data; 134100 now routes to `performManualMigration` (backup + lightweight migrate + swap). v2 model now carries `userDefinedModelVersionIdentifier="2"`. AlarmPredicateSQLiteTests 6/6 green. CoreDataMigrationTests: 10/12 pass; `migrationErrorRecovery` + `migrationPerformanceWithLargeDataset` fail identically at baseline c889047 (worktree-verified) → logged under 2.4. |

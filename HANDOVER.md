@@ -8,23 +8,16 @@ Branch: `feature/sleep-simplification`, pushed to `origin` (tracking set up).
 Working tracker: `IMPROVEMENT_ROADMAP.md` at repo root — checkboxes + progress log are
 current. Read it first; this file only adds session context the roadmap doesn't carry.
 
-**Done and committed:** all of Phase 0 (0.1–0.6), plus Phase 1 items 1.2 and 1.7.
+**Done and committed:** all of Phase 0 (0.1–0.6), plus Phase 1 items 1.2, 1.3, and 1.7.
 One commit per item (0.2+0.3 share one). Roadmap items 2.7–2.9 were added from
 Phase 0 discoveries.
 
-**In flight — item 1.3 (model defaults + versioning), WIP commit, NOT verified:**
-- `Zeez/Zeez.xcdatamodeld/Zeez 2.xcdatamodel/` created (copy of v1 with
-  `smartWakeEnabled` default `30`→`NO`, `smartWakeWindow` default `9`→`30`).
-- `.xccurrentversion` points at `Zeez 2.xcdatamodel`. ⚠️ This file silently reverted
-  to v1 once during this session — most likely a race with a background xcodebuild.
-  **Verify it still says `Zeez 2.xcdatamodel` before doing anything else.** If Xcode
-  is open, close/reopen the project so it picks up the new version.
-- `AlarmEditView.swift:68` new-alarm default changed `?? true` → `?? false`.
-- **Remaining for 1.3:** build iOS target; run `ZeezTests/CoreDataMigrationTests`
-  and `ZeezTests/AlarmPredicateSQLiteTests` (SQLite suite exercises the model);
-  upgrade-in-place check (old build → new build, alarm data intact); confirm a NEW
-  alarm has `smartWakeEnabled == false`. Then reword the WIP commit status in the
-  roadmap (flip 1.3 to `[x]`).
+**1.3 verified and closed (2026-07-06):** v1 stores are hash-compatible with model v2
+(default-value changes don't affect version hashes), so upgrade-in-place is a no-op —
+pinned by `ZeezTests/CoreDataModelV2MigrationTests`. Removed the "unversioned database"
+wipe branch in `PersistenceController.handleMigrationError` (it misclassified every
+v1 store). ⚠️ `.xccurrentversion` silently reverted to v1 once (likely a race with a
+background xcodebuild) — worth re-checking it says `Zeez 2.xcdatamodel` before builds.
 
 **Not started:** 1.5 (watch stack), 1.6 (Core Data threading), 1.1 (pre-scheduled
 follow-up chains), 1.4 (notification budget) — recommended in that order, because
