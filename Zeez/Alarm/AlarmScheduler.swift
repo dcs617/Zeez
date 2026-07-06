@@ -44,13 +44,26 @@ class AlarmScheduler: NSObject {
             }
             
             ZeezLogger.info(ZeezLogger.alarm, "⚠️ Scheduling ALL \(alarms.count) enabled alarms (this should be rare)")
-            
-            // Remove all pending alarm notifications first (synchronously)
+
+            // Remove only alarm-owned notifications ("alarm-" mains/follow-ups) so
+            // non-alarm requests (Learn reminders etc.) survive a full reschedule.
+            // In-flight snoozes ("snooze-<uuid>-...") are deliberately kept unless
+            // their owning alarm is no longer enabled (disabled or deleted) — a
+            // reschedule on app launch must not silently cancel a running snooze.
+            let enabledAlarmIDs = Set(alarms.compactMap { $0.id?.uuidString })
+
             let semaphore = DispatchSemaphore(value: 0)
-            self.notificationCenter.removeAllPendingNotificationRequests()
-            
-            // Small delay to ensure removal completes
-            DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
+            self.notificationCenter.getPendingNotificationRequests { requests in
+                let idsToRemove = requests.map(\.identifier).filter { id in
+                    if id.hasPrefix("alarm-") { return true }
+                    if id.hasPrefix("snooze-") {
+                        return !enabledAlarmIDs.contains { id.hasPrefix("snooze-\($0)-") }
+                    }
+                    return false
+                }
+                if !idsToRemove.isEmpty {
+                    self.notificationCenter.removePendingNotificationRequests(withIdentifiers: idsToRemove)
+                }
                 semaphore.signal()
             }
             semaphore.wait()
@@ -78,19 +91,23 @@ class AlarmScheduler: NSObject {
             var alarmRequests: [UNNotificationRequest] = []
             
             self.notificationCenter.getPendingNotificationRequests { requests in
-                alarmRequests = requests.filter { $0.identifier.hasPrefix(alarmID) }
+                // Identifiers are "alarm-<uuid>-main/fu-...", never bare "<uuid>...".
+                // The alarm's snooze is kept while it remains enabled; a disabled
+                // alarm must take its in-flight snooze with it.
+                alarmRequests = requests.filter { request in
+                    if request.identifier.hasPrefix("alarm-\(alarmID)-") { return true }
+                    if !alarm.enabled, request.identifier.hasPrefix("snooze-\(alarmID)-") { return true }
+                    return false
+                }
                 semaphore.signal()
             }
             semaphore.wait()
-            
+
             let identifiers = alarmRequests.map { $0.identifier }
-            
+
             if !identifiers.isEmpty {
                 self.notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
                 ZeezLogger.debug(ZeezLogger.alarm, "   Removed \(identifiers.count) old notifications for this alarm")
-                
-                // Small delay to ensure removal completes
-                usleep(100_000) // 0.1 seconds
             }
             
             // Schedule the updated alarm
@@ -141,11 +158,20 @@ class AlarmScheduler: NSObject {
         }
     }
     
-    /// Cancel all scheduled alarms
+    /// Cancel all scheduled alarms (mains, follow-ups, and snoozes).
+    /// Removes only alarm-owned identifiers so other notifications
+    /// (Learn reminders etc.) are untouched.
     func cancelAllAlarms() {
         schedulingQueue.async { [weak self] in
-            self?.notificationCenter.removeAllPendingNotificationRequests()
-            ZeezLogger.info(ZeezLogger.alarm, "Cancelled all scheduled alarms")
+            guard let self = self else { return }
+            self.notificationCenter.getPendingNotificationRequests { requests in
+                let ids = requests.map(\.identifier)
+                    .filter { $0.hasPrefix("alarm-") || $0.hasPrefix("snooze-") }
+                if !ids.isEmpty {
+                    self.notificationCenter.removePendingNotificationRequests(withIdentifiers: ids)
+                }
+                ZeezLogger.info(ZeezLogger.alarm, "Cancelled \(ids.count) scheduled alarm notifications")
+            }
         }
     }
     
