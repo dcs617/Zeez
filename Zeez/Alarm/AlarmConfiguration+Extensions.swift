@@ -6,43 +6,11 @@ import os.log
 // MARK: - Heavy Sleeper Mode Support
 extension AlarmConfiguration {
     
-    /// Heavy sleeper mode property using Core Data
-    /// Note: After adding the heavySleeperMode Boolean attribute to Core Data, 
-    /// this will use the native Core Data property
-    var heavySleeperModeEnabled: Bool {
-        get {
-            // Try to use Core Data attribute first, fall back to UserDefaults for migration
-            if let coreDataValue = self.value(forKey: "heavySleeperMode") as? Bool {
-                return coreDataValue
-            }
-            
-            // Use UserDefaults as fallback (or primary if Core Data attribute doesn't exist)
-            guard let alarmId = self.id?.uuidString else { return false }
-            return UserDefaults.standard.bool(forKey: "heavySleeperMode_\(alarmId)")
-        }
-        set {
-            // Try to set Core Data value first
-            self.setValue(newValue, forKey: "heavySleeperMode")
-            
-            // If successful, clean up UserDefaults
-            if let alarmId = self.id?.uuidString {
-                UserDefaults.standard.removeObject(forKey: "heavySleeperMode_\(alarmId)")
-            }
-            
-            // Update the alarm's modification date
-            self.modifiedAt = Date()
-            
-            // Log the change
-            ZeezLogger.info(ZeezLogger.alarm, "Heavy sleeper mode \(newValue ? "enabled" : "disabled") for alarm: \(self.name ?? "Unknown")")
-        }
-    }
-    
-    /// Convenience property that matches the old name for backward compatibility
-    var heavySleeperMode: Bool {
-        get { heavySleeperModeEnabled }
-        set { heavySleeperModeEnabled = newValue }
-    }
-    
+    // heavySleeperMode is a real @NSManaged property (see
+    // AlarmConfiguration+CoreDataProperties.swift) — the attribute has always
+    // existed in the model; only the generated property was missing. Legacy
+    // UserDefaults values are migrated once at launch by AlarmDataMigrationHelper.
+
     /// Convenience property for getting the appropriate cadence based on heavy sleeper mode
     var followUpCadence: TimeInterval {
         return AlarmNotificationUtils.getCadence(isHeavySleeper: heavySleeperMode)

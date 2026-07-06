@@ -71,69 +71,35 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         let info = notification.request.content.userInfo
         let alarmId = (info["alarmID"] as? String) ?? ""
         let type    = (info["type"] as? String) ?? "main"
-        
+
         guard !alarmId.isEmpty, type == "main" else { return }
 
         // Only once every ~2 minutes to avoid duplicates.
         if let ts = followupsGuard[alarmId], Date().timeIntervalSince(ts) < 120 { return }
         followupsGuard[alarmId] = Date()
-        
-        // Check if this alarm has heavy sleeper mode enabled
-        let isHeavySleeper = checkHeavySleeperMode(for: alarmId)
-        let cadence = AlarmNotificationUtils.getCadence(isHeavySleeper: isHeavySleeper)
-        let maxCount = AlarmNotificationUtils.getMaxFollowUps(isHeavySleeper: isHeavySleeper)
-        
-        scheduleFollowUps(alarmId: alarmId, cadence: cadence, maxCount: maxCount)
-    }
-    
-    private func checkHeavySleeperMode(for alarmId: String) -> Bool {
-        // Check the alarm configuration in Core Data
-        // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths in predicates
-        guard let uuid = UUID(uuidString: alarmId) else { return false }
-        let context = PersistenceController.shared.container.viewContext
-        let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
-        
-        do {
-            if let alarm = try context.fetch(request).first {
-                // Assuming you'll add a heavySleeperMode property to AlarmConfiguration
-                return alarm.value(forKey: "heavySleeperMode") as? Bool ?? false
-            }
-        } catch {
-            ZeezLogger.error(ZeezLogger.alarm, "Error fetching alarm for heavy sleeper check", error: error)
+
+        // Delegate callbacks run off the main thread, so the alarm's settings
+        // are read via a snapshot on a background context (item 1.6). Missing
+        // alarm falls back to normal-mode defaults, matching prior behavior.
+        AlarmSnapshot.fetch(idString: alarmId) { [weak self] snapshot in
+            let isHeavySleeper = snapshot?.heavySleeperMode ?? false
+            let cadence = AlarmNotificationUtils.getCadence(isHeavySleeper: isHeavySleeper)
+            let maxCount = AlarmNotificationUtils.getMaxFollowUps(isHeavySleeper: isHeavySleeper)
+
+            self?.scheduleFollowUps(alarmId: alarmId, cadence: cadence, maxCount: maxCount, snapshot: snapshot)
         }
-        
-        return false
     }
 
-    private func scheduleFollowUps(alarmId: String, cadence: TimeInterval, maxCount: Int) {
-        // Get the alarm configuration to use its sound and watch settings
-        // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths in predicates
-        var alarmSound: String = "Alarm_Classic.caf"
-        var vibrationOnly = false
-        var watchHaptics = false
+    private func scheduleFollowUps(alarmId: String, cadence: TimeInterval, maxCount: Int, snapshot: AlarmSnapshot?) {
+        let alarmSound = snapshot?.alarmSound ?? "Alarm_Classic.caf"
+        let vibrationOnly = snapshot?.vibrationOnly ?? false
+        let watchHaptics = snapshot?.watchHaptics ?? false
 
-        if let uuid = UUID(uuidString: alarmId) {
-            let context = PersistenceController.shared.container.viewContext
-            let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-            request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
-
-            do {
-                if let alarm = try context.fetch(request).first {
-                    alarmSound = alarm.alarmSound ?? "Alarm_Classic.caf"
-                    vibrationOnly = alarm.vibrationOnly
-                    watchHaptics = alarm.watchHaptics
-                }
-            } catch {
-                ZeezLogger.error(ZeezLogger.alarm, "Error fetching alarm for follow-up sound selection", error: error)
-            }
-        }
-        
         // Start Watch haptics if enabled
         if watchHaptics {
             startWatchHaptics()
         }
-        
+
         center.getNotificationSettings { [weak self] settings in
             guard let self = self else { return }
             let useCritical = (settings.criticalAlertSetting == .enabled)
@@ -212,25 +178,26 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     /// Simple mechanism to show your full-screen ringing UI.
     /// Your SwiftUI root can observe this notification name and present ActiveAlarmView.
     private func presentActiveAlarmUI(alarmId: String) {
-        // Find the full alarm object to pass to the UI
+        // The UI wants the managed object, so the viewContext fetch must happen
+        // on the main thread — delegate callbacks arrive off it (item 1.6).
         // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths in predicates
         guard let uuid = UUID(uuidString: alarmId) else { return }
-        let context = PersistenceController.shared.container.viewContext
-        let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
-        
-        do {
-            if let alarm = try context.fetch(request).first {
-                DispatchQueue.main.async {
+        DispatchQueue.main.async {
+            let context = PersistenceController.shared.container.viewContext
+            let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
+            request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+
+            do {
+                if let alarm = try context.fetch(request).first {
                     NotificationCenter.default.post(
                         name: NSNotification.Name("ShowActiveAlarm"),
                         object: alarm
                     )
                     ZeezLogger.info(ZeezLogger.alarm, "📱 Posted ShowActiveAlarm notification")
                 }
+            } catch {
+                ZeezLogger.error(ZeezLogger.alarm, "Error fetching alarm for UI presentation", error: error)
             }
-        } catch {
-            ZeezLogger.error(ZeezLogger.alarm, "Error fetching alarm for UI presentation", error: error)
         }
     }
     

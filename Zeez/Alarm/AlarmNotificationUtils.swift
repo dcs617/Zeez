@@ -30,62 +30,49 @@ enum AlarmNotificationUtils {
     static func scheduleSnooze(for alarmId: String, minutes: Int = defaultSnoozeMinutes) {
         // First, cancel any pending follow-ups for this alarm
         cancelPendingFollowUps(for: alarmId)
-        
-        // Get the original alarm to preserve its settings
-        // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths in predicates
-        guard let uuid = UUID(uuidString: alarmId) else {
-            scheduleBasicSnooze(for: alarmId, minutes: minutes)
-            return
-        }
-        let context = PersistenceController.shared.container.viewContext
-        let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
-        
-        do {
-            if let alarm = try context.fetch(request).first {
-                // Use the alarm's custom snooze duration instead of the default
-                let customMinutes = alarm.snoozeDurationMinutes
-                scheduleSnoozeWithAlarmSettings(alarm: alarm, minutes: customMinutes)
+
+        // Called from notification-center callbacks (off the main thread), so
+        // the alarm's settings are read via a snapshot on a background context
+        // (item 1.6). Missing alarm falls back to the basic snooze.
+        AlarmSnapshot.fetch(idString: alarmId) { snapshot in
+            if let snapshot {
+                scheduleSnoozeWithAlarmSettings(alarm: snapshot, minutes: snapshot.snoozeDurationMinutes)
             } else {
-                // Fallback: create basic snooze notification
                 scheduleBasicSnooze(for: alarmId, minutes: minutes)
             }
-        } catch {
-            ZeezLogger.error(ZeezLogger.alarm, "Error fetching alarm for snooze", error: error)
-            scheduleBasicSnooze(for: alarmId, minutes: minutes)
         }
     }
-    
-    private static func scheduleSnoozeWithAlarmSettings(alarm: AlarmConfiguration, minutes: Int) {
+
+    private static func scheduleSnoozeWithAlarmSettings(alarm: AlarmSnapshot, minutes: Int) {
         let content = UNMutableNotificationContent()
         content.title = alarm.name ?? "Alarm"
         content.body = "Snooze time's up!"
         content.categoryIdentifier = AlarmNotificationRegistrar.categoryId
         content.userInfo = [
-            "alarmID": alarm.id?.uuidString ?? "",
+            "alarmID": alarm.idString,
             "type": "main",  // Important: This makes it trigger follow-ups!
             "isSnooze": true
         ]
-        
+
         // Use dynamic interruption level and sound
         getInterruptionLevel { interruptionLevel in
             content.interruptionLevel = interruptionLevel
-            
+
             // Use the alarm's configured sound instead of default
             let alarmSound = alarm.alarmSound ?? "Alarm_Classic.caf"
             let vibrationOnly = alarm.vibrationOnly
-            
+
             if vibrationOnly {
                 content.sound = nil
             } else {
                 content.sound = getSnoozeSound(alarmSound: alarmSound, criticalEnabled: interruptionLevel == .critical)
             }
-                
+
                 let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(minutes * 60), repeats: false)
                 let timestamp = Int(Date().timeIntervalSince1970)
-                let id = "snooze-\(alarm.id?.uuidString ?? "unknown")-\(timestamp)"
+                let id = "snooze-\(alarm.idString)-\(timestamp)"
                 let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-                
+
                 UNUserNotificationCenter.current().add(request) { error in
                     if let error = error {
                         ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule proper snooze alarm", error: error)

@@ -100,6 +100,7 @@ struct HeavySleeperToggleView: View {
     }
     
     private func saveChanges() {
+        alarm.modifiedAt = Date()
         // Save the context if available
         if let context = alarm.managedObjectContext {
             do {

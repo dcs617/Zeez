@@ -59,8 +59,11 @@ class UserPatternAnalyzer {
     }
     
     private func analyzeUserPatterns() -> UserPattern {
-        let context = persistenceController.container.viewContext
-        
+        // Called from BackgroundTaskManager's queues, so the fetch and all
+        // managed-object reads happen inside performAndWait on a background
+        // context (item 1.6) — this API stays synchronous for its callers.
+        let context = persistenceController.newBackgroundContext()
+
         // Fetch recent sleep sessions (last 30 days)
         let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         let fetchRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
@@ -70,14 +73,17 @@ class UserPatternAnalyzer {
         )
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "endTime", ascending: false)]
         fetchRequest.fetchLimit = 30 // Last 30 sessions
-        
-        do {
-            let sessions = try context.fetch(fetchRequest)
-            return calculatePatternsFromSessions(sessions)
-        } catch {
-            ZeezLogger.error(ZeezLogger.background, "Failed to fetch sleep sessions for pattern analysis", error: error)
-            return getDefaultPattern()
+
+        var pattern: UserPattern?
+        context.performAndWait {
+            do {
+                let sessions = try context.fetch(fetchRequest)
+                pattern = calculatePatternsFromSessions(sessions)
+            } catch {
+                ZeezLogger.error(ZeezLogger.background, "Failed to fetch sleep sessions for pattern analysis", error: error)
+            }
         }
+        return pattern ?? getDefaultPattern()
     }
     
     private func calculatePatternsFromSessions(_ sessions: [SleepSession]) -> UserPattern {

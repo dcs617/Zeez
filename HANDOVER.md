@@ -26,10 +26,18 @@ synchronized group in BOTH app targets; models single-sourced in
 `ZeezWatch Watch App/WatchOfflineStorage.swift`. Paired-sim round-trip NOT run
 (no paired sims here) — fold into 1.1's device testing.
 
-**Not started:** 1.6 (Core Data threading), 1.1 (pre-scheduled
-follow-up chains), 1.4 (notification budget) — recommended in that order, because
-1.6's snapshot refactor makes 1.1 much cleaner, and 1.1+1.4 are coupled (the 64-request
-budget). Then Phase 2 (2.1–2.9).
+**1.6 + 2.8 done (2026-07-06):** `AlarmSnapshot` struct is the pattern — snapshot
+inside `context.perform`, scheduling queues and UN callbacks are Core-Data-free.
+Semaphore waits deleted. `heavySleeperMode` is a real `@NSManaged` property now.
+Bonus find: `UserPatternAnalyzer.analyzeUserPatterns` fetched viewContext from
+BackgroundTaskManager's queue — crashed the app at startup under
+`-com.apple.CoreData.ConcurrencyDebug 1` (fixed; app verified clean under the flag
+through startup/onboarding/MainView). To launch the app with the flag in a sim:
+`xcrun simctl launch <sim> com.danielsparano.zeez -com.apple.CoreData.ConcurrencyDebug 1`
+— note the app must be foregrounded (open Simulator.app) or it sits at the home screen.
+
+**Not started:** 1.1 (pre-scheduled follow-up chains), 1.4 (notification budget) —
+in that order; they're coupled (the 64-request budget). Then Phase 2 (2.1–2.7, 2.9).
 
 ## Decisions already made (do not re-litigate)
 
@@ -78,12 +86,6 @@ budget). Then Phase 2 (2.1–2.9).
 
 ## Item-specific context for what's next
 
-- **1.6:** follow the `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern
-  already in the codebase; snapshot alarm fields into a struct on the context's queue.
-  Verify with scheme argument `-com.apple.CoreData.ConcurrencyDebug 1`. Note
-  `AlarmNotificationHandler.checkHeavySleeperMode` reads `heavySleeperMode` via KVC
-  because the generated properties file lacks the attribute (item 2.8) — consider
-  fixing 2.8 while in there.
 - **1.1:** interacts with the 64-request cap (1.4). Roadmap's mitigation: pre-schedule
   the chain only for the NEXT firing day, 6–8 follow-ups not 12–20, re-arm on
   launch/significantTimeChange. Stop/snooze handlers already call

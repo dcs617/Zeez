@@ -18,6 +18,7 @@ extension AlarmConfiguration {
 
     @NSManaged public var createdAt: Date?
     @NSManaged public var enabled: Bool
+    @NSManaged public var heavySleeperMode: Bool
     @NSManaged public var modifiedAt: Date?
     @NSManaged public var smartWakeEnabled: Bool
     @NSManaged public var smartWakeWindow: Int16

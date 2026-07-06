@@ -22,37 +22,45 @@ class AlarmScheduler: NSObject {
     }
 
     /// Schedule all enabled alarms (use sparingly - prefer scheduleSpecificAlarm)
+    ///
+    /// Core Data is only touched inside `context.perform`; everything after the
+    /// snapshot is Core-Data-free and ordered by chaining inside the
+    /// notification-center callbacks (no semaphores — see item 1.6).
     func scheduleAllAlarms(context: NSManagedObjectContext) {
+        context.perform { [weak self] in
+            let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
+            request.predicate = NSPredicate(format: "enabled == YES")
+
+            guard let alarms = try? context.fetch(request) else {
+                ZeezLogger.error(ZeezLogger.alarm, "Failed to fetch alarms for scheduling")
+                return
+            }
+
+            let snapshots = alarms.compactMap(AlarmSnapshot.init)
+            self?.scheduleAllSnapshots(snapshots)
+        }
+    }
+
+    private func scheduleAllSnapshots(_ snapshots: [AlarmSnapshot]) {
         schedulingQueue.async { [weak self] in
             guard let self = self else { return }
-            
+
             // Prevent multiple simultaneous scheduling operations
             guard !self.isSchedulingInProgress else {
                 ZeezLogger.debug(ZeezLogger.alarm, "Scheduling already in progress, skipping duplicate request")
                 return
             }
-            
             self.isSchedulingInProgress = true
-            defer { self.isSchedulingInProgress = false }
-            
-            let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-            request.predicate = NSPredicate(format: "enabled == YES")
-            
-            guard let alarms = try? context.fetch(request) else { 
-                ZeezLogger.error(ZeezLogger.alarm, "Failed to fetch alarms for scheduling")
-                return 
-            }
-            
-            ZeezLogger.info(ZeezLogger.alarm, "⚠️ Scheduling ALL \(alarms.count) enabled alarms (this should be rare)")
+
+            ZeezLogger.info(ZeezLogger.alarm, "⚠️ Scheduling ALL \(snapshots.count) enabled alarms (this should be rare)")
 
             // Remove only alarm-owned notifications ("alarm-" mains/follow-ups) so
             // non-alarm requests (Learn reminders etc.) survive a full reschedule.
             // In-flight snoozes ("snooze-<uuid>-...") are deliberately kept unless
             // their owning alarm is no longer enabled (disabled or deleted) — a
             // reschedule on app launch must not silently cancel a running snooze.
-            let enabledAlarmIDs = Set(alarms.compactMap { $0.id?.uuidString })
+            let enabledAlarmIDs = Set(snapshots.map(\.idString))
 
-            let semaphore = DispatchSemaphore(value: 0)
             self.notificationCenter.getPendingNotificationRequests { requests in
                 let idsToRemove = requests.map(\.identifier).filter { id in
                     if id.hasPrefix("alarm-") { return true }
@@ -64,92 +72,93 @@ class AlarmScheduler: NSObject {
                 if !idsToRemove.isEmpty {
                     self.notificationCenter.removePendingNotificationRequests(withIdentifiers: idsToRemove)
                 }
-                semaphore.signal()
+
+                // Adds are serialized with the removal by the notification center,
+                // so scheduling here cannot race the identifier removal above.
+                for snapshot in snapshots {
+                    self.scheduleSnapshot(snapshot)
+                }
+
+                ZeezLogger.info(ZeezLogger.alarm, "Completed scheduling all alarms")
+                self.schedulingQueue.async { self.isSchedulingInProgress = false }
             }
-            semaphore.wait()
-            
-            // Schedule each alarm
-            for alarm in alarms {
-                self.scheduleAlarmSynchronous(alarm)
-            }
-            
-            ZeezLogger.info(ZeezLogger.alarm, "Completed scheduling all alarms")
         }
     }
-    
+
     /// Schedule only a specific alarm (efficient for single alarm changes)
     func scheduleSpecificAlarm(_ alarm: AlarmConfiguration) {
-        guard let alarmID = alarm.id?.uuidString else { return }
-        
+        guard let context = alarm.managedObjectContext else { return }
+        context.perform { [weak self] in
+            guard let snapshot = AlarmSnapshot(alarm) else { return }
+            self?.scheduleSpecificSnapshot(snapshot)
+        }
+    }
+
+    private func scheduleSpecificSnapshot(_ snapshot: AlarmSnapshot) {
         schedulingQueue.async { [weak self] in
             guard let self = self else { return }
-            
-            ZeezLogger.info(ZeezLogger.alarm, "🎯 Rescheduling single alarm: \(alarm.name ?? "Unknown")")
-            
-            // Remove only notifications for this specific alarm (synchronously)
-            let semaphore = DispatchSemaphore(value: 0)
-            var alarmRequests: [UNNotificationRequest] = []
-            
+
+            ZeezLogger.info(ZeezLogger.alarm, "🎯 Rescheduling single alarm: \(snapshot.name ?? "Unknown")")
+
+            let alarmID = snapshot.idString
             self.notificationCenter.getPendingNotificationRequests { requests in
                 // Identifiers are "alarm-<uuid>-main/fu-...", never bare "<uuid>...".
                 // The alarm's snooze is kept while it remains enabled; a disabled
                 // alarm must take its in-flight snooze with it.
-                alarmRequests = requests.filter { request in
-                    if request.identifier.hasPrefix("alarm-\(alarmID)-") { return true }
-                    if !alarm.enabled, request.identifier.hasPrefix("snooze-\(alarmID)-") { return true }
+                let identifiers = requests.map(\.identifier).filter { id in
+                    if id.hasPrefix("alarm-\(alarmID)-") { return true }
+                    if !snapshot.enabled, id.hasPrefix("snooze-\(alarmID)-") { return true }
                     return false
                 }
-                semaphore.signal()
-            }
-            semaphore.wait()
 
-            let identifiers = alarmRequests.map { $0.identifier }
+                if !identifiers.isEmpty {
+                    self.notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
+                    ZeezLogger.debug(ZeezLogger.alarm, "   Removed \(identifiers.count) old notifications for this alarm")
+                }
 
-            if !identifiers.isEmpty {
-                self.notificationCenter.removePendingNotificationRequests(withIdentifiers: identifiers)
-                ZeezLogger.debug(ZeezLogger.alarm, "   Removed \(identifiers.count) old notifications for this alarm")
+                // Schedule the updated alarm (serialized after the removal above)
+                self.scheduleSnapshot(snapshot)
             }
-            
-            // Schedule the updated alarm
-            self.scheduleAlarmSynchronous(alarm)
         }
     }
-    
+
     /// Schedule a single alarm (public interface - uses synchronization)
     func scheduleAlarm(_ alarm: AlarmConfiguration) {
-        schedulingQueue.async { [weak self] in
-            self?.scheduleAlarmSynchronous(alarm)
+        guard let context = alarm.managedObjectContext else { return }
+        context.perform { [weak self] in
+            guard let snapshot = AlarmSnapshot(alarm) else { return }
+            self?.schedulingQueue.async {
+                self?.scheduleSnapshot(snapshot)
+            }
         }
     }
-    
-    /// Internal synchronous scheduling method (called within schedulingQueue)
-    private func scheduleAlarmSynchronous(_ alarm: AlarmConfiguration) {
-        guard alarm.enabled,
-              let time = alarm.time,
-              let daysData = alarm.daysOfWeek,
-              let selectedDays = try? JSONDecoder().decode(Set<Int>.self, from: daysData),
-              !selectedDays.isEmpty else { 
+
+    /// Schedules the notifications for one alarm snapshot. Core-Data-free.
+    private func scheduleSnapshot(_ snapshot: AlarmSnapshot) {
+        guard snapshot.enabled,
+              let time = snapshot.time,
+              !snapshot.selectedDays.isEmpty else {
             ZeezLogger.error(ZeezLogger.alarm, "Cannot schedule alarm: missing required data")
-            return 
+            return
         }
-        
+
         // Schedule for each selected day of the week
-        for dayOfWeek in selectedDays {
+        for dayOfWeek in snapshot.selectedDays {
             // If smart wake is enabled, schedule earlier for analysis
-            let scheduledTime = alarm.smartWakeEnabled ?
-                time.addingTimeInterval(-Double(alarm.smartWakeWindow) * 60) : time
-            
+            let scheduledTime = snapshot.smartWakeEnabled ?
+                time.addingTimeInterval(-Double(snapshot.smartWakeWindow) * 60) : time
+
             createNotificationForDay(
-                for: alarm,
+                for: snapshot,
                 at: scheduledTime,
                 dayOfWeek: dayOfWeek,
-                isSmartWake: alarm.smartWakeEnabled
+                isSmartWake: snapshot.smartWakeEnabled
             )
-            
+
             // Also schedule the backup alarm if smart wake is enabled
-            if alarm.smartWakeEnabled {
+            if snapshot.smartWakeEnabled {
                 createNotificationForDay(
-                    for: alarm,
+                    for: snapshot,
                     at: time,
                     dayOfWeek: dayOfWeek,
                     isSmartWake: false
@@ -261,13 +270,13 @@ class AlarmScheduler: NSObject {
     // MARK: - Private Methods
     
     private func createNotificationForDay(
-        for alarm: AlarmConfiguration,
+        for alarm: AlarmSnapshot,
         at time: Date,
         dayOfWeek: Int,
         isSmartWake: Bool
     ) {
-        guard let alarmID = alarm.id?.uuidString else { return }
-        
+        let alarmID = alarm.idString
+
         let content = UNMutableNotificationContent()
         let alarmName = alarm.name ?? ""
         content.title = alarmName.isEmpty ? "Alarm" : alarmName
