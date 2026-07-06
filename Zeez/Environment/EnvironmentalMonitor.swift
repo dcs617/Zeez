@@ -11,30 +11,43 @@ final class EnvironmentalMonitor {
     private var monitoringTimer: Timer?
     private let samplingInterval: TimeInterval = 300 // 5 minutes
     private let errorManager = ErrorManager.shared
-    
+    /// Set when the user has denied mic access so sampling degrades to
+    /// non-noise metrics without re-reporting an error every interval.
+    private var microphoneDenied = false
+
     private init() {
         self.persistenceController = .shared
-        setupAudioSession()
+        removeLegacyRecordingFile()
     }
-    
+
     func startMonitoring(for session: SleepSession) {
         stopMonitoring()
-        
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-            monitoringTimer = Timer.scheduledTimer(withTimeInterval: samplingInterval, repeats: true) { [weak self] _ in
-                self?.captureEnvironmentalData(for: session)
+
+        // Noise sampling needs the microphone — ask before first use and
+        // degrade to light/temperature-only monitoring if the user declines.
+        AVAudioApplication.requestRecordPermission { [weak self] granted in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.microphoneDenied = !granted
+                if granted {
+                    self.startRecorder()
+                } else {
+                    ZeezLogger.info(ZeezLogger.environment, "Microphone permission denied — monitoring without noise sampling")
+                }
+                self.monitoringTimer = Timer.scheduledTimer(withTimeInterval: self.samplingInterval, repeats: true) { [weak self] _ in
+                    self?.captureEnvironmentalData(for: session)
+                }
+                self.monitoringTimer?.fire()
+                self.errorManager.showStatus("Environmental monitoring started")
             }
-            monitoringTimer?.fire()
-            errorManager.showStatus("Environmental monitoring started")
-        } catch {
-            errorManager.reportError(AppError.sensorDataUnavailable)
         }
     }
-    
+
     func stopMonitoring() {
         monitoringTimer?.invalidate()
         monitoringTimer = nil
+        audioRecorder?.stop()
+        audioRecorder = nil
         try? AVAudioSession.sharedInstance().setActive(false)
     }
     
@@ -72,31 +85,38 @@ final class EnvironmentalMonitor {
         }
     }
     
-    private func setupAudioSession() {
+    private func startRecorder() {
         let audioSession = AVAudioSession.sharedInstance()
-        
+
         do {
             try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [])
             try audioSession.setActive(true)
-            
+
+            // Metering only — record to /dev/null so no audio ever reaches disk.
+            // The NSMicrophoneUsageDescription promises on-device analysis with
+            // no storage or upload; this is what keeps that claim true.
             let settings: [String: Any] = [
-                AVFormatIDKey: Int(kAudioFormatAppleLossless),
-                AVSampleRateKey: 44100.0,
-                AVNumberOfChannelsKey: 1,
-                AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+                AVFormatIDKey: Int(kAudioFormatAppleIMA4),
+                AVSampleRateKey: 8000.0,
+                AVNumberOfChannelsKey: 1
             ]
-            
-            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let audioFilename = documentsPath.appendingPathComponent("environmental_audio.caf")
-            
-            audioRecorder = try AVAudioRecorder(url: audioFilename, settings: settings)
-            audioRecorder?.prepareToRecord()
-            audioRecorder?.isMeteringEnabled = true
-            audioRecorder?.record()
-            
+
+            let recorder = try AVAudioRecorder(url: URL(fileURLWithPath: "/dev/null"), settings: settings)
+            recorder.isMeteringEnabled = true
+            recorder.record()
+            audioRecorder = recorder
+
         } catch {
             errorManager.reportError(AppError.sensorDataUnavailable)
         }
+    }
+
+    /// Earlier builds recorded lossless audio to Documents indefinitely
+    /// ("environmental_audio.caf"). Delete anything left behind.
+    private func removeLegacyRecordingFile() {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let legacyURL = documentsPath.appendingPathComponent("environmental_audio.caf")
+        try? FileManager.default.removeItem(at: legacyURL)
     }
     
     private func captureLightLevel() -> Double {
@@ -151,6 +171,8 @@ final class EnvironmentalMonitor {
     }
     
     private func captureNoiseLevel() -> Double {
+        // User declined mic access — degrade quietly rather than erroring each sample.
+        guard !microphoneDenied else { return 0 }
         guard let recorder = audioRecorder else {
             errorManager.reportError(AppError.sensorDataUnavailable)
             return 0

@@ -31,6 +31,8 @@
 	<string>Zeez needs access to your health data to track and analyze your sleep patterns.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Zeez needs permission to save sleep-related data to HealthKit.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Zeez samples ambient noise levels while you sleep to score your sleep environment. Audio is analyzed on-device and never stored or uploaded.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
