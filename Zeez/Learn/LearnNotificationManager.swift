@@ -4,10 +4,13 @@ import os.log
 
 class LearnNotificationManager {
     static let shared = LearnNotificationManager()
-    
+
     private let notificationCenter = UNUserNotificationCenter.current()
     private let challengeCategory = "com.zeez.notifications.challenge"
     private let learningCategory = "com.zeez.notifications.learning"
+    /// Every Learn-owned request identifier starts with this prefix so bulk
+    /// removal can target Learn notifications without touching alarms.
+    private static let identifierPrefix = "learn-"
     
     private init() {
         setupNotificationCategories()
@@ -76,7 +79,7 @@ class LearnNotificationManager {
                 )
                 
                 let request = UNNotificationRequest(
-                    identifier: "challenge_\(challenge.id?.uuidString ?? "")_\(currentDate.timeIntervalSince1970)",
+                    identifier: "\(Self.identifierPrefix)challenge_\(challenge.id?.uuidString ?? "")_\(currentDate.timeIntervalSince1970)",
                     content: content,
                     trigger: trigger
                 )
@@ -104,7 +107,7 @@ class LearnNotificationManager {
         
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
         let request = UNNotificationRequest(
-            identifier: "challenge_completion_\(challenge.id?.uuidString ?? "")",
+            identifier: "\(Self.identifierPrefix)challenge_completion_\(challenge.id?.uuidString ?? "")",
             content: content,
             trigger: trigger
         )
@@ -128,7 +131,7 @@ class LearnNotificationManager {
         
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
         let request = UNNotificationRequest(
-            identifier: "learning_\(category.rawValue)_\(date.timeIntervalSince1970)",
+            identifier: "\(Self.identifierPrefix)learning_\(category.rawValue)_\(date.timeIntervalSince1970)",
             content: content,
             trigger: trigger
         )
@@ -150,7 +153,7 @@ class LearnNotificationManager {
         
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
         let request = UNNotificationRequest(
-            identifier: "streak_reminder_\(Date().timeIntervalSince1970)",
+            identifier: "\(Self.identifierPrefix)streak_reminder_\(Date().timeIntervalSince1970)",
             content: content,
             trigger: trigger
         )
@@ -160,8 +163,17 @@ class LearnNotificationManager {
     
     // MARK: - Notification Management
     
+    /// Remove all Learn-owned pending notifications. Filters on the "learn-"
+    /// identifier prefix — a global removeAllPendingNotificationRequests()
+    /// here would cancel every scheduled alarm (toggling Learn notifications
+    /// off in settings used to do exactly that).
     func removeAllPendingNotifications() {
-        notificationCenter.removeAllPendingNotificationRequests()
+        notificationCenter.getPendingNotificationRequests { [notificationCenter] requests in
+            let ids = requests.map(\.identifier).filter { $0.hasPrefix(Self.identifierPrefix) }
+            if !ids.isEmpty {
+                notificationCenter.removePendingNotificationRequests(withIdentifiers: ids)
+            }
+        }
     }
     
     func removeChallengeNotifications(for challenge: LearnChallenge) {
@@ -241,7 +253,7 @@ extension LearnNotificationManager {
         
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: AppConstants.Learning.achievementNotificationDelay, repeats: false)
         let request = UNNotificationRequest(
-            identifier: "snoozed_\(challengeId)_\(Date().timeIntervalSince1970)",
+            identifier: "\(Self.identifierPrefix)snoozed_\(challengeId)_\(Date().timeIntervalSince1970)",
             content: content,
             trigger: trigger
         )
