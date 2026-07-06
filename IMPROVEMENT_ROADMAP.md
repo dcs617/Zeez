@@ -183,7 +183,7 @@ watch targets build, alarm test suites pass (now including the SQLite predicate 
   follow-ups must arrive at the configured cadence.
 
 ### 1.2 Info.plist and capability cleanup
-- [ ] Done
+- [x] Done
 - **Problems in `Zeez/Info.plist`:**
   - `UIBackgroundModes` contains `audio` (but `AlarmAudioController` is documented and
     implemented as foreground-only) and `remote-notification` (no push registration exists
@@ -209,7 +209,7 @@ watch targets build, alarm test suites pass (now including the SQLite predicate 
   a proper launch screen.
 
 ### 1.3 Fix `AlarmConfiguration` model defaults — with model versioning
-- [ ] Done
+- [ ] Done *(IN PROGRESS — see HANDOVER.md: v2 model + defaults created, verification pending)*
 - **Problem:** in `Zeez/Zeez.xcdatamodeld/Zeez.xcdatamodel/contents`,
   `smartWakeEnabled` (Boolean) has `defaultValueString="30"` and `smartWakeWindow` has
   default `9`. These look transposed (window should plausibly be 30 min; snooze-ish 9).
@@ -297,7 +297,7 @@ watch targets build, alarm test suites pass (now including the SQLite predicate 
   `-com.apple.CoreData.ConcurrencyDebug 1` — zero multithreading assertions.
 
 ### 1.7 Decide Smart Wake honestly (implement or relabel)
-- [ ] Done
+- [x] Done
 - **Problem:** `Zeez/Alarm/SmartWakeAnalyzer.swift` (194 lines,
   `calculateOptimalWakeTime`) has **zero callers**. The shipped "smart wake" behavior
   (`AlarmScheduler.swift:120-141`) is just a second notification scheduled
@@ -535,3 +535,4 @@ single-sourced.
 |---|---|---|
 | 2026-07-05 | — | Roadmap created from audit. |
 | 2026-07-05 | 0.1–0.6 | Phase 0 complete, one commit per item (0.2+0.3 shared). 0.4 decision: KEEP noise monitoring — usage string added; recorder was also found persisting lossless audio to Documents from init, now metering-only to /dev/null behind an explicit permission request. 0.5: in-flight snoozes survive reschedules unless the owning alarm is disabled/deleted; also fixed scheduleSpecificAlarm's never-matching prefix filter and cancelAllAlarms' global wipe. New AlarmPredicateSQLiteTests passes 6/6. Pre-existing suites (EndToEnd/Reliability/RaceCondition) fail identically at the pre-change baseline commit — Core Data 132001 "recursively call -save:" from testing against PersistenceController.shared while the host app runs; that is item 2.4's scope, not a Phase 0 regression. Note: `grep -rn "id.uuidString" Zeez/` still matches 2 non-predicate serialization sites (Widget.swift, WatchCommunicationSupport.swift) — predicate-form matches are zero. |
+| 2026-07-06 | 1.2, 1.7; 1.3 WIP | 1.2: UIBackgroundModes → processing only, armv7 key dropped, UILaunchScreen dict replaces phantom storyboard, time-sensitive entitlement added, critical-sound gating on scheduleBasicSnooze/scheduleTestNotification, all INFOPLIST_KEY_NSHealth* build settings removed (watch target now 0 warnings). 1.7: Option B — SmartWakeAnalyzer deleted, UI/notification copy relabeled to "Gentle Pre-Alarm", pre-alert now genuinely quieter (default sound, .timeSensitive, never critical). 1.3 WIP: "Zeez 2.xcdatamodel" created (smartWakeEnabled=NO, smartWakeWindow=30), .xccurrentversion → v2, AlarmEditView new-alarm default false — NOT yet built/tested; see HANDOVER.md. Branch pushed to origin. |

@@ -65,7 +65,7 @@ struct AlarmEditView: View {
         _allowVibrationsWithSound = State(initialValue: alarm?.allowVibrationsWithSound ?? true)
         _watchHaptics = State(initialValue: alarm?.watchHaptics ?? true)
         
-        _smartWakeEnabled = State(initialValue: alarm?.smartWakeEnabled ?? true)
+        _smartWakeEnabled = State(initialValue: alarm?.smartWakeEnabled ?? false)
         _smartWakeWindow = State(initialValue: alarm?.smartWakeWindow ?? 30)
         _audioCapture = State(initialValue: alarm?.audioCapture ?? false)
         

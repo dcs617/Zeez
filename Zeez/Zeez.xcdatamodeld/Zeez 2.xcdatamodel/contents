@@ -1,0 +1,500 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23788.4" systemVersion="24G84" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="YES" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="AlarmConfiguration" representedClassName="AlarmConfiguration" syncable="YES">
+        <attribute name="alarmSound" optional="YES" attributeType="String"/>
+        <attribute name="alarmSoundSource" optional="YES" attributeType="String"/>
+        <attribute name="allowVibrationsWithSound" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="audioCapture" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="daysOfWeek" optional="YES" attributeType="Binary"/>
+        <attribute name="deactivateGesture" optional="YES" attributeType="String"/>
+        <attribute name="enabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="fadeInDuration" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="heavySleeperMode" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="musicEnabled" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="musicSource" optional="YES" attributeType="String"/>
+        <attribute name="musicTrackId" optional="YES" attributeType="String"/>
+        <attribute name="musicVolume" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="smartWakeEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="smartWakeWindow" attributeType="Integer 16" defaultValueString="30" usesScalarValueType="YES"/>
+        <attribute name="snoozeDuration" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="snoozeEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="snoozeGesture" optional="YES" attributeType="String"/>
+        <attribute name="time" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="timerDuration" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="vibrationOnly" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="wakeType" optional="YES" attributeType="String"/>
+        <attribute name="watchHaptics" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <relationship name="userPreferences" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="alarmConfigurations" inverseEntity="UserPreferences"/>
+    </entity>
+    <entity name="AnalyticsEvent" representedClassName="AnalyticsEvent" syncable="YES">
+        <attribute name="category" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="name" attributeType="String" defaultValueString="unknown_event"/>
+        <attribute name="parameters" optional="YES" attributeType="Binary"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="analyticsEvents" inverseEntity="SleepSession"/>
+        <relationship name="userPreferences" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="analyticsEvent" inverseEntity="UserPreferences"/>
+    </entity>
+    <entity name="ChallengeBadge" representedClassName="ChallengeBadge" syncable="YES">
+        <attribute name="earnedDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isCompleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="progress" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="challenge" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LearnChallenge" inverseName="userProgress" inverseEntity="LearnChallenge"/>
+        <relationship name="userPreferences" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="challengeBadges" inverseEntity="UserPreferences"/>
+    </entity>
+    <entity name="DailyMetrics" representedClassName="DailyMetrics" syncable="YES">
+        <attribute name="averageHeartRate" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="averageRespiratoryRate" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="date" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="sleepDebt" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="totalSleepTime" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="sessions" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="dailyMetrics" inverseEntity="SleepSession"/>
+        <relationship name="weeklyMetrics" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="WeeklyMetrics" inverseName="dailyMetrics" inverseEntity="WeeklyMetrics"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="EnvironmentalReading" representedClassName="EnvironmentalReading" syncable="YES">
+        <attribute name="deviceType" optional="YES" attributeType="String"/>
+        <attribute name="humidity" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="lightLevel" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="noiseLevel" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="temperature" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="environmentalReadings" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="FeatureAccessRecord" representedClassName="FeatureAccessRecord" syncable="YES">
+        <attribute name="context" optional="YES" attributeType="String"/>
+        <attribute name="feature" attributeType="String" defaultValueString="unknown_feature"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="featureAccess" inverseEntity="SleepSession"/>
+        <relationship name="sleepStage" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepStage" inverseName="featureAccess" inverseEntity="SleepStage"/>
+        <relationship name="userPreferences" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="featureAccess" inverseEntity="UserPreferences"/>
+    </entity>
+    <entity name="GlossaryTerm" representedClassName="GlossaryTerm" syncable="YES">
+        <attribute name="category" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="definition" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="sortOrder" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="term" optional="YES" attributeType="String"/>
+        <relationship name="relatedArticles" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LearnArticle" inverseName="glossaryTerms" inverseEntity="LearnArticle"/>
+        <relationship name="relatedTerms" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GlossaryTerm" inverseName="relatedTerms" inverseEntity="GlossaryTerm"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="HeartRateData" representedClassName="HeartRateData" syncable="YES">
+        <attribute name="confidence" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="deviceType" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="rawData" optional="YES" attributeType="Binary"/>
+        <attribute name="samplingRate" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="value" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="heartRateData" inverseEntity="SleepSession"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="LearnArticle" representedClassName="LearnArticle" syncable="YES">
+        <attribute name="category" optional="YES" attributeType="String"/>
+        <attribute name="content" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="imageAssetName" optional="YES" attributeType="String"/>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="readTimeMinutes" optional="YES" attributeType="Integer 16" defaultValueString="5" usesScalarValueType="YES"/>
+        <attribute name="sortOrder" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="tags" optional="YES" attributeType="Binary"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <relationship name="glossaryTerms" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="GlossaryTerm" inverseName="relatedArticles" inverseEntity="GlossaryTerm"/>
+        <relationship name="highlights" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="NoteHighlight" inverseName="article" inverseEntity="NoteHighlight"/>
+        <relationship name="notes" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepNote" inverseName="article" inverseEntity="SleepNote"/>
+        <relationship name="quiz" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="Quiz" inverseName="article" inverseEntity="Quiz"/>
+        <relationship name="references" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="ScientificReference" inverseName="articles" inverseEntity="ScientificReference"/>
+        <relationship name="relatedChallenges" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LearnChallenge" inverseName="relatedArticles" inverseEntity="LearnChallenge"/>
+        <relationship name="userProgress" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="UserArticleProgress" inverseName="article" inverseEntity="UserArticleProgress"/>
+    </entity>
+    <entity name="LearnChallenge" representedClassName="LearnChallenge" syncable="YES">
+        <attribute name="challengeDescription" optional="YES" attributeType="String"/>
+        <attribute name="durationDays" attributeType="Integer 16" defaultValueString="7" usesScalarValueType="YES"/>
+        <attribute name="endDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isActive" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="points" attributeType="Integer 32" defaultValueString="100" usesScalarValueType="YES"/>
+        <attribute name="requirements" optional="YES" attributeType="Binary"/>
+        <attribute name="startDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="type" optional="YES" attributeType="String"/>
+        <relationship name="relatedArticles" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LearnArticle" inverseName="relatedChallenges" inverseEntity="LearnArticle"/>
+        <relationship name="userProgress" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="ChallengeBadge" inverseName="challenge" inverseEntity="ChallengeBadge"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="MovementData" representedClassName="MovementData" syncable="YES">
+        <attribute name="activityLevel" attributeType="Integer 16" minValueString="0" maxValueString="5" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="deviceType" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="magnitude" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="xAcceleration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="yAcceleration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="zAcceleration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="movementData" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="NoteHighlight" representedClassName="NoteHighlight" syncable="YES">
+        <attribute name="color" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="text" optional="YES" attributeType="String"/>
+        <relationship name="article" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LearnArticle" inverseName="highlights" inverseEntity="LearnArticle"/>
+        <relationship name="note" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepNote" inverseName="highlights" inverseEntity="SleepNote"/>
+    </entity>
+    <entity name="Quiz" representedClassName="Quiz" syncable="YES">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isRequired" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="passingScore" attributeType="Integer 16" defaultValueString="70" usesScalarValueType="YES"/>
+        <attribute name="quizDescription" optional="YES" attributeType="String"/>
+        <attribute name="sortOrder" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <relationship name="article" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LearnArticle" inverseName="quiz" inverseEntity="LearnArticle"/>
+        <relationship name="questions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="QuizQuestion" inverseName="quiz" inverseEntity="QuizQuestion"/>
+        <relationship name="userProgress" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="QuizProgress" inverseName="quiz" inverseEntity="QuizProgress"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="QuizAnswer" representedClassName="QuizAnswer" syncable="YES">
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isCorrect" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="text" optional="YES" attributeType="String"/>
+        <relationship name="question" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="QuizQuestion" inverseName="answers" inverseEntity="QuizQuestion"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="QuizProgress" representedClassName="QuizProgress" syncable="YES">
+        <attribute name="attemptCount" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="completedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO" versionHashModifier="w">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isCompleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="score" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="quiz" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Quiz" inverseName="userProgress" inverseEntity="Quiz"/>
+        <relationship name="userPreferences" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="quizProgress" inverseEntity="UserPreferences"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="QuizQuestion" representedClassName="QuizQuestion" syncable="YES">
+        <attribute name="explanation" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="question" optional="YES" attributeType="String"/>
+        <attribute name="sortOrder" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="answers" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="QuizAnswer" inverseName="question" inverseEntity="QuizAnswer"/>
+        <relationship name="quiz" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Quiz" inverseName="questions" inverseEntity="Quiz"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="RespiratoryData" representedClassName="RespiratoryData" syncable="YES">
+        <attribute name="confidence" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="deviceType" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="oxygenSaturation" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="respiratoryRate" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="respiratoryData" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="ScientificReference" representedClassName="ScientificReference" syncable="YES">
+        <attribute name="abstract" optional="YES" attributeType="String"/>
+        <attribute name="authors" optional="YES" attributeType="String"/>
+        <attribute name="citation" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="doi" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="journal" optional="YES" attributeType="String"/>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="url" optional="YES" attributeType="String"/>
+        <attribute name="year" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="articles" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="LearnArticle" inverseName="references" inverseEntity="LearnArticle"/>
+    </entity>
+    <entity name="SleepFact" representedClassName="SleepFact" syncable="YES">
+        <attribute name="category" optional="YES" attributeType="String"/>
+        <attribute name="content" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="lastShownDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="source" optional="YES" attributeType="String"/>
+        <attribute name="timesShown" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <relationship name="viewedBy" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="viewedFacts" inverseEntity="UserPreferences"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="SleepNote" representedClassName="SleepNote" syncable="YES">
+        <attribute name="category" optional="YES" attributeType="String"/>
+        <attribute name="content" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <relationship name="article" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LearnArticle" inverseName="notes" inverseEntity="LearnArticle"/>
+        <relationship name="highlights" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="NoteHighlight" inverseName="note" inverseEntity="NoteHighlight"/>
+        <relationship name="linkedNotes" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="SleepNote" inverseName="linkedNotes" inverseEntity="SleepNote"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="notes" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="SleepQualityScore" representedClassName="SleepQualityScore" syncable="YES">
+        <attribute name="calculationVersion" optional="YES" attributeType="String"/>
+        <attribute name="confidenceScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="environmentalScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="heartRateScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isPersonalized" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="movementScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="overallScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="personalizationLevel" optional="YES" attributeType="String"/>
+        <attribute name="personalizedComponents" optional="YES" attributeType="String"/>
+        <attribute name="respiratoryScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="sleepCycleScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="qualityScores" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="SleepSession" representedClassName="SleepSession" syncable="YES">
+        <attribute name="completedCycles" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="cycleConsistency" optional="YES" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="deviceIdentifier" optional="YES" attributeType="String"/>
+        <attribute name="endTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="environmentalScore" optional="YES" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isActive" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="qualityScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="startTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="userFeedback" optional="YES" attributeType="Integer 16" minValueString="1" maxValueString="5" usesScalarValueType="NO"/>
+        <relationship name="analyticsEvents" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AnalyticsEvent" inverseName="session" inverseEntity="AnalyticsEvent"/>
+        <relationship name="dailyMetrics" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DailyMetrics" inverseName="sessions" inverseEntity="DailyMetrics"/>
+        <relationship name="environmentalReadings" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="EnvironmentalReading" inverseName="session" inverseEntity="EnvironmentalReading"/>
+        <relationship name="featureAccess" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FeatureAccessRecord" inverseName="session" inverseEntity="FeatureAccessRecord"/>
+        <relationship name="heartRateData" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="HeartRateData" inverseName="session" inverseEntity="HeartRateData"/>
+        <relationship name="movementData" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="MovementData" inverseName="session" inverseEntity="MovementData"/>
+        <relationship name="notes" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SleepNote" inverseName="session" inverseEntity="SleepNote"/>
+        <relationship name="qualityScores" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SleepQualityScore" inverseName="session" inverseEntity="SleepQualityScore"/>
+        <relationship name="respiratoryData" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="RespiratoryData" inverseName="session" inverseEntity="RespiratoryData"/>
+        <relationship name="sleepStages" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SleepStage" inverseName="session" inverseEntity="SleepStage"/>
+        <relationship name="subscriptionEvents" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SubscriptionEventRecord" inverseName="session" inverseEntity="SubscriptionEventRecord"/>
+        <relationship name="upgradeEvents" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="UpgradeEventRecord" inverseName="session" inverseEntity="UpgradeEventRecord"/>
+    </entity>
+    <entity name="SleepStage" representedClassName="SleepStage" syncable="YES">
+        <attribute name="confidence" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="duration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="endTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="stageType" optional="YES" attributeType="String"/>
+        <attribute name="startTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="featureAccess" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="FeatureAccessRecord" inverseName="sleepStage" inverseEntity="FeatureAccessRecord"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="sleepStages" inverseEntity="SleepSession"/>
+    </entity>
+    <entity name="SubscriptionEventRecord" representedClassName="SubscriptionEventRecord" syncable="YES">
+        <attribute name="cancellationReason" optional="YES" attributeType="String"/>
+        <attribute name="eventType" attributeType="String" defaultValueString="unknown_event_type"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isAnnual" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="metadata" optional="YES" attributeType="Binary"/>
+        <attribute name="source" optional="YES" attributeType="String"/>
+        <attribute name="tier" attributeType="String" defaultValueString="basic"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="subscriptionEvents" inverseEntity="SleepSession"/>
+        <relationship name="userPreferences" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="subscriptionEvents" inverseEntity="UserPreferences"/>
+    </entity>
+    <entity name="UpgradeEventRecord" representedClassName="UpgradeEventRecord" syncable="YES">
+        <attribute name="eventType" attributeType="String" defaultValueString="unknown_event_type"/>
+        <attribute name="feature" attributeType="String" defaultValueString="unknown_feature"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="result" optional="YES" attributeType="String"/>
+        <attribute name="source" attributeType="String" defaultValueString="unknown_source"/>
+        <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="viewContext" optional="YES" attributeType="String"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="SleepSession" inverseName="upgradeEvents" inverseEntity="SleepSession"/>
+        <relationship name="userPreferences" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="upgradeEvents" inverseEntity="UserPreferences"/>
+    </entity>
+    <entity name="UserArticleProgress" representedClassName="UserArticleProgress" syncable="YES">
+        <attribute name="bookmarked" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="isCompleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastReadDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="article" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LearnArticle" inverseName="userProgress" inverseEntity="LearnArticle"/>
+        <relationship name="userPreferences" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserPreferences" inverseName="articleProgress" inverseEntity="UserPreferences"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+    <entity name="UserPreferences" representedClassName="UserPreferences" syncable="YES">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="healthKitSyncEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="notificationsEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="sleepGoalEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="targetBedtime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="targetSleepDuration" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="targetWakeTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="alarmConfigurations" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AlarmConfiguration" inverseName="userPreferences" inverseEntity="AlarmConfiguration"/>
+        <relationship name="analyticsEvent" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AnalyticsEvent" inverseName="userPreferences" inverseEntity="AnalyticsEvent"/>
+        <relationship name="articleProgress" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="UserArticleProgress" inverseName="userPreferences" inverseEntity="UserArticleProgress"/>
+        <relationship name="challengeBadges" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ChallengeBadge" inverseName="userPreferences" inverseEntity="ChallengeBadge"/>
+        <relationship name="featureAccess" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="FeatureAccessRecord" inverseName="userPreferences" inverseEntity="FeatureAccessRecord"/>
+        <relationship name="quizProgress" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="QuizProgress" inverseName="userPreferences" inverseEntity="QuizProgress"/>
+        <relationship name="subscriptionEvents" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="SubscriptionEventRecord" inverseName="userPreferences" inverseEntity="SubscriptionEventRecord"/>
+        <relationship name="upgradeEvents" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="UpgradeEventRecord" inverseName="userPreferences" inverseEntity="UpgradeEventRecord"/>
+        <relationship name="viewedFacts" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="SleepFact" inverseName="viewedBy" inverseEntity="SleepFact"/>
+    </entity>
+    <entity name="WeeklyMetrics" representedClassName="WeeklyMetrics" syncable="YES">
+        <attribute name="averageQualityScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="averageSleepTime" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="consistencyScore" attributeType="Double" minValueString="0" maxValueString="100" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="UUID" usesScalarValueType="NO">
+            <userInfo>
+                <entry key="indexed" value="YES"/>
+            </userInfo>
+        </attribute>
+        <attribute name="modifiedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="weekEndDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="weekStartDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="dailyMetrics" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="DailyMetrics" inverseName="weeklyMetrics" inverseEntity="DailyMetrics"/>
+        <userInfo>
+            <entry key="indexed" value="YES"/>
+        </userInfo>
+    </entity>
+</model>
