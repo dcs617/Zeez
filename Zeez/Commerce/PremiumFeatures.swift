@@ -123,11 +123,6 @@ class PremiumManager: ObservableObject {
         saveSubscriptionState()
     }
     
-    /// Restore purchases and subscription status
-    func restorePurchases() async throws {
-        // Will implement StoreKit integration here
-    }
-    
     // MARK: - Private Methods
     
     private func loadSubscriptionState() {
@@ -155,11 +150,24 @@ class PremiumManager: ObservableObject {
 }
 
 /// Available subscription tiers
-enum SubscriptionTier: String {
+enum SubscriptionTier: String, Comparable {
     case basic = "Basic"
     case premium = "Premium"
     case premium_plus = "Premium+"
-    
+
+    /// Explicit ordering — raw values are display strings and must not be compared.
+    var rank: Int {
+        switch self {
+        case .basic: return 0
+        case .premium: return 1
+        case .premium_plus: return 2
+        }
+    }
+
+    static func < (lhs: SubscriptionTier, rhs: SubscriptionTier) -> Bool {
+        lhs.rank < rhs.rank
+    }
+
     var displayName: String {
         switch self {
         case .basic: return "Basic"

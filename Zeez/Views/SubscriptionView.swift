@@ -4,9 +4,11 @@ import os.log
 struct SubscriptionView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var premiumManager = PremiumManager.shared
+    @StateObject private var storeKitManager = StoreKitManager.shared
     @State private var selectedTier: SubscriptionTier?
     @State private var isAnnual = true
     @State private var isProcessing = false
+    @State private var errorMessage: String?
     
     let requiredFeature: PremiumFeature?
     
@@ -47,6 +49,14 @@ struct SubscriptionView: View {
                     .background(Color(.systemBackground))
                     .cornerRadius(8)
             }
+        }
+        .alert("Something Went Wrong", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
         }
     }
     
@@ -239,40 +249,50 @@ struct SubscriptionView: View {
     }
     
     private func priceString(for tier: SubscriptionTier) -> String {
+        // Prefer the App Store's localized price; fall back to the static price
+        // when products haven't loaded (e.g. offline).
+        if let product = storeKitManager.product(for: tier, annual: isAnnual) {
+            return product.displayPrice
+        }
         let price = isAnnual ? tier.annualPrice : tier.monthlyPrice
         return "$\(price)"
     }
-    
+
     private func subscribe() async {
         guard let tier = selectedTier else { return }
         isProcessing = true
         defer { isProcessing = false }
-        
-        // Track subscription attempt
-        SubscriptionEvents.shared.trackSubscriptionStarted(
-            tier: tier,
-            isAnnual: isAnnual,
-            source: .settings  // or whatever source is appropriate
-        )
-        
-        // TODO: Implement StoreKit purchase
-        // For now, simulate subscription
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
-        premiumManager.updateSubscription(tier)
-        dismiss()
-    }
-    
-    private func restorePurchases() async {
-        isProcessing = true
-        defer { isProcessing = false }
-        
+
+        guard let product = storeKitManager.product(for: tier, annual: isAnnual) else {
+            errorMessage = "Subscriptions aren't available right now. Check your connection and try again."
+            return
+        }
+
         do {
-            try await premiumManager.restorePurchases()
-            if premiumManager.activeSubscription != nil {
+            // Entitlement (and PremiumManager state) updates inside purchase(_:).
+            if try await storeKitManager.purchase(product) != nil {
                 dismiss()
             }
         } catch {
+            ZeezLogger.error(ZeezLogger.app, "Purchase failed", error: error)
+            errorMessage = "The purchase could not be completed. You have not been charged."
+        }
+    }
+
+    private func restorePurchases() async {
+        isProcessing = true
+        defer { isProcessing = false }
+
+        do {
+            try await storeKitManager.restorePurchases()
+            if premiumManager.activeSubscription != nil {
+                dismiss()
+            } else {
+                errorMessage = "No previous purchases were found for this Apple Account."
+            }
+        } catch {
             ZeezLogger.error(ZeezLogger.app, "Error restoring purchases", error: error)
+            errorMessage = "Restore failed. Check your connection and try again."
         }
     }
 }

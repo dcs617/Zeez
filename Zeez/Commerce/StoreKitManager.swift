@@ -48,9 +48,10 @@ class StoreKitManager: ObservableObject {
         }
     }
     
-    /// Restore purchases
+    /// Restore purchases. Throws if the App Store sync fails so the UI never
+    /// reports "restored" after a failed sync.
     func restorePurchases() async throws {
-        try? await AppStore.sync()
+        try await AppStore.sync()
         await updatePurchasedSubscriptions()
     }
     
@@ -61,18 +62,34 @@ class StoreKitManager: ObservableObject {
         }
     }
     
-    // MARK: - Private Methods
-    
-    private func loadProducts() async {
+    // MARK: - Product Identifiers
+
+    /// Product IDs must match App Store Connect character-for-character (mirrored in
+    /// `ZeezTests/Zeez.storekit`). Note "+" is not a valid product-ID character, so
+    /// premium_plus uses "premiumplus". ⚠️ Confirm these against ASC before release.
+    nonisolated static let productIDs: [(tier: SubscriptionTier, annual: Bool, id: String)] = [
+        (.premium, false, "com.zeez.subscription.premium.monthly"),
+        (.premium, true, "com.zeez.subscription.premium.annual"),
+        (.premium_plus, false, "com.zeez.subscription.premiumplus.monthly"),
+        (.premium_plus, true, "com.zeez.subscription.premiumplus.annual")
+    ]
+
+    private func productIdentifier(for tier: SubscriptionTier, annual: Bool) -> String? {
+        Self.productIDs.first { $0.tier == tier && $0.annual == annual }?.id
+    }
+
+    /// Exact-match lookup. Never use substring matching here: every premium_plus
+    /// identifier *contains* "premium", which used to resolve Premium+ entitlements
+    /// to the lower tier.
+    nonisolated static func subscriptionTier(from identifier: String) -> SubscriptionTier? {
+        productIDs.first { $0.id == identifier }?.tier
+    }
+
+    // MARK: - Internal Methods (internal for tests — production callers stay in this file)
+
+    func loadProducts() async {
         do {
-            let identifiers = SubscriptionTier.allCases.flatMap { tier in
-                [
-                    productIdentifier(for: tier, annual: false),
-                    productIdentifier(for: tier, annual: true)
-                ]
-            }
-            
-            let products = try await Product.products(for: identifiers)
+            let products = try await Product.products(for: Self.productIDs.map(\.id))
             subscriptions = products.sorted { $0.price < $1.price }
         } catch {
             ZeezLogger.error(ZeezLogger.app, "Failed to load products", error: error)
@@ -102,12 +119,19 @@ class StoreKitManager: ObservableObject {
         }
     }
     
-    private func updatePurchasedSubscriptions() async {
+    func updatePurchasedSubscriptions() async {
         var purchased: [Product] = []
-        
+        var entitledTiers: [SubscriptionTier] = []
+
         for await result in Transaction.currentEntitlements {
             do {
                 let transaction = try checkVerified(result)
+                // Map the tier straight from the productID — entitlements must resolve
+                // even when loadProducts() failed (e.g. offline launch), otherwise a
+                // valid subscriber gets a persisted downgrade.
+                if let tier = Self.subscriptionTier(from: transaction.productID) {
+                    entitledTiers.append(tier)
+                }
                 if let subscription = subscriptions.first(where: { $0.id == transaction.productID }) {
                     purchased.append(subscription)
                 }
@@ -115,31 +139,11 @@ class StoreKitManager: ObservableObject {
                 ZeezLogger.error(ZeezLogger.app, "Failed to verify transaction", error: error)
             }
         }
-        
+
         self.purchasedSubscriptions = purchased
-        
-        // Update PremiumManager with active subscription
-        if let highestTier = purchased
-            .compactMap({ subscriptionTier(from: $0.id) })
-            .sorted(by: { $0.rawValue > $1.rawValue })
-            .first {
-            PremiumManager.shared.updateSubscription(highestTier)
-        } else {
-            PremiumManager.shared.updateSubscription(nil)
-        }
-    }
-    
-    private func productIdentifier(for tier: SubscriptionTier, annual: Bool) -> String {
-        "com.zeez.subscription.\(tier.rawValue.lowercased()).\(annual ? "annual" : "monthly")"
-    }
-    
-    private func subscriptionTier(from identifier: String) -> SubscriptionTier? {
-        for tier in SubscriptionTier.allCases {
-            if identifier.contains(tier.rawValue.lowercased()) {
-                return tier
-            }
-        }
-        return nil
+
+        // Update PremiumManager with the highest active tier (numeric rank, not raw string)
+        PremiumManager.shared.updateSubscription(entitledTiers.max())
     }
 }
 
