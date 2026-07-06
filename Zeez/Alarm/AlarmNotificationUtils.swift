@@ -102,23 +102,27 @@ enum AlarmNotificationUtils {
         content.title = "Alarm"
         content.body = "Snooze time's up!"
         content.categoryIdentifier = AlarmNotificationRegistrar.categoryId
-        content.interruptionLevel = .timeSensitive
-        content.sound = .defaultCritical
         content.userInfo = [
             "alarmID": alarmId,
             "type": "main",  // This triggers follow-ups
             "isSnooze": true
         ]
 
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(minutes * 60), repeats: false)
-        let id = "snooze-\(alarmId)-\(Int(Date().timeIntervalSince1970))"
-        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule basic snooze", error: error)
-            } else {
-                ZeezLogger.info(ZeezLogger.alarm, "💤 Basic snooze scheduled for \(minutes) minutes")
+        // Critical sound/level only when the entitlement-backed setting is on
+        checkCriticalAlertsEnabled { criticalEnabled in
+            content.interruptionLevel = criticalEnabled ? .critical : .timeSensitive
+            content.sound = criticalEnabled ? .defaultCritical : .default
+
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(minutes * 60), repeats: false)
+            let id = "snooze-\(alarmId)-\(Int(Date().timeIntervalSince1970))"
+            let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule basic snooze", error: error)
+                } else {
+                    ZeezLogger.info(ZeezLogger.alarm, "💤 Basic snooze scheduled for \(minutes) minutes")
+                }
             }
         }
     }

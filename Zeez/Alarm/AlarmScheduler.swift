@@ -214,19 +214,23 @@ class AlarmScheduler: NSObject {
         let content = UNMutableNotificationContent()
         content.title = "Zeez Alarm Test"
         content.body = "This is a test notification to verify alarm system works"
-        content.sound = .defaultCritical
-        content.interruptionLevel = .critical
         content.categoryIdentifier = AlarmNotificationRegistrar.categoryId
-        
-        // Schedule for 10 seconds from now
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 10, repeats: false)
-        let request = UNNotificationRequest(identifier: "test-notification", content: content, trigger: trigger)
-        
-        notificationCenter.add(request) { error in
-            if let error = error {
-                ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule test notification", error: error)
-            } else {
-                ZeezLogger.info(ZeezLogger.alarm, "✅ Test notification scheduled for 10 seconds from now")
+
+        // Critical sound/level only when the entitlement-backed setting is on
+        AlarmNotificationUtils.checkCriticalAlertsEnabled { [weak self] criticalEnabled in
+            content.sound = criticalEnabled ? .defaultCritical : .default
+            content.interruptionLevel = criticalEnabled ? .critical : .timeSensitive
+
+            // Schedule for 10 seconds from now
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 10, repeats: false)
+            let request = UNNotificationRequest(identifier: "test-notification", content: content, trigger: trigger)
+
+            self?.notificationCenter.add(request) { error in
+                if let error = error {
+                    ZeezLogger.error(ZeezLogger.alarm, "Failed to schedule test notification", error: error)
+                } else {
+                    ZeezLogger.info(ZeezLogger.alarm, "✅ Test notification scheduled for 10 seconds from now")
+                }
             }
         }
     }
