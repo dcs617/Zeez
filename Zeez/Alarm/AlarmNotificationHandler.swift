@@ -88,9 +88,11 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     
     private func checkHeavySleeperMode(for alarmId: String) -> Bool {
         // Check the alarm configuration in Core Data
+        // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths in predicates
+        guard let uuid = UUID(uuidString: alarmId) else { return false }
         let context = PersistenceController.shared.container.viewContext
         let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-        request.predicate = NSPredicate(format: "id.uuidString == %@", alarmId)
+        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
         
         do {
             if let alarm = try context.fetch(request).first {
@@ -106,22 +108,25 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
 
     private func scheduleFollowUps(alarmId: String, cadence: TimeInterval, maxCount: Int) {
         // Get the alarm configuration to use its sound and watch settings
-        let context = PersistenceController.shared.container.viewContext
-        let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-        request.predicate = NSPredicate(format: "id.uuidString == %@", alarmId)
-        
+        // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths in predicates
         var alarmSound: String = "Alarm_Classic.caf"
         var vibrationOnly = false
         var watchHaptics = false
-        
-        do {
-            if let alarm = try context.fetch(request).first {
-                alarmSound = alarm.alarmSound ?? "Alarm_Classic.caf"
-                vibrationOnly = alarm.vibrationOnly
-                watchHaptics = alarm.watchHaptics
+
+        if let uuid = UUID(uuidString: alarmId) {
+            let context = PersistenceController.shared.container.viewContext
+            let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
+            request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+
+            do {
+                if let alarm = try context.fetch(request).first {
+                    alarmSound = alarm.alarmSound ?? "Alarm_Classic.caf"
+                    vibrationOnly = alarm.vibrationOnly
+                    watchHaptics = alarm.watchHaptics
+                }
+            } catch {
+                ZeezLogger.error(ZeezLogger.alarm, "Error fetching alarm for follow-up sound selection", error: error)
             }
-        } catch {
-            ZeezLogger.error(ZeezLogger.alarm, "Error fetching alarm for follow-up sound selection", error: error)
         }
         
         // Start Watch haptics if enabled
@@ -208,9 +213,11 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     /// Your SwiftUI root can observe this notification name and present ActiveAlarmView.
     private func presentActiveAlarmUI(alarmId: String) {
         // Find the full alarm object to pass to the UI
+        // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths in predicates
+        guard let uuid = UUID(uuidString: alarmId) else { return }
         let context = PersistenceController.shared.container.viewContext
         let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-        request.predicate = NSPredicate(format: "id.uuidString == %@", alarmId)
+        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
         
         do {
             if let alarm = try context.fetch(request).first {

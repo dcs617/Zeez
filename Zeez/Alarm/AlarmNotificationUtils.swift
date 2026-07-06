@@ -32,9 +32,14 @@ enum AlarmNotificationUtils {
         cancelPendingFollowUps(for: alarmId)
         
         // Get the original alarm to preserve its settings
+        // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths in predicates
+        guard let uuid = UUID(uuidString: alarmId) else {
+            scheduleBasicSnooze(for: alarmId, minutes: minutes)
+            return
+        }
         let context = PersistenceController.shared.container.viewContext
         let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-        request.predicate = NSPredicate(format: "id.uuidString == %@", alarmId)
+        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
         
         do {
             if let alarm = try context.fetch(request).first {
