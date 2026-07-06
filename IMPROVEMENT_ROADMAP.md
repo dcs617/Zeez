@@ -441,10 +441,12 @@ single-sourced.
   `"AlarmPermissionDenied"`, `"ModalDismissed"` as `extension Notification.Name` statics;
   centralize `deviceIdentifier` provenance strings ("HealthKit Import", Pillow, mock
   markers) currently scattered across `RealDataManager`/importers/`SleepAnalyzer`.
-- **F. Documentation truth pass:** CLAUDE.md — remove `SessionValidationService` from the
+- **F. Documentation truth pass:** ~~CLAUDE.md — remove `SessionValidationService` from the
   pipeline description (validation is inline in `SleepAnalyzer` now); fix the watch build
   command (Series 9 sim doesn't exist here); note the `DEVELOPER_DIR` requirement. AGENTS.md —
-  correct the `Shared/` claim once 1.5 lands.
+  correct the `Shared/` claim once 1.5 lands.~~ *(all done in the Phase-1 sessions: watch
+  section + testing + Core Data threading + model versioning + build commands updated
+  2026-07-06; AGENTS.md `Shared/` claim became true with 1.5)* — re-verify docs at 2.5 time.
 - **G. Warning sweep** (from the audit build): dead `serverTime`/`metrics`/`modelURL`/`session`
   variables, deprecated `allowBluetooth` option in `AlarmAudioController.swift:23,51`
   (→ `.allowBluetoothHFP`), non-exhaustive switch in `BackgroundTaskManager.swift:231`,

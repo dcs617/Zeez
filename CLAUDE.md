@@ -9,6 +9,9 @@ Zeez is an iOS sleep tracking and analysis application built with SwiftUI and Co
 ## Development Commands
 
 ```bash
+# NOTE: xcode-select on this machine points at CommandLineTools — prefix commands with
+# DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+
 # Build iOS target
 xcodebuild -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
 
@@ -19,7 +22,7 @@ xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS 
 xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:ZeezTests/AlarmEndToEndTests
 
 # Build watch app
-xcodebuild -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'platform=watchOS Simulator,name=Apple Watch Series 9 (45mm)' build
+xcodebuild -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)' build
 ```
 
 ## Core Architecture
@@ -33,12 +36,13 @@ At startup, `ZeezApp.setupApp()` runs `AlarmDataMigrationHelper` and starts `Ala
 
 ### Data Layer
 - **Core Data stack**: `PersistenceController.shared` — use `.container.viewContext` for UI, `newBackgroundContext()` for heavy work. Migration is automatic via `CoreDataMigrationManager`.
+- **Model versioning**: the model is versioned; `Zeez 2.xcdatamodel` is current (check `Zeez.xcdatamodeld/.xccurrentversion`). Structural changes require a new model version — default-value-only changes don't alter version hashes, so old stores stay compatible.
 - **Primary entity**: `SleepSession` — links to `SleepStage`, `HeartRateData`, `MovementData`, `EnvironmentalReading`, `SleepQualityScore`.
 - **Generated classes**: All Core Data entity classes live in `CoreData/` (paired `+CoreDataClass.swift` / `+CoreDataProperties.swift`).
 
 ### Sleep Analysis Pipeline
 `SleepAnalyzer.shared.analyzeSleepSession(_:)` orchestrates analysis in four steps:
-1. `SessionValidationService` — validates session has minimum data
+1. Inline validation in `SleepAnalyzer` — checks the session has minimum data (`SessionValidationService` is dead code slated for deletion in roadmap 2.5)
 2. `SleepStageAnalyzer` (`Sleep/Stage/`) — detects stages from movement + heart rate
 3. `SleepQualityCalculator` (`Sleep/Quality/`) — scores duration, efficiency, stage distribution, fragmentation, latency (research-based weights)
 4. Updates session with results in a background context
@@ -103,9 +107,10 @@ Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImp
 - UI reads: `PersistenceController.shared.container.viewContext` with `@FetchRequest`
 - Heavy writes: `newBackgroundContext()`, always save and merge back
 - Previews: `PersistenceController.preview`
+- **Threading**: never touch a managed object or context off its queue. The alarm stack uses the snapshot pattern — `AlarmSnapshot` (`Zeez/Alarm/AlarmSnapshot.swift`) is built inside `context.perform` and only plain values cross onto dispatch queues or `UNUserNotificationCenter` callbacks. Verify threading changes by launching with `-com.apple.CoreData.ConcurrencyDebug 1`.
 
 ### Testing
-Uses Swift Testing framework (`import Testing`, `@testable import Zeez`). Test suites: `AlarmEndToEndTests`, `AlarmRaceConditionTests`, `AlarmReliabilityTests`, `CoreDataMigrationTests`, `CoreDataModelTests`, `MockDataTests`.
+Uses Swift Testing framework (`import Testing`, `@testable import Zeez`). Test suites: `AlarmEndToEndTests`, `AlarmRaceConditionTests`, `AlarmReliabilityTests`, `AlarmPredicateSQLiteTests`, `AlarmFollowUpChainTests`, `NotificationBudgetTests`, `CoreDataMigrationTests`, `CoreDataModelV2MigrationTests`, `CoreDataModelTests`, `MockDataTests`. Alarm-scheduler tests inject a fake center via the `AlarmNotificationScheduling` protocol instead of using the real `UNUserNotificationCenter` (see `AlarmFollowUpChainTests` for the pattern).
 
 ### Logging
 Use `ZeezLogger` (`Infrastructure/ZeezLogger.swift`) — never `print`. Import `os.log`. Categories: `ZeezLogger.coreData`, `.sleepTracking`, `.alarm`, `.learning`, `.ui`, `.environment`, `.background`, `.analytics`, `.network`, `.mockData`, `.error`, `.app`. Debug logs are stripped from release builds.
