@@ -251,9 +251,9 @@ struct AlarmEditView: View {
     @State private var isWakeWindowExpanded = false
     
     private var smartWakeCard: some View {
-        SettingsCard(title: "Smart Wake", icon: "sparkles") {
+        SettingsCard(title: "Gentle Pre-Alarm", icon: "sparkles") {
             VStack(alignment: .leading, spacing: 16) {
-                Toggle("Enable Smart Wake", isOn: $smartWakeEnabled)
+                Toggle("Enable Gentle Pre-Alarm", isOn: $smartWakeEnabled)
                 
                 if smartWakeEnabled {
                     VStack(alignment: .leading, spacing: 8) {
@@ -281,7 +281,7 @@ struct AlarmEditView: View {
                         }
                     }
                     
-                    Text("Smart Wake will monitor your sleep and wake you up at the optimal time within your selected window")
+                    Text("Get an earlier, quieter alert up to the selected number of minutes before your alarm")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

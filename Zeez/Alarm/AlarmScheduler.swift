@@ -271,7 +271,7 @@ class AlarmScheduler: NSObject {
         let content = UNMutableNotificationContent()
         let alarmName = alarm.name ?? ""
         content.title = alarmName.isEmpty ? "Alarm" : alarmName
-        content.body = isSmartWake ? "Smart Wake Initializing" : "Time to Wake Up"
+        content.body = isSmartWake ? "Gentle wake-up — your alarm is coming soon" : "Time to Wake Up"
         
         // Add action buttons to the notification using new system
         content.categoryIdentifier = AlarmNotificationRegistrar.categoryId
@@ -301,13 +301,21 @@ class AlarmScheduler: NSObject {
         
         // Check critical alert capability and set appropriate interruption level and sound
         AlarmNotificationUtils.checkCriticalAlertsEnabled { [weak self] criticalEnabled in
-            content.interruptionLevel = criticalEnabled ? .critical : .timeSensitive
-            
-            // Use user's selected alarm sound
-            if alarm.vibrationOnly {
-                content.sound = nil
+            if isSmartWake {
+                // The gentle pre-alarm is deliberately quieter than the real
+                // alarm: default sound, never critical. The backup alert at the
+                // actual alarm time carries the full loudness.
+                content.interruptionLevel = .timeSensitive
+                content.sound = alarm.vibrationOnly ? nil : .default
             } else {
-                content.sound = self?.getAlarmSoundForNotification(selectedSound, criticalEnabled: criticalEnabled) ?? .default
+                content.interruptionLevel = criticalEnabled ? .critical : .timeSensitive
+
+                // Use user's selected alarm sound
+                if alarm.vibrationOnly {
+                    content.sound = nil
+                } else {
+                    content.sound = self?.getAlarmSoundForNotification(selectedSound, criticalEnabled: criticalEnabled) ?? .default
+                }
             }
             
             // Log the resolved sound for debugging

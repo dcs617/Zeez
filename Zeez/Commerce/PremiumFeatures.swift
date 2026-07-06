@@ -22,7 +22,7 @@ enum PremiumFeature: String, CaseIterable {
         case .environmentalReports:
             return "Detailed reports on how your environment affects sleep"
         case .advancedAlarms:
-            return "Enhanced smart wake features and custom wake windows"
+            return "Gentle pre-alarm alerts and custom wake windows"
         case .sleepCoaching:
             return "Personalized recommendations and coaching"
         case .dataExport:

@@ -207,7 +207,7 @@ struct SettingsView: View {
                 AlarmSettingsView()
             }
             .accessibilityLabel("Configure alarms")
-            .accessibilityHint("Set up and manage your smart wake-up alarms")
+            .accessibilityHint("Set up and manage your wake-up alarms")
             .accessibilityIdentifier("configureAlarmsLink")
         }
     }

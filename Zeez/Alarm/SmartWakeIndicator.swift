@@ -1,7 +1,7 @@
 import SwiftUI
 import os.log
 
-/// Visual indicator for smart wake window
+/// Visual indicator for the gentle pre-alarm window
 struct SmartWakeIndicator: View {
     let window: Int16
     
