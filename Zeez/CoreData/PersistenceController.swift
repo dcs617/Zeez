@@ -250,13 +250,13 @@ final class PersistenceController {
         
         do {
             try FileManager.default.moveItem(at: storeURL, to: corruptedURL)
-            ZeezLogger.info(ZeezLogger.coreData, "Moved corrupted store to backup location: \(corruptedURL.path)")
+            ZeezLogger.info(ZeezLogger.coreData, "Moved corrupted store to backup location: \(corruptedURL.lastPathComponent)")
             
             // Try to load with a fresh store
             try retryStoreLoad()
             
             // Log the data loss event for analytics
-            ZeezLogger.error(ZeezLogger.coreData, "Data migration failed - user data preserved at backup location: \(corruptedURL.path) - data can be recovered")
+            ZeezLogger.error(ZeezLogger.coreData, "Data migration failed - user data preserved at backup location: \(corruptedURL.lastPathComponent) - data can be recovered")
             
         } catch {
             ZeezLogger.error(ZeezLogger.coreData, "Failed to implement migration fallback", error: error)

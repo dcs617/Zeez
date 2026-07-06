@@ -60,7 +60,9 @@ final class AlarmAudioController {
             isPlaying = true
             retryCount = 0
             startWatchdog(fileURL: fileURL, volume: volume)
-            ZeezLogger.info(ZeezLogger.alarm, "🔊 Started looping user audio: \(fileURL.lastPathComponent)")
+            // User file names are personal content — debug builds only.
+            ZeezLogger.info(ZeezLogger.alarm, "🔊 Started looping user audio")
+            ZeezLogger.debug(ZeezLogger.alarm, "   User audio file: \(fileURL.lastPathComponent)")
         } catch {
             ZeezLogger.error(ZeezLogger.alarm, "AlarmAudioController startLooping (URL) error", error: error)
             fallbackToSystemSound()

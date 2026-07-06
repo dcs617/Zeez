@@ -156,7 +156,7 @@ struct ActiveAlarmView: View {
                 }
         }
         .onAppear {
-            ZeezLogger.info(ZeezLogger.alarm, "📱 ActiveAlarmView appeared for alarm: \(alarm.name ?? "Unknown")")
+            ZeezLogger.info(ZeezLogger.alarm, "📱 ActiveAlarmView appeared for alarm \(alarm.id?.uuidString ?? "Unknown")")
             startAnimation()
             startContinuousAlarmAudio()
         }

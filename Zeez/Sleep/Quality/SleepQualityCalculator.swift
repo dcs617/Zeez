@@ -36,7 +36,8 @@ class SleepQualityCalculator {
             sleepLatencyScore * 0.05       // 5% - Time to fall asleep
         )
         
-        ZeezLogger.sleepTracking.info("Quality scores - Overall: \(Int(overallScore)), Duration: \(Int(durationScore)), Efficiency: \(Int(efficiencyScore)), Stages: \(Int(stageDistributionScore)), Fragmentation: \(Int(fragmentationScore)), Latency: \(Int(sleepLatencyScore))")
+        // Quality scores are derived health data — debug builds only.
+        ZeezLogger.debug(ZeezLogger.sleepTracking, "Quality scores - Overall: \(Int(overallScore)), Duration: \(Int(durationScore)), Efficiency: \(Int(efficiencyScore)), Stages: \(Int(stageDistributionScore)), Fragmentation: \(Int(fragmentationScore)), Latency: \(Int(sleepLatencyScore))")
         
         return QualityMetrics(
             overallScore: overallScore,

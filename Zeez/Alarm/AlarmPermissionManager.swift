@@ -79,7 +79,7 @@ class AlarmPermissionManager: ObservableObject {
                     ZeezLogger.error(ZeezLogger.alarm, "Notification authorization error", error: error)
                 }
                 
-                ZeezLogger.info(ZeezLogger.alarm, "📱 Notification authorization granted: \\(granted)")
+                ZeezLogger.info(ZeezLogger.alarm, "📱 Notification authorization granted: \(granted)")
                 
                 self?.permissionCompletion?(granted)
                 self?.permissionCompletion = nil

@@ -70,7 +70,11 @@ public final class ZeezLogger {
     ///   - logger: The logger category to use
     ///   - message: The message to log
     public static func info(_ logger: Logger, _ message: String) {
-        logger.info("\(message)")
+        // .public: interpolated non-literals are otherwise redacted to <private> in
+        // release builds, making TestFlight sysdiagnoses useless. Callers must keep
+        // health values / personal data out of these messages (use
+        // debugWithSensitiveData for payloads that need redaction).
+        logger.info("\(message, privacy: .public)")
     }
     
     /// Log error conditions
@@ -80,9 +84,9 @@ public final class ZeezLogger {
     ///   - error: Optional Error object for additional context
     public static func error(_ logger: Logger, _ message: String, error: Error? = nil) {
         if let error = error {
-            logger.error("\(message): \(error.localizedDescription)")
+            logger.error("\(message, privacy: .public): \(error.localizedDescription, privacy: .public)")
         } else {
-            logger.error("\(message)")
+            logger.error("\(message, privacy: .public)")
         }
     }
     
@@ -93,9 +97,9 @@ public final class ZeezLogger {
     ///   - error: Optional Error object for additional context
     public static func fault(_ logger: Logger, _ message: String, error: Error? = nil) {
         if let error = error {
-            logger.fault("\(message): \(error.localizedDescription)")
+            logger.fault("\(message, privacy: .public): \(error.localizedDescription, privacy: .public)")
         } else {
-            logger.fault("\(message)")
+            logger.fault("\(message, privacy: .public)")
         }
     }
     

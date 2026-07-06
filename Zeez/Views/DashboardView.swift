@@ -97,9 +97,11 @@ struct DashboardView: View {
         }
         .navigationTitle("")
         .navigationBarHidden(true)
+        #if DEBUG
         .sheet(isPresented: $showingDebugMenu) {
             DebugMenuView(viewContext: viewContext)
         }
+        #endif
     }
     
     private var headerSection: some View {

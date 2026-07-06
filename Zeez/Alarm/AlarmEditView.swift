@@ -462,7 +462,9 @@ struct AlarmEditView: View {
         // Debug logging before save
         let timeFormatter = DateFormatter()
         timeFormatter.dateFormat = "h:mm a"
-        ZeezLogger.info(ZeezLogger.alarm, "💾 Saving alarm '\(name)' - Time: \(timeFormatter.string(from: time)), Enabled: \(enabled)")
+        // Alarm names are user content — keep them out of release logs.
+        ZeezLogger.info(ZeezLogger.alarm, "💾 Saving alarm - Time: \(timeFormatter.string(from: time)), Enabled: \(enabled)")
+        ZeezLogger.debug(ZeezLogger.alarm, "   Alarm name: '\(name)'")
         
         if !isNewAlarm {
             ZeezLogger.debug(ZeezLogger.alarm, "   Previous time was: \(timeFormatter.string(from: alarmToSave.time ?? Date()))")
@@ -507,7 +509,7 @@ struct AlarmEditView: View {
             timeFormatter.dateFormat = "h:mm a"
             let timeString = timeFormatter.string(from: time)
             
-            ZeezLogger.info(ZeezLogger.alarm, "✅ Successfully \(isNewAlarm ? "created" : "updated") alarm '\(name)' for \(timeString)")
+            ZeezLogger.info(ZeezLogger.alarm, "✅ Successfully \(isNewAlarm ? "created" : "updated") alarm for \(timeString)")
             
             // Check notification permissions to provide user feedback
             UNUserNotificationCenter.current().getNotificationSettings { settings in

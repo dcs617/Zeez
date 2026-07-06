@@ -27,7 +27,7 @@ class AlarmDataMigrationHelper {
                         alarm.setValue(userDefaultsValue, forKey: "heavySleeperMode")
                         migratedCount += 1
                         
-                        ZeezLogger.info(ZeezLogger.alarm, "Migrated heavy sleeper mode (\(userDefaultsValue)) for alarm: \(alarm.name ?? "Unknown")")
+                        ZeezLogger.info(ZeezLogger.alarm, "Migrated heavy sleeper mode (\(userDefaultsValue)) for alarm \(alarm.id?.uuidString ?? "Unknown")")
                     }
                     
                     // Clean up UserDefaults
@@ -62,7 +62,7 @@ class AlarmDataMigrationHelper {
                 if alarm.id == nil {
                     alarm.id = UUID()
                     needsSave = true
-                    ZeezLogger.info(ZeezLogger.alarm, "Added missing UUID to alarm: \(alarm.name ?? "Unknown")")
+                    ZeezLogger.info(ZeezLogger.alarm, "Added missing UUID to alarm \(alarm.id?.uuidString ?? "Unknown")")
                 }
                 
                 // Ensure all alarms have creation dates

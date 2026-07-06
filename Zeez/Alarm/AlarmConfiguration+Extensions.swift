@@ -34,7 +34,7 @@ extension AlarmConfiguration {
         
         do {
             try self.managedObjectContext?.save()
-            ZeezLogger.info(ZeezLogger.alarm, "Snooze duration updated to \(minutes) minutes for alarm: \(self.name ?? "Unknown")")
+            ZeezLogger.info(ZeezLogger.alarm, "Snooze duration updated to \(minutes) minutes for alarm \(self.id?.uuidString ?? "Unknown")")
         } catch {
             ZeezLogger.error(ZeezLogger.alarm, "Failed to save snooze duration", error: error)
         }

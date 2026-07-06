@@ -34,7 +34,9 @@ class SleepStageAnalyzer {
                          userInfo: [NSLocalizedDescriptionKey: "Invalid session times"])
         }
 
-        ZeezLogger.sleepTracking.info("Analyzing stages for session \(startTime) – \(endTime)")
+        ZeezLogger.info(ZeezLogger.sleepTracking, "Analyzing sleep stages")
+        // Session times are health data — keep them out of release logs.
+        ZeezLogger.debug(ZeezLogger.sleepTracking, "Stage analysis window \(startTime) – \(endTime)")
 
         let baselineHR = calculateRestingHeartRate(heartRates: heartRates)
         let sleepOnsetTime = detectSleepOnset(movements: movements, heartRates: heartRates,
@@ -58,7 +60,8 @@ class SleepStageAnalyzer {
                          userInfo: [NSLocalizedDescriptionKey: "Invalid session times"])
         }
 
-        ZeezLogger.sleepTracking.info("Analyzing sleep stages for session from \(startTime) to \(endTime)")
+        ZeezLogger.info(ZeezLogger.sleepTracking, "Analyzing sleep stages (async entry)")
+        ZeezLogger.debug(ZeezLogger.sleepTracking, "Stage analysis window \(startTime) – \(endTime)")
 
         let movements = (session.movementData?.allObjects as? [MovementData] ?? [])
             .sorted { ($0.timestamp ?? Date.distantPast) < ($1.timestamp ?? Date.distantPast) }
@@ -405,8 +408,9 @@ class SleepStageAnalyzer {
         let remPercent = totalDuration > 0 ? (Double(remCount) / Double(stages.count)) * 100 : 0
         let awakePercent = totalDuration > 0 ? (Double(awakeCount) / Double(stages.count)) * 100 : 0
         
-        ZeezLogger.sleepTracking.info("Stage distribution - Deep: \(deepPercent)%, Light: \(lightPercent)%, REM: \(remPercent)%, Awake: \(awakePercent)%")
-        ZeezLogger.sleepTracking.info("Total stages created: \(stages.count), Total duration: \(totalDuration/3600) hours")
+        // Stage distribution and sleep duration are health data — debug builds only.
+        ZeezLogger.debug(ZeezLogger.sleepTracking, "Stage distribution - Deep: \(deepPercent)%, Light: \(lightPercent)%, REM: \(remPercent)%, Awake: \(awakePercent)%")
+        ZeezLogger.debug(ZeezLogger.sleepTracking, "Total stages created: \(stages.count), Total duration: \(totalDuration/3600) hours")
     }
 }
 

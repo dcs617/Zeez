@@ -18,7 +18,8 @@ final class CoreDataMigrationManager {
             at: sourceURL,
             options: nil
         ) else {
-            ZeezLogger.error(logger, "Could not read metadata from store: \(sourceURL.path)")
+            // Log file names only — full container paths stay out of public release logs.
+            ZeezLogger.error(logger, "Could not read metadata from store: \(sourceURL.lastPathComponent)")
             return false
         }
         
@@ -32,7 +33,7 @@ final class CoreDataMigrationManager {
     }
     
     func migrateStore(from sourceURL: URL, to destinationURL: URL) throws {
-        ZeezLogger.info(logger, "Starting Core Data migration from \(sourceURL.path) to \(destinationURL.path)")
+        ZeezLogger.info(logger, "Starting Core Data migration from \(sourceURL.lastPathComponent) to \(destinationURL.lastPathComponent)")
         
         let startTime = CFAbsoluteTimeGetCurrent()
         
@@ -44,7 +45,7 @@ final class CoreDataMigrationManager {
             try performMigration(from: sourceURL, to: destinationURL)
             
             let migrationTime = CFAbsoluteTimeGetCurrent() - startTime
-            ZeezLogger.info(logger, "Migration completed successfully in \(String(format: "%.3f", migrationTime))s - backup at \(backupURL.path)")
+            ZeezLogger.info(logger, "Migration completed successfully in \(String(format: "%.3f", migrationTime))s - backup at \(backupURL.lastPathComponent)")
             
             // Clean up backup after successful migration (optional - keep for safety)
             // try? FileManager.default.removeItem(at: backupURL)
@@ -209,12 +210,12 @@ final class CoreDataMigrationManager {
             )
         }
         
-        ZeezLogger.info(logger, "Migration backup created at \(backupURL.path)")
+        ZeezLogger.info(logger, "Migration backup created at \(backupURL.lastPathComponent)")
         return backupURL
     }
     
     private func restoreFromBackup(backupURL: URL, originalURL: URL) throws {
-        ZeezLogger.info(logger, "Restoring from backup \(backupURL.path) to \(originalURL.path)")
+        ZeezLogger.info(logger, "Restoring from backup \(backupURL.lastPathComponent) to \(originalURL.lastPathComponent)")
         
         // Remove corrupted files
         try? FileManager.default.removeItem(at: originalURL)

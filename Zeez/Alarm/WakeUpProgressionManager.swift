@@ -107,7 +107,7 @@ class WakeUpProgressionManager {
         
         // Schedule new wake sequence after snooze duration
         let snoozeTime = Date().addingTimeInterval(Double(alarm.snoozeDuration) * 60)
-        ZeezLogger.alarm.info("Alarm snoozed for \(alarm.snoozeDuration) minutes. Will resume at \(snoozeTime.formatted())")
+        ZeezLogger.info(ZeezLogger.alarm, "Alarm snoozed for \(alarm.snoozeDuration) minutes. Will resume at \(snoozeTime.formatted())")
         
         Timer.scheduledTimer(withTimeInterval: Double(alarm.snoozeDuration) * 60, repeats: false) { [weak self] _ in
             guard let self = self,

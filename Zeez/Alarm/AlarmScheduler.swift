@@ -106,7 +106,9 @@ class AlarmScheduler: NSObject {
         schedulingQueue.async { [weak self] in
             guard let self = self else { return }
 
-            ZeezLogger.info(ZeezLogger.alarm, "🎯 Rescheduling single alarm: \(snapshot.name ?? "Unknown")")
+            // Alarm names are user content — log the id publicly, the name in debug only.
+            ZeezLogger.info(ZeezLogger.alarm, "🎯 Rescheduling single alarm \(snapshot.idString)")
+            ZeezLogger.debug(ZeezLogger.alarm, "   Alarm name: \(snapshot.name ?? "Unknown")")
 
             let alarmID = snapshot.idString
             self.notificationCenter.getPendingNotificationRequests { requests in

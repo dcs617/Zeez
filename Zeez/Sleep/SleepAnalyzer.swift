@@ -46,7 +46,9 @@ final class SleepAnalyzer {
             throw AnalysisError.sessionTooShort(duration: duration)
         }
 
-        ZeezLogger.sleepTracking.info("Analyzing session \(startTime) – \(endTime) (\(duration / 3600, format: .fixed(precision: 1)) h)")
+        ZeezLogger.info(ZeezLogger.sleepTracking, "Analyzing sleep session")
+        // Session times are health data — keep them out of release logs.
+        ZeezLogger.debug(ZeezLogger.sleepTracking, "Session window \(startTime) – \(endTime) (\(String(format: "%.1f", duration / 3600)) h)")
 
         // Collect supporting data (accessed safely inside context.perform)
         let movements = (session.movementData?.allObjects as? [MovementData] ?? [])
@@ -60,7 +62,7 @@ final class SleepAnalyzer {
         let isHealthKitImport = session.deviceIdentifier?.contains("HealthKit") == true
         let hasExistingStages = (session.sleepStages?.count ?? 0) > 0
         if isHealthKitImport && hasExistingStages {
-            ZeezLogger.sleepTracking.info("Skipping analysis for HealthKit session with source-reported stages")
+            ZeezLogger.info(ZeezLogger.sleepTracking, "Skipping analysis for HealthKit session with source-reported stages")
             return
         }
 
@@ -68,7 +70,7 @@ final class SleepAnalyzer {
         // Without data the analyzer would only produce fixed-timing guesses that look
         // physiologically plausible but are not measured.
         guard !movements.isEmpty || !heartRates.isEmpty else {
-            ZeezLogger.sleepTracking.info("Skipping stage analysis: no movement or heart rate data available")
+            ZeezLogger.info(ZeezLogger.sleepTracking, "Skipping stage analysis: no movement or heart rate data available")
             // Set a sentinel (1.0) so BackgroundTaskManager does not retry indefinitely.
             // UI treats qualityScore <= 1.0 as "no displayable score" and shows nothing.
             session.qualityScore = 1.0
@@ -123,8 +125,11 @@ final class SleepAnalyzer {
         let remCount = stages.filter { SleepStageType.rem.matches($0.stageType) }.count
         let awakeCount = stages.filter { SleepStageType.awake.matches($0.stageType) }.count
 
-        ZeezLogger.sleepTracking.info(
-            "Analysis complete – score: \(Int(qualityMetrics.overallScore)), stages: \(stages.count) (D:\(deepCount) L:\(lightCount) R:\(remCount) W:\(awakeCount))"
+        ZeezLogger.info(ZeezLogger.sleepTracking, "Analysis complete")
+        // Scores and stage distribution are health data — debug builds only.
+        ZeezLogger.debug(
+            ZeezLogger.sleepTracking,
+            "Score: \(Int(qualityMetrics.overallScore)), stages: \(stages.count) (D:\(deepCount) L:\(lightCount) R:\(remCount) W:\(awakeCount))"
         )
     }
 }

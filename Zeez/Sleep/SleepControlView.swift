@@ -202,7 +202,7 @@ struct SleepControlView: View {
                         MovementDataManager.shared.startMonitoring(for: session)
                         
                     case .failure(let error):
-                        ZeezLogger.error.error("Failed to create sleep session: \(error.localizedDescription)")
+                        ZeezLogger.error(ZeezLogger.error, "Failed to create sleep session", error: error)
                         ErrorManager.shared.showError(.sleepSessionCreationFailed)
                     }
                     isPreparingSession = false
@@ -218,13 +218,13 @@ struct SleepControlView: View {
         SleepSessionManager.shared.endSession(session) { result in
             switch result {
             case .success(let completedSession):
-                ZeezLogger.sleepTracking.info("Successfully ended sleep session: \(completedSession.id?.uuidString ?? "unknown")")
+                ZeezLogger.info(ZeezLogger.sleepTracking, "Successfully ended sleep session: \(completedSession.id?.uuidString ?? "unknown")")
                 EnvironmentalMonitor.shared.stopMonitoring()
                 MovementDataManager.shared.stopMonitoring()
                 showingSessionSummary = true
                 
             case .failure(let error):
-                ZeezLogger.error.error("Failed to end sleep session: \(error.localizedDescription)")
+                ZeezLogger.error(ZeezLogger.error, "Failed to end sleep session", error: error)
                 ErrorManager.shared.showError(.sleepSessionUpdateFailed)
             }
         }
