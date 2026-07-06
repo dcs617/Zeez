@@ -36,8 +36,17 @@ through startup/onboarding/MainView). To launch the app with the flag in a sim:
 `xcrun simctl launch <sim> com.danielsparano.zeez -com.apple.CoreData.ConcurrencyDebug 1`
 — note the app must be foregrounded (open Simulator.app) or it sits at the home screen.
 
-**Not started:** 1.1 (pre-scheduled follow-up chains), 1.4 (notification budget) —
-in that order; they're coupled (the 64-request budget). Then Phase 2 (2.1–2.7, 2.9).
+**1.1 done in code (2026-07-06), device test pending:** chains pre-armed at
+scheduling time (`AlarmScheduler.scheduleFollowUpChain`), next-firing-day only,
+6/8 entries; snoozes pre-arm their own chain; foreground fires swap in the dynamic
+chain; Stop re-arms. New `AlarmNotificationScheduling` protocol + fake center
+(pre-does 2.4 step 1); `AlarmFollowUpChainTests` 6/6. **The roadmap's physical-device
+verification (force-quit, locked phone, follow-ups at cadence) has NOT run — do it
+when a device is available.**
+
+**Not started:** 1.4 (notification budget) — main pressure valve (next-day-only
+chains) already landed with 1.1; remaining: budget accounting + UI warning +
+mains-first trimming. Then Phase 2 (2.1–2.7, 2.9).
 
 ## Decisions already made (do not re-litigate)
 
@@ -86,10 +95,7 @@ in that order; they're coupled (the 64-request budget). Then Phase 2 (2.1–2.7,
 
 ## Item-specific context for what's next
 
-- **1.1:** interacts with the 64-request cap (1.4). Roadmap's mitigation: pre-schedule
-  the chain only for the NEXT firing day, 6–8 follow-ups not 12–20, re-arm on
-  launch/significantTimeChange. Stop/snooze handlers already call
-  `cancelFollowUps(for:)` — extend its prefix matching to the new IDs. Also make
-  `willPresent` post `ShowActiveAlarm` + start looped audio for `type == "main"`.
-- **0.5 leftover noted in roadmap:** the remaining `DispatchSemaphore` in
-  `scheduleAllAlarms` and Core Data reads on `schedulingQueue` are 1.6's scope.
+- **1.4:** the injected `AlarmNotificationScheduling` fake (see
+  `ZeezTests/AlarmFollowUpChainTests.swift`) is the harness for the budget
+  calculator tests. Mains are already scheduled before chains in
+  `AlarmScheduler.scheduleSnapshot`.

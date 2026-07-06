@@ -27,6 +27,17 @@ enum AlarmNotificationUtils {
         return isHeavySleeper ? maxHeavySleeperFollowUps : maxFollowUps
     }
 
+    /// Pre-scheduled chains (armed at alarm-scheduling time so Heavy Sleeper
+    /// works with the app killed) are deliberately shorter than the dynamic
+    /// chain: they exist for every scheduled alarm and count against the
+    /// 64-pending-request cap (roadmap 1.1/1.4).
+    static var maxPreScheduledFollowUps: Int = 6
+    static var maxPreScheduledHeavySleeperFollowUps: Int = 8
+
+    static func getPreScheduledFollowUps(isHeavySleeper: Bool) -> Int {
+        return isHeavySleeper ? maxPreScheduledHeavySleeperFollowUps : maxPreScheduledFollowUps
+    }
+
     static func scheduleSnooze(for alarmId: String, minutes: Int = defaultSnoozeMinutes) {
         // First, cancel any pending follow-ups for this alarm
         cancelPendingFollowUps(for: alarmId)
@@ -80,7 +91,43 @@ enum AlarmNotificationUtils {
                         ZeezLogger.info(ZeezLogger.alarm, "💤 Snooze scheduled for \(minutes) minutes with sound: \(alarmSound)")
                     }
                 }
+
+                scheduleSnoozeFollowUpChain(alarm: alarm, snoozeMinutes: minutes,
+                                            interruptionLevel: interruptionLevel, timestamp: timestamp)
         }
+    }
+
+    /// Pre-arms a follow-up chain behind a snooze fire so Heavy Sleeper works
+    /// even when the snooze fires with the app killed (roadmap 1.1). If the
+    /// app is foregrounded at fire time, `handleNotificationArrived` replaces
+    /// this chain with a dynamic one anchored at the actual fire moment.
+    private static func scheduleSnoozeFollowUpChain(alarm: AlarmSnapshot, snoozeMinutes: Int,
+                                                    interruptionLevel: UNNotificationInterruptionLevel,
+                                                    timestamp: Int) {
+        let cadence = getCadence(isHeavySleeper: alarm.heavySleeperMode)
+        let count = getPreScheduledFollowUps(isHeavySleeper: alarm.heavySleeperMode)
+        let alarmSound = alarm.alarmSound ?? "Alarm_Classic.caf"
+
+        for n in 1...count {
+            let content = UNMutableNotificationContent()
+            content.title = ""
+            content.body = ""
+            content.categoryIdentifier = AlarmNotificationRegistrar.categoryId
+            content.userInfo = ["alarmID": alarm.idString, "type": "fu"]
+            content.interruptionLevel = interruptionLevel
+            content.sound = alarm.vibrationOnly
+                ? nil
+                : getSnoozeSound(alarmSound: alarmSound, criticalEnabled: interruptionLevel == .critical)
+
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: TimeInterval(snoozeMinutes * 60) + cadence * Double(n),
+                repeats: false
+            )
+            // "alarm-<uuid>-fu-" prefix keeps these targetable by cancelFollowUps
+            let id = "alarm-\(alarm.idString)-fu-snz-\(n)-\(timestamp)"
+            UNUserNotificationCenter.current().add(.init(identifier: id, content: content, trigger: trigger))
+        }
+        ZeezLogger.info(ZeezLogger.alarm, "📅 Pre-armed \(count) follow-ups behind snooze for alarm \(alarm.idString)")
     }
     
     private static func scheduleBasicSnooze(for alarmId: String, minutes: Int) {

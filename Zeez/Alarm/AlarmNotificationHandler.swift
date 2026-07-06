@@ -20,8 +20,20 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         ZeezLogger.info(ZeezLogger.alarm, "🔔 Alarm notification will present: \(notification.request.identifier)")
-        
+
         handleNotificationArrived(notification)
+
+        // A main alarm firing while the app is open should ring like an
+        // alarm, not sit as a banner: show the full-screen alarm UI and
+        // start looped audio immediately (roadmap 1.1 / audit 8.7).
+        let info = notification.request.content.userInfo
+        if (info["type"] as? String) ?? "main" == "main",
+           let alarmId = info["alarmID"] as? String, !alarmId.isEmpty {
+            prewarmAudio()
+            presentActiveAlarmUI(alarmId: alarmId)
+            startContinuousAudio()
+        }
+
         completionHandler([.banner, .sound])
     }
 
@@ -47,6 +59,11 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
             cancelFollowUps(for: alarmId)
             resetFollowUpGuard(for: alarmId)
             AlarmAudioController.shared.stop()
+            // The cancel above consumed the pre-scheduled chain — re-arm it
+            // for the alarm's NEXT firing (runs fine from a background
+            // activation, which is how action handlers execute when the app
+            // is killed).
+            AlarmScheduler.shared.rearmFollowUpChain(alarmId: alarmId)
 
         case AlarmNotificationRegistrar.contId,
              UNNotificationDefaultActionIdentifier: // tapped the banner
@@ -82,11 +99,23 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         // are read via a snapshot on a background context (item 1.6). Missing
         // alarm falls back to normal-mode defaults, matching prior behavior.
         AlarmSnapshot.fetch(idString: alarmId) { [weak self] snapshot in
+            guard let self = self else { return }
             let isHeavySleeper = snapshot?.heavySleeperMode ?? false
             let cadence = AlarmNotificationUtils.getCadence(isHeavySleeper: isHeavySleeper)
             let maxCount = AlarmNotificationUtils.getMaxFollowUps(isHeavySleeper: isHeavySleeper)
 
-            self?.scheduleFollowUps(alarmId: alarmId, cadence: cadence, maxCount: maxCount, snapshot: snapshot)
+            // The app is foregrounded at fire time, so the dynamic chain
+            // (anchored at the actual fire moment) supersedes any
+            // pre-scheduled or snooze chain — remove those first so the two
+            // mechanisms never double-fire (roadmap 1.1).
+            self.center.getPendingNotificationRequests { requests in
+                let stale = requests.map(\.identifier).filter { $0.contains("alarm-\(alarmId)-fu-") }
+                if !stale.isEmpty {
+                    self.center.removePendingNotificationRequests(withIdentifiers: stale)
+                    ZeezLogger.info(ZeezLogger.alarm, "♻️ Replaced \(stale.count) pre-armed follow-ups with a dynamic chain for alarm \(alarmId)")
+                }
+                self.scheduleFollowUps(alarmId: alarmId, cadence: cadence, maxCount: maxCount, snapshot: snapshot)
+            }
         }
     }
 

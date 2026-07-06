@@ -47,6 +47,29 @@ struct AlarmSnapshot {
         self.snoozeDurationMinutes = alarm.snoozeDurationMinutes
     }
 
+    /// The next absolute Date this alarm's MAIN alert fires: the earliest
+    /// upcoming occurrence of the alarm's hour:minute on any selected weekday
+    /// (1 = Sunday … 7 = Saturday). Nil when the alarm has no time or days.
+    func nextFireDate(after referenceDate: Date = Date(), calendar: Calendar = .current) -> Date? {
+        guard let time = time, !selectedDays.isEmpty else { return nil }
+
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
+        var earliest: Date?
+        for weekday in selectedDays {
+            var match = DateComponents()
+            match.hour = timeComponents.hour
+            match.minute = timeComponents.minute
+            match.weekday = weekday
+            if let candidate = calendar.nextDate(after: referenceDate, matching: match,
+                                                 matchingPolicy: .nextTime) {
+                if earliest == nil || candidate < earliest! {
+                    earliest = candidate
+                }
+            }
+        }
+        return earliest
+    }
+
     /// Looks up an alarm by its UUID string on a background context and delivers
     /// a snapshot. The completion runs on the background context's queue —
     /// callers needing the main thread must hop themselves.

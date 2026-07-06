@@ -8,14 +8,16 @@ import os.log
 class AlarmScheduler: NSObject {
     static let shared = AlarmScheduler()
 
-    private let notificationCenter = UNUserNotificationCenter.current()
+    private let notificationCenter: AlarmNotificationScheduling
     private let wakeManager = WakeUpProgressionManager.shared
-    
+
     // Synchronization queue to prevent race conditions
     private let schedulingQueue = DispatchQueue(label: "com.zeez.alarmscheduler", qos: .userInitiated)
     private var isSchedulingInProgress = false
-    
-    override init() {
+
+    /// Tests inject an in-memory fake center; production uses the real one.
+    init(notificationCenter: AlarmNotificationScheduling = UNUserNotificationCenter.current()) {
+        self.notificationCenter = notificationCenter
         super.init()
         // Note: Notification handling is now done by AlarmNotificationHandler
         // The delegate is set in ApplicationDelegate
@@ -142,7 +144,8 @@ class AlarmScheduler: NSObject {
             return
         }
 
-        // Schedule for each selected day of the week
+        // Mains are scheduled before the follow-up chain so that if the
+        // 64-request budget is tight, follow-ups are what get dropped (1.4).
         for dayOfWeek in snapshot.selectedDays {
             // If smart wake is enabled, schedule earlier for analysis
             let scheduledTime = snapshot.smartWakeEnabled ?
@@ -163,6 +166,83 @@ class AlarmScheduler: NSObject {
                     dayOfWeek: dayOfWeek,
                     isSmartWake: false
                 )
+            }
+        }
+
+        scheduleFollowUpChain(for: snapshot)
+    }
+
+    // MARK: - Pre-scheduled follow-up chain (roadmap 1.1)
+
+    /// Arms the "still ringing" follow-up chain for the alarm's NEXT firing
+    /// only. Before this existed, follow-ups were armed in `willPresent` —
+    /// i.e. only when the app was foregrounded at fire time — so Heavy
+    /// Sleeper mode did nothing in the exact scenario it exists for (phone
+    /// locked, app suspended/killed).
+    ///
+    /// Budget notes (1.4): next-firing-day only (not all 7 weekdays), and a
+    /// shorter chain (6/8) than the dynamic one. The chain is re-armed on
+    /// every reschedule — app launch, alarm edits, significantTimeChange —
+    /// and from the Stop action handler after it cancels the consumed chain.
+    /// If the app stays closed past the next firing, later firings ring the
+    /// main alarm but have no chain until any of those re-arm points runs.
+    ///
+    /// If the app IS foregrounded at fire time, `handleNotificationArrived`
+    /// replaces this chain with a dynamic one anchored at the actual fire
+    /// moment, so the two mechanisms never double-fire.
+    func scheduleFollowUpChain(for snapshot: AlarmSnapshot) {
+        guard snapshot.enabled,
+              let nextFire = snapshot.nextFireDate() else { return }
+
+        let cadence = AlarmNotificationUtils.getCadence(isHeavySleeper: snapshot.heavySleeperMode)
+        let count = AlarmNotificationUtils.getPreScheduledFollowUps(isHeavySleeper: snapshot.heavySleeperMode)
+        let alarmID = snapshot.idString
+        let selectedSound = snapshot.alarmSound ?? "default"
+        let vibrationOnly = snapshot.vibrationOnly
+        let chainStamp = Int(nextFire.timeIntervalSince1970)
+
+        AlarmNotificationUtils.checkCriticalAlertsEnabled { [weak self] criticalEnabled in
+            guard let self = self else { return }
+            let calendar = Calendar.current
+
+            for n in 1...count {
+                let fireDate = nextFire.addingTimeInterval(cadence * Double(n))
+                let content = UNMutableNotificationContent()
+                content.title = ""
+                content.body = ""
+                content.categoryIdentifier = AlarmNotificationRegistrar.categoryId
+                content.userInfo = ["alarmID": alarmID, "type": "fu"]
+                content.interruptionLevel = criticalEnabled ? .critical : .timeSensitive
+                if vibrationOnly {
+                    content.sound = nil
+                } else {
+                    content.sound = self.getAlarmSoundForNotification(selectedSound, criticalEnabled: criticalEnabled)
+                }
+
+                // One-shot absolute-time trigger for the next firing only
+                let components = calendar.dateComponents(
+                    [.year, .month, .day, .hour, .minute, .second], from: fireDate
+                )
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+                // "alarm-<uuid>-fu-" prefix keeps these targetable by cancelFollowUps
+                let id = "alarm-\(alarmID)-fu-pre-\(n)-\(chainStamp)"
+                self.notificationCenter.add(
+                    UNNotificationRequest(identifier: id, content: content, trigger: trigger),
+                    withCompletionHandler: nil
+                )
+            }
+
+            ZeezLogger.info(ZeezLogger.alarm, "📅 Pre-armed \(count) follow-ups for alarm \(alarmID) at next fire \(nextFire)")
+        }
+    }
+
+    /// Re-arms the chain for an alarm's next firing from a notification
+    /// action handler (the Stop action consumes the current chain).
+    func rearmFollowUpChain(alarmId: String) {
+        AlarmSnapshot.fetch(idString: alarmId) { [weak self] snapshot in
+            guard let snapshot = snapshot else { return }
+            self?.schedulingQueue.async {
+                self?.scheduleFollowUpChain(for: snapshot)
             }
         }
     }
