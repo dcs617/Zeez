@@ -83,6 +83,12 @@ class AlarmScheduler: NSObject {
 
                 ZeezLogger.info(ZeezLogger.alarm, "Completed scheduling all alarms")
                 self.schedulingQueue.async { self.isSchedulingInProgress = false }
+
+                // Budget audit (1.4) — deferred so the async adds above have
+                // landed; logging only, the gate lives in scheduleFollowUpChain.
+                self.schedulingQueue.asyncAfter(deadline: .now() + 2) {
+                    self.logNotificationBudget()
+                }
             }
         }
     }
@@ -201,6 +207,25 @@ class AlarmScheduler: NSObject {
         let vibrationOnly = snapshot.vibrationOnly
         let chainStamp = Int(nextFire.timeIntervalSince1970)
 
+        // Budget gate (1.4): mains are scheduled before chains, and a chain
+        // that would push past the 64-request cap is skipped entirely — the
+        // system must never be left to silently drop a MAIN fire instead.
+        notificationCenter.getPendingNotificationRequests { [weak self] requests in
+            guard let self = self else { return }
+            let budget = NotificationBudget(requests: requests)
+            guard budget.canFit(count) else {
+                ZeezLogger.error(ZeezLogger.alarm, "⚠️ Notification budget tight — skipping follow-up chain for alarm \(alarmID) (\(budget.summary))")
+                return
+            }
+            self.armFollowUpChain(alarmID: alarmID, nextFire: nextFire, cadence: cadence,
+                                  count: count, selectedSound: selectedSound,
+                                  vibrationOnly: vibrationOnly, chainStamp: chainStamp)
+        }
+    }
+
+    private func armFollowUpChain(alarmID: String, nextFire: Date, cadence: TimeInterval,
+                                  count: Int, selectedSound: String,
+                                  vibrationOnly: Bool, chainStamp: Int) {
         AlarmNotificationUtils.checkCriticalAlertsEnabled { [weak self] criticalEnabled in
             guard let self = self else { return }
             let calendar = Calendar.current
@@ -264,6 +289,18 @@ class AlarmScheduler: NSObject {
         }
     }
     
+    /// Logs the per-category pending-notification totals against the 64 cap.
+    func logNotificationBudget() {
+        notificationCenter.getPendingNotificationRequests { requests in
+            let budget = NotificationBudget(requests: requests)
+            if budget.isNearCap {
+                ZeezLogger.error(ZeezLogger.alarm, "⚠️ Notification budget near cap: \(budget.summary)")
+            } else {
+                ZeezLogger.info(ZeezLogger.alarm, "Notification budget: \(budget.summary)")
+            }
+        }
+    }
+
     /// Debug function to check scheduled notifications
     func debugScheduledAlarms() {
         notificationCenter.getPendingNotificationRequests { requests in

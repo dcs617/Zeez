@@ -44,9 +44,15 @@ chain; Stop re-arms. New `AlarmNotificationScheduling` protocol + fake center
 verification (force-quit, locked phone, follow-ups at cadence) has NOT run — do it
 when a device is available.**
 
-**Not started:** 1.4 (notification budget) — main pressure valve (next-day-only
-chains) already landed with 1.1; remaining: budget accounting + UI warning +
-mains-first trimming. Then Phase 2 (2.1–2.7, 2.9).
+**1.4 done (2026-07-06):** `NotificationBudget` accounting + chain gate
+(chains skipped when they'd blow the 64 cap; mains never displaced) +
+`AlarmSettingsView` near-cap warning banner. All of Phase 1 is now code-complete;
+the only open Phase-1 verification is the physical-device end-to-end for 1.1.
+
+**Next: Phase 2** in order — 2.1 (StoreKit), 2.2 (log privacy), 2.3 (privacy
+scaffolding), 2.4 (test suite reliability + CI), 2.5 (cleanup sweep), 2.6 (Core
+Data hygiene), 2.7 (legacy identifier cleanup), 2.9 (environmental honesty).
+2.8 is already done (folded into 1.6).
 
 ## Decisions already made (do not re-litigate)
 
