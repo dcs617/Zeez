@@ -1,7 +1,10 @@
 import Foundation
-import CoreData
 
 // MARK: - Shared Data Models for Watch Communication
+//
+// Compiled into BOTH the iOS and watchOS targets — keep this file free of
+// Core Data and platform-specific imports. iOS-only conveniences (e.g. the
+// SleepSession-based initializer) live in Zeez/Watch/.
 
 /// Sleep summary data optimized for watch display
 struct WatchSleepSummary: Codable {
@@ -70,27 +73,9 @@ struct WakePatternData: Codable {
     }
 }
 
-// MARK: - Enhanced Data Model Extensions
+// MARK: - Display Helpers
 
 extension WatchSleepSummary {
-    /// Initialize from Core Data sleep session
-    init(from coreDataSession: SleepSession) {
-        guard let startTime = coreDataSession.startTime,
-              let endTime = coreDataSession.endTime,
-              let duration = coreDataSession.derivedSleepMetrics.recordedSessionInterval.value else {
-            self.init()
-            return
-        }
-
-        self.init(
-            duration: duration,
-            quality: coreDataSession.qualityScore,
-            qualityAvailable: coreDataSession.hasDisplayableScore,
-            bedTime: startTime,
-            wakeTime: endTime
-        )
-    }
-    
     /// Formatted duration string (e.g., "7h 30m")
     var formattedDuration: String {
         let hours = Int(lastNightDuration) / 3600

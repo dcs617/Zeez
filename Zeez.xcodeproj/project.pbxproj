@@ -125,6 +125,11 @@
 			path = "ZeezWatch Watch AppUITests";
 			sourceTree = "<group>";
 		};
+		65C0FFEE2D0000010000A001 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -176,6 +181,7 @@
 		653B18D52D3315EA00B2CAE4 = {
 			isa = PBXGroup;
 			children = (
+				65C0FFEE2D0000010000A001 /* Shared */,
 				653B18E02D3315EA00B2CAE4 /* Zeez */,
 				653B18F62D3315EB00B2CAE4 /* ZeezTests */,
 				653B19002D3315EB00B2CAE4 /* ZeezUITests */,
@@ -219,6 +225,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				653B18E02D3315EA00B2CAE4 /* Zeez */,
+				65C0FFEE2D0000010000A001 /* Shared */,
 			);
 			name = Zeez;
 			packageProductDependencies = (
@@ -287,6 +294,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				653B1A832D3630C300B2CAE4 /* ZeezWatch Watch App */,
+				65C0FFEE2D0000010000A001 /* Shared */,
 			);
 			name = "ZeezWatch Watch App";
 			packageProductDependencies = (

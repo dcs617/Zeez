@@ -62,40 +62,9 @@ struct WatchMessage {
     }
 }
 
-// MARK: - Watch Message Types
-
-/// Watch sync message types
-enum WatchMessageType: String, CaseIterable {
-    case sleepSummary = "sleepSummary"
-    case alarmStatus = "alarmStatus"
-    case wakePattern = "wakePattern"
-    case stopPattern = "stopPattern"
-    case acknowledge = "acknowledge"
-    case snooze = "snooze"
-    case requestData = "requestData"
-}
-
-/// Haptic pattern types for wake-up progression
-enum HapticPattern: String, CaseIterable {
-    case gentle = "gentle"
-    case moderate = "moderate"
-    case strong = "strong"
-}
-
-/// Wake pattern data for watch haptics
-struct WakePatternData {
-    let pattern: HapticPattern
-    let intensity: Double
-    let duration: TimeInterval
-    
-    init(pattern: HapticPattern, intensity: Double, duration: TimeInterval = 30) {
-        self.pattern = pattern
-        self.intensity = intensity
-        self.duration = duration
-    }
-}
-
 // MARK: - Extended Message Types
+// WatchMessageType, HapticPattern, WakePatternData and the watch display
+// models are defined once in Shared/WatchDataModels.swift (both targets).
 
 extension WatchMessageType {
     static let heartbeat = WatchMessageType.requestData // Reuse existing for compatibility

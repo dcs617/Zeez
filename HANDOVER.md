@@ -19,7 +19,14 @@ wipe branch in `PersistenceController.handleMigrationError` (it misclassified ev
 v1 store). ⚠️ `.xccurrentversion` silently reverted to v1 once (likely a race with a
 background xcodebuild) — worth re-checking it says `Zeez 2.xcdatamodel` before builds.
 
-**Not started:** 1.5 (watch stack), 1.6 (Core Data threading), 1.1 (pre-scheduled
+**1.5 done (2026-07-06):** Enhanced pair deleted; root `Shared/` is now a real
+synchronized group in BOTH app targets; models single-sourced in
+`Shared/WatchDataModels.swift`. Gotcha: the watch Enhanced file carried live
+`WatchOfflineStorage`/`OfflineAction` — extracted to
+`ZeezWatch Watch App/WatchOfflineStorage.swift`. Paired-sim round-trip NOT run
+(no paired sims here) — fold into 1.1's device testing.
+
+**Not started:** 1.6 (Core Data threading), 1.1 (pre-scheduled
 follow-up chains), 1.4 (notification budget) — recommended in that order, because
 1.6's snapshot refactor makes 1.1 much cleaner, and 1.1+1.4 are coupled (the 64-request
 budget). Then Phase 2 (2.1–2.9).
@@ -71,14 +78,6 @@ budget). Then Phase 2 (2.1–2.9).
 
 ## Item-specific context for what's next
 
-- **1.5:** the two Enhanced files each grab `WCSession.default.delegate` in their
-  singleton `init` — deletion is safe (zero callers, verified in the audit) but
-  re-grep `EnhancedWatch` after. The model triplication step means real pbxproj
-  surgery (add root `Shared/` as a synchronized group with membership in both app
-  targets — there's an `exceptions`/membership syntax for `PBXFileSystemSynchronizedRootGroup`;
-  copy the shape of the existing six groups). The Core-Data-dependent initializer in
-  root `Shared/WatchDataModels.swift` must split into an iOS-only extension under
-  `Zeez/Watch/`.
 - **1.6:** follow the `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern
   already in the codebase; snapshot alarm fields into a struct on the context's queue.
   Verify with scheme argument `-com.apple.CoreData.ConcurrencyDebug 1`. Note

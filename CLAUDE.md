@@ -95,7 +95,7 @@ Zeez/
 Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImportView.swift`). `DataImport/HealthKitDataImporter` and `DataImport/PillowDataImporter` map to Core Data, coordinated by `DataImport/RealDataManager`. Mock data generation is manually triggered via the debug menu in DEBUG builds — it is **not** generated automatically at launch.
 
 ### watchOS Companion
-`ZeezWatch Watch App/` is a separate target. iOS↔watch communication uses `Watch/WatchConnectivityHandler.swift` and `Watch/EnhancedWatchConnectivityHandler.swift` on the iOS side, mirrored by `WatchConnectivityManager.swift` / `EnhancedWatchConnectivityManager.swift` on the watch side.
+`ZeezWatch Watch App/` is a separate target. iOS↔watch communication uses `Watch/WatchConnectivityHandler.swift` on the iOS side, mirrored by `WatchConnectivityManager.swift` on the watch side. Message/model types (`WatchSleepSummary`, `WatchAlarmStatus`, `WatchMessageType`, `HapticPattern`, `WakePatternData`) are defined once in the repo-root `Shared/` folder, which is a synchronized group compiled into **both** app targets — keep that folder free of Core Data and platform-specific imports (iOS-only bridges go in `Zeez/Watch/`).
 
 ## Development Guidelines
 
