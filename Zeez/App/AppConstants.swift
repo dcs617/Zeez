@@ -36,6 +36,13 @@ struct AppConstants {
         
         /// Minimum storage space threshold (100MB)
         static let minimumStorageBytes: Int64 = 100_000_000
+
+        /// Persistent-history transactions older than this are pruned (7 days) — the
+        /// tracking key must stay on (see PersistenceController) but nothing reads it
+        static let persistentHistoryRetention: TimeInterval = 7 * 24 * 3600
+
+        /// Local-only AnalyticsEvent/FeatureAccessRecord rows older than this are pruned (90 days)
+        static let analyticsRetention: TimeInterval = 90 * 24 * 3600
     }
     
     // MARK: - Sleep Analysis Constants

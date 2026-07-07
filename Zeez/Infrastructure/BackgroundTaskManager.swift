@@ -306,7 +306,7 @@ final class BackgroundTaskManager {
         scheduleDataProcessing()
         
         let context = createManagedBackgroundContext()
-        
+
         // Enhanced expiration handling with progress tracking
         var isProcessingComplete = false
         task.expirationHandler = { [weak self] in
@@ -316,7 +316,13 @@ final class BackgroundTaskManager {
             }
             self?.cleanupBackgroundContext(context)
         }
-        
+
+        // Storage maintenance first — serialized ahead of the backlog work on the
+        // same context queue, and cheap enough to never threaten the task budget.
+        context.perform { [weak self] in
+            self?.performStorageMaintenance(in: context)
+        }
+
         processBackloggedData(in: context) { [weak self] success in
             let duration = CFAbsoluteTimeGetCurrent() - startTime
             isProcessingComplete = true
@@ -333,8 +339,32 @@ final class BackgroundTaskManager {
         }
     }
     
+    // MARK: - Storage Maintenance (2.6)
+
+    /// Prunes unbounded local storage: unconsumed persistent history and the
+    /// local-only analytics entities. Must be called on `context`'s queue.
+    private func performStorageMaintenance(in context: NSManagedObjectContext) {
+        persistenceController.purgePersistentHistory(
+            olderThan: Date().addingTimeInterval(-AppConstants.Background.persistentHistoryRetention),
+            in: context
+        )
+
+        let cutoff = Date().addingTimeInterval(-AppConstants.Background.analyticsRetention) as NSDate
+        for entityName in ["AnalyticsEvent", "FeatureAccessRecord"] {
+            let fetch = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
+            fetch.predicate = NSPredicate(format: "timestamp < %@", cutoff)
+            do {
+                let delete = NSBatchDeleteRequest(fetchRequest: fetch)
+                try context.execute(delete)
+                ZeezLogger.debug(ZeezLogger.background, "Pruned \(entityName) rows older than 90 days")
+            } catch {
+                ZeezLogger.error(ZeezLogger.background, "Retention prune failed for \(entityName)", error: error)
+            }
+        }
+    }
+
     // MARK: - Enhanced Context Management
-    
+
     private func createManagedBackgroundContext() -> NSManagedObjectContext {
         let context = persistenceController.newBackgroundContext()
         context.automaticallyMergesChangesFromParent = true

@@ -6,6 +6,10 @@ final class PersistenceController {
     let container: NSPersistentContainer
     private(set) var isStoreLoaded: Bool = false
 
+    /// Set when `handleMigrationFallback` had to start a fresh store; RootView shows
+    /// a one-time "your history could not be migrated, a backup was kept" notice.
+    static let migrationDataLossNoticeKey = "coreDataMigrationFallbackNotice"
+
     /// One model instance shared by every container. `NSPersistentContainer(name:)`
     /// loads a fresh NSManagedObjectModel per container; duplicate models
     /// re-register the NSManagedObject subclasses, making `+entity` lookup
@@ -71,7 +75,11 @@ final class PersistenceController {
         return controller
     }()
     
-    init(inMemory: Bool = false) {
+    /// Non-shared instances are for tests, previews, and deliberately scratch stores
+    /// (e.g. `LearnContentLoader`) ONLY — production code must use `.shared`. The
+    /// argument has no default value so an accidental `PersistenceController()`
+    /// fails to compile instead of silently creating a second stack (2.6).
+    init(inMemory: Bool) {
         container = NSPersistentContainer(name: "Zeez", managedObjectModel: Self.model)
         
         if inMemory {
@@ -140,18 +148,27 @@ final class PersistenceController {
             description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
         }
         
-        // Enable history tracking
+        // History tracking must STAY enabled: existing stores were created with it,
+        // and Core Data force-opens a previously-tracked store READ-ONLY when the key
+        // is later omitted (the "Store opened without NSPersistentHistoryTrackingKey…"
+        // warning). Nothing consumes the history, so BackgroundTaskManager prunes it
+        // periodically instead (2.6).
         description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
-        
-        // SQLite optimizations
-        let pragmaOptions: [String: String] = [
-            "journal_mode": "DELETE",          // Use simpler journaling
-            "synchronous": "NORMAL",           // Reduce write-ahead logging
-            "page_size": "4096",              // Optimize page size
-            "temp_store": "MEMORY",           // Use memory for temp storage
-            "auto_vacuum": "FULL"             // Enable full auto-vacuum
-        ]
-        description.setOption(pragmaOptions as NSDictionary, forKey: NSSQLitePragmasOption)
+        // No NSSQLitePragmasOption: the old journal_mode=DELETE disabled WAL for no
+        // benefit, and auto_vacuum set via pragma after creation is ineffective (2.6).
+    }
+
+    /// Delete persistent-history transactions older than `date`. History tracking is
+    /// required (see `configureStoreForMigration`) but unconsumed, so unbounded growth
+    /// is pruned from BackgroundTaskManager's processing task.
+    func purgePersistentHistory(olderThan date: Date, in context: NSManagedObjectContext) {
+        let purge = NSPersistentHistoryChangeRequest.deleteHistory(before: date)
+        do {
+            try context.execute(purge)
+            ZeezLogger.debug(ZeezLogger.coreData, "Purged persistent history older than \(date)")
+        } catch {
+            ZeezLogger.error(ZeezLogger.coreData, "Persistent-history purge failed", error: error)
+        }
     }
     
     private func handleMigrationError(error: Error, description: NSPersistentStoreDescription?) {
@@ -266,13 +283,17 @@ final class PersistenceController {
         do {
             try FileManager.default.moveItem(at: storeURL, to: corruptedURL)
             ZeezLogger.info(ZeezLogger.coreData, "Moved corrupted store to backup location: \(corruptedURL.lastPathComponent)")
-            
+
+            // Surface the data loss to the user instead of failing silently —
+            // RootView reads this flag and shows a one-time notice (2.6).
+            UserDefaults.standard.set(true, forKey: Self.migrationDataLossNoticeKey)
+
             // Try to load with a fresh store
             try retryStoreLoad()
-            
+
             // Log the data loss event for analytics
             ZeezLogger.error(ZeezLogger.coreData, "Data migration failed - user data preserved at backup location: \(corruptedURL.lastPathComponent) - data can be recovered")
-            
+
         } catch {
             ZeezLogger.error(ZeezLogger.coreData, "Failed to implement migration fallback", error: error)
             self.isStoreLoaded = false

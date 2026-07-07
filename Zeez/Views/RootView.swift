@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var activeAlarm: AlarmConfiguration?
     @State private var showingActiveAlarm = false
     @State private var showingPermissionDenied = false
+    @State private var showingMigrationDataLossNotice = false
     
     var body: some View {
         Group {
@@ -107,6 +108,19 @@ struct RootView: View {
             if permissionManager.isDenied {
                 showingPermissionDenied = true
             }
+        }
+        .onAppear {
+            // One-time notice if a failed migration forced a fresh store (2.6)
+            if UserDefaults.standard.bool(forKey: PersistenceController.migrationDataLossNoticeKey) {
+                showingMigrationDataLossNotice = true
+            }
+        }
+        .alert("Sleep History Unavailable", isPresented: $showingMigrationDataLossNotice) {
+            Button("OK") {
+                UserDefaults.standard.removeObject(forKey: PersistenceController.migrationDataLossNoticeKey)
+            }
+        } message: {
+            Text("Your sleep history could not be migrated after an app update, so Zeez started with a fresh database. A backup of your previous data was kept on this device.")
         }
     }
     
