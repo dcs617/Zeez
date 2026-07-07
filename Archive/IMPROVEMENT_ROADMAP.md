@@ -1,5 +1,11 @@
 # Zeez Improvement Roadmap
 
+> **ARCHIVED 2026-07-07.** Phases 0, 1, and 2 are complete (all items checked; full
+> detail in the progress log below). Live follow-ups — the open device/App Store Connect
+> verifications and the Phase 3 nice-to-have list — now live in `FUTURE_IMPROVEMENTS.md`
+> at the repo root. This file is kept as the historical record of the audit, decisions,
+> and per-item progress.
+
 Source: full repository audit performed 2026-07-05 on branch `feature/sleep-simplification`.
 Both app targets build successfully (Xcode 26.6, iOS 18.6 sim / watchOS Series 10 sim). Unit
 test results were not verified during the audit. This file is the working tracker for the
