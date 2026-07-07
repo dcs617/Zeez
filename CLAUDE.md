@@ -109,6 +109,7 @@ Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImp
 - UI reads: `PersistenceController.shared.container.viewContext` with `@FetchRequest`
 - Heavy writes: `newBackgroundContext()`, always save and merge back
 - Previews: `PersistenceController.preview`
+- **EnvironmentalReading**: numeric attributes use the sentinel `EnvironmentalReading.notMeasured` (-1) for metrics the hardware can't measure — always read via the `measured*` optional accessors (`Environment/EnvironmentalReading+Measured.swift`), never the raw attributes, or absent sensors read as freezing/pitch-dark rooms.
 - **Threading**: never touch a managed object or context off its queue. The alarm stack uses the snapshot pattern — `AlarmSnapshot` (`Zeez/Alarm/AlarmSnapshot.swift`) is built inside `context.perform` and only plain values cross onto dispatch queues or `UNUserNotificationCenter` callbacks. Verify threading changes by launching with `-com.apple.CoreData.ConcurrencyDebug 1`.
 
 ### Testing

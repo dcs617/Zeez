@@ -3,6 +3,15 @@ import AVFoundation
 import UIKit
 import os.log
 
+/// Samples the sleep environment while the app is in the FOREGROUND (2.9).
+///
+/// Honest scope, per the 1.7 relabel precedent: the sampling timer is suspended
+/// with the app, so a locked phone collects nothing overnight — full-night
+/// coverage requires Zeez open on a charging device. Only noise is genuinely
+/// measured (microphone metering); iPhones have no ambient temperature/humidity
+/// sensor and no usable ambient-light API, so those attributes are stored as
+/// `EnvironmentalReading.notMeasured` rather than fabricated (the previous
+/// camera-ISO "light level" never measured anything without a capture session).
 final class EnvironmentalMonitor {
     static let shared = EnvironmentalMonitor()
     
@@ -38,7 +47,7 @@ final class EnvironmentalMonitor {
                     self?.captureEnvironmentalData(for: session)
                 }
                 self.monitoringTimer?.fire()
-                self.errorManager.showStatus("Environmental monitoring started")
+                self.errorManager.showStatus("Environmental monitoring started — samples while Zeez is open")
             }
         }
     }
@@ -74,11 +83,14 @@ final class EnvironmentalMonitor {
         reading.deviceType = UIDevice.current.model
         reading.session = session
         
+        // Noise is the only metric this hardware can genuinely measure — the
+        // rest are marked not-measured instead of fabricated (2.9, see class doc).
+        reading.noiseLevel = captureNoiseLevel()
+        reading.lightLevel = EnvironmentalReading.notMeasured
+        reading.temperature = EnvironmentalReading.notMeasured
+        reading.humidity = EnvironmentalReading.notMeasured
+
         do {
-            reading.lightLevel = captureLightLevel()
-            reading.noiseLevel = captureNoiseLevel()
-            reading.temperature = estimateRoomTemperature()
-            
             try context.save()
         } catch {
             errorManager.reportError(AppError.dataProcessingFailed)
@@ -119,78 +131,37 @@ final class EnvironmentalMonitor {
         try? FileManager.default.removeItem(at: legacyURL)
     }
     
-    private func captureLightLevel() -> Double {
-        guard let device = AVCaptureDevice.default(for: .video) else {
-            errorManager.reportError(AppError.sensorDataUnavailable)
-            return 0
-        }
-        
-        do {
-            try device.lockForConfiguration()
-            let currentISO = device.iso
-            let minISO = device.activeFormat.minISO
-            let maxISO = device.activeFormat.maxISO
-            device.unlockForConfiguration()
-            
-            // Calculate normalized brightness value
-            let normalizedBrightness = Double((currentISO - minISO) / (maxISO - minISO))
-
-            // Ensure value is between 0 and 1, then convert to percentage
-            let boundedBrightness = min(max(normalizedBrightness, 0), 1)
-            return boundedBrightness * 100
-        } catch {
-            errorManager.reportError(AppError.sensorDataUnavailable)
-            return 0
-        }
-    }
-    
     func checkSensorAvailability(completion: @escaping (Bool) -> Void) {
         let audioSession = AVAudioSession.sharedInstance()
-        
+
         do {
             try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [])
-            
-            // Check audio session availability
-            AVAudioApplication.requestRecordPermission { hasPermission in
-                if !hasPermission {
-                    completion(false)
-                    return
-                }
-                
-                // Check if camera (for light sensor) is available
-                guard AVCaptureDevice.default(for: .video) != nil else {
-                    completion(false)
-                    return
-                }
 
-                completion(true)
+            // The microphone is the only sensor monitoring actually uses (2.9).
+            AVAudioApplication.requestRecordPermission { hasPermission in
+                completion(hasPermission)
             }
         } catch {
             completion(false)
         }
     }
-    
+
     private func captureNoiseLevel() -> Double {
-        // User declined mic access — degrade quietly rather than erroring each sample.
-        guard !microphoneDenied else { return 0 }
+        // Mic denied or recorder unavailable — record "not measured", not silence.
+        guard !microphoneDenied else { return EnvironmentalReading.notMeasured }
         guard let recorder = audioRecorder else {
             errorManager.reportError(AppError.sensorDataUnavailable)
-            return 0
+            return EnvironmentalReading.notMeasured
         }
-        
+
         recorder.updateMeters()
         let averagePower = recorder.averagePower(forChannel: 0)
-        
+
         // Normalize the decibel reading (typical range is -160 to 0)
         let normalizedValue = Double((averagePower + 160) / 160)
 
         // Convert to percentage and ensure it's between 0 and 100
         return min(max(normalizedValue * 100, 0), 100)
-    }
-    
-    private func estimateRoomTemperature() -> Double {
-        // Placeholder for future temperature sensor integration
-        return 0
     }
     
     deinit {

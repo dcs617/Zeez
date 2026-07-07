@@ -191,24 +191,20 @@ struct SleepControlView: View {
     private func prepareSession() {
         isPreparingSession = true
         
-        // Start environmental monitoring
-        EnvironmentalMonitor.shared.checkSensorAvailability { available in
-            if available {
-                SleepSessionManager.shared.startSession { result in
-                    switch result {
-                    case .success(let session):
-                        // Start all monitoring systems
-                        EnvironmentalMonitor.shared.startMonitoring(for: session)
-                        MovementDataManager.shared.startMonitoring(for: session)
-                        
-                    case .failure(let error):
-                        ZeezLogger.error(ZeezLogger.error, "Failed to create sleep session", error: error)
-                        ErrorManager.shared.showError(.sleepSessionCreationFailed)
-                    }
-                    isPreparingSession = false
+        // Request mic permission up front, but never block the session on it —
+        // a denied mic just means noise is stored as "not measured" (2.9).
+        EnvironmentalMonitor.shared.checkSensorAvailability { _ in
+            SleepSessionManager.shared.startSession { result in
+                switch result {
+                case .success(let session):
+                    // Start all monitoring systems
+                    EnvironmentalMonitor.shared.startMonitoring(for: session)
+                    MovementDataManager.shared.startMonitoring(for: session)
+
+                case .failure(let error):
+                    ZeezLogger.error(ZeezLogger.error, "Failed to create sleep session", error: error)
+                    ErrorManager.shared.showError(.sleepSessionCreationFailed)
                 }
-            } else {
-                ErrorManager.shared.showError(.sensorDataUnavailable)
                 isPreparingSession = false
             }
         }

@@ -152,27 +152,26 @@ extension SleepSession {
             // This is a simplified scoring mechanism
             var score = 100.0
             
+            // Unmeasured metrics are skipped (EnvironmentalReading.notMeasured) —
+            // a missing sensor must not read as a bad environment.
+
             // Temperature optimal range: 18-22°C
-            let temp = reading.temperature
-            if temp < 18 || temp > 22 {
+            if let temp = reading.measuredTemperature, temp < 18 || temp > 22 {
                 score -= 10
             }
-            
+
             // Noise level optimal range: < 40 dB
-            let noise = reading.noiseLevel
-            if noise > 40 {
+            if let noise = reading.measuredNoiseLevel, noise > 40 {
                 score -= 15
             }
-            
+
             // Light level optimal range: < 10 lux
-            let light = reading.lightLevel
-            if light > 10 {
+            if let light = reading.measuredLightLevel, light > 10 {
                 score -= 10
             }
-            
+
             // Humidity optimal range: 30-60%
-            let humidity = reading.humidity
-            if humidity < 30 || humidity > 60 {
+            if let humidity = reading.measuredHumidity, humidity < 30 || humidity > 60 {
                 score -= 10
             }
             

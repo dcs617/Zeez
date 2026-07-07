@@ -5,46 +5,54 @@ import os.log
 struct AverageEnvironmentalReadingView: View {
     let readings: [EnvironmentalReading]
     
-    private var averages: (noise: Double, light: Double, temp: Double) {
-        let count = Double(readings.count)
-        guard count > 0 else { return (0, 0, 0) }
-        
-        let noiseSum = readings.reduce(0.0) { $0 + $1.noiseLevel }
-        let lightSum = readings.reduce(0.0) { $0 + $1.lightLevel }
-        let tempSum = readings.reduce(0.0) { $0 + $1.temperature }
-        
+    /// Per-metric averages over genuinely measured values only; nil when a
+    /// metric was never measured (see EnvironmentalReading.notMeasured, 2.9).
+    private var averages: (noise: Double?, light: Double?, temp: Double?) {
+        func average(_ values: [Double]) -> Double? {
+            values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
+        }
         return (
-            noise: noiseSum / count,
-            light: lightSum / count,
-            temp: tempSum / count
+            noise: average(readings.compactMap(\.measuredNoiseLevel)),
+            light: average(readings.compactMap(\.measuredLightLevel)),
+            temp: average(readings.compactMap(\.measuredTemperature))
         )
     }
-    
+
     var body: some View {
         VStack(spacing: 16) {
-            HStack(spacing: 20) {
-                environmentalMetric(
-                    icon: "ear",
-                    title: "Noise",
-                    value: averages.noise,
-                    unit: "dB",
-                    color: .blue
-                )
-                
-                environmentalMetric(
-                    icon: "lightbulb",
-                    title: "Light",
-                    value: averages.light,
-                    unit: "lux",
-                    color: .yellow
-                )
+            if averages.noise == nil && averages.light == nil && averages.temp == nil {
+                Text("No environmental measurements")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
-            
-            if averages.temp > 0 {
+
+            HStack(spacing: 20) {
+                if let noise = averages.noise {
+                    environmentalMetric(
+                        icon: "ear",
+                        title: "Noise",
+                        value: noise,
+                        unit: "dB",
+                        color: .blue
+                    )
+                }
+
+                if let light = averages.light {
+                    environmentalMetric(
+                        icon: "lightbulb",
+                        title: "Light",
+                        value: light,
+                        unit: "lux",
+                        color: .yellow
+                    )
+                }
+            }
+
+            if let temp = averages.temp {
                 environmentalMetric(
                     icon: "thermometer",
                     title: "Temperature",
-                    value: averages.temp,
+                    value: temp,
                     unit: "°C",
                     color: .red
                 )

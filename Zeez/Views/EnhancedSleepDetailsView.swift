@@ -217,15 +217,21 @@ struct EnhancedSleepDetailsView: View {
     }
     
     private func aggregateEnvironmentalData(_ readings: [EnvironmentalReading]) -> [(label: String, value: String)] {
-        let avgTemp = readings.compactMap { $0.temperature }.reduce(0, +) / Double(readings.count)
-        let avgHumidity = readings.compactMap { $0.humidity }.reduce(0, +) / Double(readings.count)
-        let avgNoise = readings.compactMap { $0.noiseLevel }.reduce(0, +) / Double(readings.count)
-        
-        return [
-            ("Temperature", String(format: "%.1f°C", avgTemp)),
-            ("Humidity", String(format: "%.0f%%", avgHumidity)),
-            ("Noise Level", String(format: "%.0f dB", avgNoise))
-        ]
+        // Only genuinely measured values; unmeasured metrics are omitted entirely
+        func average(_ values: [Double]) -> Double? {
+            values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
+        }
+        var rows: [(label: String, value: String)] = []
+        if let avgTemp = average(readings.compactMap(\.measuredTemperature)) {
+            rows.append(("Temperature", String(format: "%.1f°C", avgTemp)))
+        }
+        if let avgHumidity = average(readings.compactMap(\.measuredHumidity)) {
+            rows.append(("Humidity", String(format: "%.0f%%", avgHumidity)))
+        }
+        if let avgNoise = average(readings.compactMap(\.measuredNoiseLevel)) {
+            rows.append(("Noise Level", String(format: "%.0f dB", avgNoise)))
+        }
+        return rows
     }
     
     private func averageHeartRate(_ data: [HeartRateData]) -> Double {

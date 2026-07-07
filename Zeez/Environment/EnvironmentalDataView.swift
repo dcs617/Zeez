@@ -21,7 +21,7 @@ struct EnvironmentalDataView: View {
                     
                     MetricChartView(
                         title: "Noise Level",
-                        data: readings.map { ($0.timestamp ?? Date(), $0.noiseLevel) },
+                        data: readings.compactMap { r in r.measuredNoiseLevel.map { (r.timestamp ?? Date(), $0) } },
                         color: .blue,
                         unit: "dB"
                     )
@@ -32,7 +32,7 @@ struct EnvironmentalDataView: View {
                     
                     MetricChartView(
                         title: "Light Level",
-                        data: readings.map { ($0.timestamp ?? Date(), $0.lightLevel) },
+                        data: readings.compactMap { r in r.measuredLightLevel.map { (r.timestamp ?? Date(), $0) } },
                         color: .orange,
                         unit: "lux"
                     )
@@ -41,10 +41,10 @@ struct EnvironmentalDataView: View {
                     .accessibilityHint("Shows light levels during sleep session in lux")
                     .accessibilityIdentifier("lightLevelChart")
                     
-                    if readings.contains(where: { $0.temperature > 0 }) {
+                    if readings.contains(where: { $0.measuredTemperature != nil }) {
                         MetricChartView(
                             title: "Temperature",
-                            data: readings.map { ($0.timestamp ?? Date(), $0.temperature) },
+                            data: readings.compactMap { r in r.measuredTemperature.map { (r.timestamp ?? Date(), $0) } },
                             color: .red,
                             unit: "°C"
                         )
@@ -90,27 +90,31 @@ struct EnvironmentalDataView: View {
                 .accessibilityIdentifier("currentConditionsHeader")
             
             LazyVGrid(columns: [.init(), .init()], spacing: 20) {
-                MetricTile(
-                    title: "Noise",
-                    value: String(format: "%.1f dB", readings.last?.noiseLevel ?? 0),
-                    icon: "ear",
-                    color: .blue
-                )
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Noise level \(String(format: "%.1f", readings.last?.noiseLevel ?? 0)) decibels")
-                .accessibilityIdentifier("noiseMetricTile")
-                
-                MetricTile(
-                    title: "Light",
-                    value: String(format: "%.1f lux", readings.last?.lightLevel ?? 0),
-                    icon: "lightbulb",
-                    color: .orange
-                )
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Light level \(String(format: "%.1f", readings.last?.lightLevel ?? 0)) lux")
-                .accessibilityIdentifier("lightMetricTile")
-                
-                if let temp = readings.last?.temperature, temp > 0 {
+                if let noise = readings.last?.measuredNoiseLevel {
+                    MetricTile(
+                        title: "Noise",
+                        value: String(format: "%.1f dB", noise),
+                        icon: "ear",
+                        color: .blue
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Noise level \(String(format: "%.1f", noise)) decibels")
+                    .accessibilityIdentifier("noiseMetricTile")
+                }
+
+                if let light = readings.last?.measuredLightLevel {
+                    MetricTile(
+                        title: "Light",
+                        value: String(format: "%.1f lux", light),
+                        icon: "lightbulb",
+                        color: .orange
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Light level \(String(format: "%.1f", light)) lux")
+                    .accessibilityIdentifier("lightMetricTile")
+                }
+
+                if let temp = readings.last?.measuredTemperature {
                     MetricTile(
                         title: "Temperature",
                         value: String(format: "%.1f°C", temp),
@@ -122,7 +126,7 @@ struct EnvironmentalDataView: View {
                     .accessibilityIdentifier("temperatureMetricTile")
                 }
                 
-                if let humidity = readings.last?.humidity, humidity > 0 {
+                if let humidity = readings.last?.measuredHumidity, humidity > 0 {
                     MetricTile(
                         title: "Humidity",
                         value: String(format: "%.1f%%", humidity),

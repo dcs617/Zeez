@@ -22,10 +22,10 @@ class EnvironmentalAnalyzer {
         let sortedReadings = readings.sorted { ($0.timestamp ?? Date()) < ($1.timestamp ?? Date()) }
         
         // Calculate averages and ranges
-        let temperature = calculateMetrics(sortedReadings.compactMap { $0.temperature })
-        let humidity = calculateMetrics(sortedReadings.compactMap { $0.humidity })
-        let noise = calculateMetrics(sortedReadings.compactMap { $0.noiseLevel })
-        let light = calculateMetrics(sortedReadings.compactMap { $0.lightLevel })
+        let temperature = calculateMetrics(sortedReadings.compactMap { $0.measuredTemperature })
+        let humidity = calculateMetrics(sortedReadings.compactMap { $0.measuredHumidity })
+        let noise = calculateMetrics(sortedReadings.compactMap { $0.measuredNoiseLevel })
+        let light = calculateMetrics(sortedReadings.compactMap { $0.measuredLightLevel })
         
         // Analyze impact on sleep quality
         let qualityCorrelation = try await analyzeQualityCorrelations(
@@ -75,16 +75,16 @@ class EnvironmentalAnalyzer {
             }
             
             // Get average readings for this session
-            if let avgTemp = readings.compactMap({ $0.temperature }).average {
+            if let avgTemp = readings.compactMap({ $0.measuredTemperature }).average {
                 temperatures.append(avgTemp)
             }
-            if let avgHumidity = readings.compactMap({ $0.humidity }).average {
+            if let avgHumidity = readings.compactMap({ $0.measuredHumidity }).average {
                 humidities.append(avgHumidity)
             }
-            if let avgNoise = readings.compactMap({ $0.noiseLevel }).average {
+            if let avgNoise = readings.compactMap({ $0.measuredNoiseLevel }).average {
                 noiseLevels.append(avgNoise)
             }
-            if let avgLight = readings.compactMap({ $0.lightLevel }).average {
+            if let avgLight = readings.compactMap({ $0.measuredLightLevel }).average {
                 lightLevels.append(avgLight)
             }
         }

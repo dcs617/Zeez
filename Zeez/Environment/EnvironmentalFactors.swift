@@ -71,10 +71,10 @@ struct EnvironmentalFactors: View {
     
     private var environmentalChart: some View {
         Chart {
-            ForEach(sortedReadings, id: \.timestamp) { reading in
+            ForEach(chartPoints, id: \.0) { point in
                 LineMark(
-                    x: .value("Time", reading.timestamp ?? Date()),
-                    y: .value("Value", value(for: reading))
+                    x: .value("Time", point.0),
+                    y: .value("Value", point.1)
                 )
                 .foregroundStyle(Color.blue.gradient)
             }
@@ -129,18 +129,27 @@ struct EnvironmentalFactors: View {
         readings.sorted { ($0.timestamp ?? Date()) < ($1.timestamp ?? Date()) }
     }
     
-    private func value(for reading: EnvironmentalReading) -> Double {
+    /// nil when the metric was not genuinely measured (EnvironmentalReading.notMeasured, 2.9)
+    private func measuredValue(for reading: EnvironmentalReading) -> Double? {
         switch selectedTab {
-        case 0: return reading.temperature
-        case 1: return reading.humidity
-        case 2: return reading.noiseLevel
-        case 3: return reading.lightLevel
-        default: return 0
+        case 0: return reading.measuredTemperature
+        case 1: return reading.measuredHumidity
+        case 2: return reading.measuredNoiseLevel
+        case 3: return reading.measuredLightLevel
+        default: return nil
         }
     }
-    
+
+    private var chartPoints: [(Date, Double)] {
+        sortedReadings.compactMap { reading in
+            guard let timestamp = reading.timestamp,
+                  let value = measuredValue(for: reading) else { return nil }
+            return (timestamp, value)
+        }
+    }
+
     private var average: Double {
-        let values = readings.map(value)
+        let values = readings.compactMap(measuredValue)
         return values.reduce(0, +) / Double(max(values.count, 1))
     }
     
