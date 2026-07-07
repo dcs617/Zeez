@@ -68,37 +68,3 @@ struct StageCorrelation: Identifiable {
     let timeSpent: TimeInterval
     let color: Color
 }
-
-struct HRVDataPoint: Identifiable {
-    let id = UUID()
-    let date: Date
-    let value: Double
-}
-
-struct HRVData {
-    let average: Double
-    let quality: HRVQuality
-    let timeData: [HRVDataPoint]
-}
-
-enum HRVQuality {
-    case poor, fair, good, excellent
-    
-    var label: String {
-        switch self {
-        case .poor: return "Poor"
-        case .fair: return "Fair"
-        case .good: return "Good"
-        case .excellent: return "Excellent"
-        }
-    }
-    
-    var color: Color {
-        switch self {
-        case .poor: return .red
-        case .fair: return .orange
-        case .good: return .green
-        case .excellent: return .blue
-        }
-    }
-}

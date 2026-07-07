@@ -37,28 +37,6 @@ extension HeartRateView {
         }
     }
     
-    func heartRateVariabilitySection(data: [HeartRateData]) -> some View {
-        let hrv = calculateHRV(data: data)
-        return hrvContent(hrv: hrv)
-    }
-    
-    private func hrvContent(hrv: HRVData) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Heart Rate Variability")
-                .font(.headline)
-            
-            HRVChart(data: hrv.timeData)
-                .frame(height: 150)
-            
-            HRVInsightsView(averageHRV: hrv.average, quality: hrv.quality)
-        }
-        .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .fill(Color(UIColor.secondarySystemBackground))
-        }
-    }
-    
     func heartRateZonesSection(data: [HeartRateData]) -> some View {
         let zones = calculateHeartRateZones(data: data)
         return zonesContent(zones: zones)
@@ -89,9 +67,13 @@ extension HeartRateView {
     
     private func correlationContent(correlations: [StageCorrelation]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sleep Stage Correlation")
+            Text("Recorded Heart Rate by Sleep Stage")
                 .font(.headline)
-            
+
+            Text("Average recorded heart rate during each reported sleep stage. Zeez is not inferring a relationship between heart rate and sleep.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             correlationsList(correlations: correlations)
         }
         .padding()
