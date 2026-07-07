@@ -15,13 +15,21 @@ final class AlarmAudioController {
     private var retryCount = 0
     private let maxRetries = 5
 
+    // Xcode 26's SDK renames .allowBluetooth → .allowBluetoothHFP (old name deprecated);
+    // CI builds with Xcode 16.x, which only has .allowBluetooth.
+    #if compiler(>=6.2)
+    private let bluetoothOption: AVAudioSession.CategoryOptions = .allowBluetoothHFP
+    #else
+    private let bluetoothOption: AVAudioSession.CategoryOptions = .allowBluetooth
+    #endif
+
     private init() {}
 
     /// Play and loop a bundled file (e.g., "Zeez_Long_Default.caf").
     func startLooping(bundledName: String, fileExtension: String = "caf", volume: Float = 1.0) {
         stop()
         do {
-            try session.setCategory(.playback, mode: .default, options: [.duckOthers, .allowBluetoothHFP])
+            try session.setCategory(.playback, mode: .default, options: [.duckOthers, bluetoothOption])
             try session.setActive(true)
             guard let url = Bundle.main.url(forResource: bundledName, withExtension: fileExtension) else {
                 ZeezLogger.error(ZeezLogger.alarm, "Missing bundled audio \(bundledName).\(fileExtension)")
@@ -49,7 +57,7 @@ final class AlarmAudioController {
     func startLooping(fileURL: URL, volume: Float = 1.0) {
         stop()
         do {
-            try session.setCategory(.playback, mode: .default, options: [.duckOthers, .allowBluetoothHFP])
+            try session.setCategory(.playback, mode: .default, options: [.duckOthers, bluetoothOption])
             try session.setActive(true)
             
             let p = try AVAudioPlayer(contentsOf: fileURL)
