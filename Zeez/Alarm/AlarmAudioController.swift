@@ -11,6 +11,7 @@ final class AlarmAudioController {
     private var player: AVAudioPlayer?
     private(set) var isPlaying = false
     private var watchdogTimer: Timer?
+    private var fallbackTimer: Timer?
     private var retryCount = 0
     private let maxRetries = 5
 
@@ -20,7 +21,7 @@ final class AlarmAudioController {
     func startLooping(bundledName: String, fileExtension: String = "caf", volume: Float = 1.0) {
         stop()
         do {
-            try session.setCategory(.playback, mode: .default, options: [.duckOthers, .allowBluetooth])
+            try session.setCategory(.playback, mode: .default, options: [.duckOthers, .allowBluetoothHFP])
             try session.setActive(true)
             guard let url = Bundle.main.url(forResource: bundledName, withExtension: fileExtension) else {
                 ZeezLogger.error(ZeezLogger.alarm, "Missing bundled audio \(bundledName).\(fileExtension)")
@@ -48,7 +49,7 @@ final class AlarmAudioController {
     func startLooping(fileURL: URL, volume: Float = 1.0) {
         stop()
         do {
-            try session.setCategory(.playback, mode: .default, options: [.duckOthers, .allowBluetooth])
+            try session.setCategory(.playback, mode: .default, options: [.duckOthers, .allowBluetoothHFP])
             try session.setActive(true)
             
             let p = try AVAudioPlayer(contentsOf: fileURL)
@@ -100,8 +101,7 @@ final class AlarmAudioController {
             AudioServicesPlaySystemSound(SystemSoundID(1005)) // System alert sound
         }
         
-        // Store the timer so we can stop it
-        objc_setAssociatedObject(self, "fallbackTimer", timer, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        fallbackTimer = timer
         isPlaying = true
         ZeezLogger.info(ZeezLogger.alarm, "🔊 Started system sound fallback timer")
     }
@@ -116,11 +116,8 @@ final class AlarmAudioController {
         watchdogTimer?.invalidate()
         watchdogTimer = nil
         
-        // Stop fallback timer if it exists
-        if let timer = objc_getAssociatedObject(self, "fallbackTimer") as? Timer {
-            timer.invalidate()
-            objc_setAssociatedObject(self, "fallbackTimer", nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        }
+        fallbackTimer?.invalidate()
+        fallbackTimer = nil
         
         do {
             try session.setActive(false, options: [.notifyOthersOnDeactivation])

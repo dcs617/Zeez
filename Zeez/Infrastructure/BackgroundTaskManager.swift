@@ -247,7 +247,11 @@ final class BackgroundTaskManager {
             
         case .notPermitted:
             ZeezLogger.error(ZeezLogger.background, "Background tasks not permitted for task: \(taskId)")
-            
+
+        case .immediateRunIneligible:
+            // Only reachable via the submit-for-immediate-run API, which Zeez doesn't use.
+            ZeezLogger.error(ZeezLogger.background, "Task ineligible for immediate run: \(taskId)")
+
         @unknown default:
             ZeezLogger.error(ZeezLogger.background, "Unknown scheduling error for task: \(taskId)", error: error)
         }
@@ -414,22 +418,23 @@ final class BackgroundTaskManager {
             }
             
             do {
-                // Get sessions needing analysis with priority ordering.
-                // Exclude HealthKit-imported sessions that already have source-reported stages:
-                // those sessions keep qualityScore=0 (unavailable) intentionally and must not
-                // be routed through stage inference.
-                let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-                request.predicate = NSPredicate(
-                    format: "qualityScore == 0 AND isActive == NO AND NOT (deviceIdentifier CONTAINS[c] 'HealthKit' AND sleepStages.@count > 0)"
-                )
-                request.sortDescriptors = [
-                    NSSortDescriptor(key: "endTime", ascending: false) // Most recent first
-                ]
-                
-                // Fetch only objectIDs inside the context's perform block to avoid
-                // passing managed objects across queue boundaries.
+                // Fetch only objectIDs, and build the request inside the context's perform
+                // block, to avoid passing managed objects or the (non-Sendable) fetch
+                // request across queue boundaries.
                 let sessionIDs = try await context.perform {
-                    try context.fetch(request).map { $0.objectID }
+                    // Get sessions needing analysis with priority ordering.
+                    // Exclude HealthKit-imported sessions that already have source-reported stages:
+                    // those sessions keep qualityScore=0 (unavailable) intentionally and must not
+                    // be routed through stage inference.
+                    let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+                    request.predicate = NSPredicate(
+                        format: "qualityScore == 0 AND isActive == NO AND NOT (deviceIdentifier CONTAINS[c] %@ AND sleepStages.@count > 0)",
+                        AppConstants.DataProvenance.healthKitMarker
+                    )
+                    request.sortDescriptors = [
+                        NSSortDescriptor(key: "endTime", ascending: false) // Most recent first
+                    ]
+                    return try context.fetch(request).map { $0.objectID }
                 }
 
                 // Process in batches with progress monitoring

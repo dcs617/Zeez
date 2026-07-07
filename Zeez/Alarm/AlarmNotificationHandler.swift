@@ -235,7 +235,7 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
             do {
                 if let alarm = try context.fetch(request).first {
                     NotificationCenter.default.post(
-                        name: NSNotification.Name("ShowActiveAlarm"),
+                        name: .showActiveAlarm,
                         object: alarm
                     )
                     ZeezLogger.info(ZeezLogger.alarm, "📱 Posted ShowActiveAlarm notification")

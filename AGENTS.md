@@ -6,13 +6,13 @@
 
 ## Build, Test, and Development Commands
 
-Use Xcode or `xcodebuild` with an installed simulator:
+Use Xcode or `xcodebuild` with an installed simulator (on this machine `xcode-select` points at CommandLineTools — prefix commands with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`):
 
 ```bash
 xcodebuild -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
 xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
 xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:ZeezTests/AlarmEndToEndTests
-xcodebuild -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'platform=watchOS Simulator,name=Apple Watch Series 9 (45mm)' build
+xcodebuild -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)' build
 ```
 
 The first command compiles the iOS app; the second runs its test plan; the third targets one regression suite; the fourth verifies the watch companion.

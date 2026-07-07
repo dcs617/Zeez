@@ -121,12 +121,12 @@ struct AlarmSounds {
                         completion()
                     }
                 } else {
-                    print("Could not find sound file: \(soundOption.id)")
+                    ZeezLogger.error(ZeezLogger.alarm, "Could not find sound file: \(soundOption.id)")
                     completion()
                 }
             }
         } catch {
-            print("Error playing sound preview: \(error)")
+            ZeezLogger.error(ZeezLogger.alarm, "Error playing sound preview", error: error)
             completion()
         }
     }

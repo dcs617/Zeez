@@ -65,7 +65,7 @@ extension SleepSession {
         guard qualityScore > 1.0 else { return false }
 
         #if DEBUG
-        if deviceIdentifier?.localizedCaseInsensitiveContains("Mock Data") == true {
+        if deviceIdentifier?.localizedCaseInsensitiveContains(AppConstants.DataProvenance.mockMarker) == true {
             return true
         }
         #endif
@@ -78,7 +78,7 @@ extension SleepSession {
     }
 
     var hasSourceReportedStages: Bool {
-        deviceIdentifier?.contains("HealthKit") == true
+        deviceIdentifier?.contains(AppConstants.DataProvenance.healthKitMarker) == true
     }
 
     var stageSourceDescription: String {

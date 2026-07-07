@@ -147,11 +147,7 @@ private struct PermissionBenefitRow: View {
 
 #Preview {
     AlarmPermissionExplainerView(
-        onAllow: {
-            print("Allow notifications")
-        },
-        onDismiss: {
-            print("Dismiss explainer")
-        }
+        onAllow: {},
+        onDismiss: {}
     )
 }

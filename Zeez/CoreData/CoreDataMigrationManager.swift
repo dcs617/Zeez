@@ -171,8 +171,7 @@ final class CoreDataMigrationManager {
     }
     
     private func model(for version: String) -> NSManagedObjectModel? {
-        guard let modelURL = Bundle.main.url(forResource: modelName, withExtension: "momd"),
-              let bundleURL = Bundle.main.url(forResource: "\(modelName).momd/\(version)", withExtension: "mom") else {
+        guard let bundleURL = Bundle.main.url(forResource: "\(modelName).momd/\(version)", withExtension: "mom") else {
             return nil
         }
         return NSManagedObjectModel(contentsOf: bundleURL)

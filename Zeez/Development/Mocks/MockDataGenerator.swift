@@ -125,7 +125,7 @@ class MockDataGenerator {
     func clearMockData() {
         // Fetch only mock-origin sessions (identified by deviceIdentifier prefix)
         let sessionFetch: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        sessionFetch.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", "Mock Data")
+        sessionFetch.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", AppConstants.DataProvenance.mockMarker)
 
         let mockSessions: [SleepSession]
         do {
@@ -157,7 +157,7 @@ class MockDataGenerator {
 
         // Now batch-delete the mock sessions themselves
         let sessionDeleteRequest: NSFetchRequest<NSFetchRequestResult> = NSFetchRequest(entityName: "SleepSession")
-        sessionDeleteRequest.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", "Mock Data")
+        sessionDeleteRequest.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", AppConstants.DataProvenance.mockMarker)
         let batchDelete = NSBatchDeleteRequest(fetchRequest: sessionDeleteRequest)
         batchDelete.resultType = .resultTypeObjectIDs
         do {
@@ -189,7 +189,7 @@ class MockDataGenerator {
         session.id = UUID()
         session.createdAt = date
         session.modifiedAt = date
-        session.deviceIdentifier = "Mock Data - iPhone"
+        session.deviceIdentifier = AppConstants.DataProvenance.mockDevice
         session.isActive = false
         
         // Calculate start time (previous evening)

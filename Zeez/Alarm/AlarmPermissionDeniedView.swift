@@ -147,11 +147,7 @@ private struct PermissionInstructionStep: View {
 
 #Preview {
     AlarmPermissionDeniedView(
-        onOpenSettings: {
-            print("Open settings")
-        },
-        onDismiss: {
-            print("Dismiss")
-        }
+        onOpenSettings: {},
+        onDismiss: {}
     )
 }

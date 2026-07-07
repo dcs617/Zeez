@@ -23,21 +23,12 @@ struct RootView: View {
         .accessibilityIdentifier("rootView")
         .sheet(item: $modalCoordinator.activeModal, onDismiss: {
             // Notify that modal was dismissed - Settings can refresh its data status
-            NotificationCenter.default.post(name: NSNotification.Name("ModalDismissed"), object: nil)
+            NotificationCenter.default.post(name: .modalDismissed, object: nil)
         }) { modal in
             switch modal {
             case .dataImport:
                 SimpleDataImportView()
                     .interactiveDismissDisabled(false)
-            case .healthKitError:
-                // TODO: Create HealthKitErrorView if needed
-                Text("HealthKit Error")
-            case .settings:
-                // Only if you want to present settings as a sheet
-                Text("Settings Modal")
-            case .debug:
-                // TODO: Create DebugToolsView if needed
-                Text("Debug Tools")
             }
         }
         .fullScreenCover(isPresented: $showingActiveAlarm) {
@@ -69,7 +60,7 @@ struct RootView: View {
                 .background(Color.black)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ShowActiveAlarm"))) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: .showActiveAlarm)) { notification in
             if let alarm = notification.object as? AlarmConfiguration {
                 // Prevent UI conflicts: dismiss any active sheets first
                 dismissActiveModals()
@@ -111,7 +102,7 @@ struct RootView: View {
                 .zIndex(1000)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AlarmPermissionDenied"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .alarmPermissionDenied)) { _ in
             // Show denied permission flow when user tries to enable alarm without permissions
             if permissionManager.isDenied {
                 showingPermissionDenied = true

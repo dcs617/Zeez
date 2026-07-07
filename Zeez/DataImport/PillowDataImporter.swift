@@ -80,7 +80,7 @@ class PillowDataImporter {
         
         context.perform {
             for pillowSession in pillowData.sessions {
-                if let session = self.createSessionFromPillow(pillowSession, context: context) {
+                if self.createSessionFromPillow(pillowSession, context: context) != nil {
                     importedCount += 1
                 }
             }
@@ -143,7 +143,7 @@ class PillowDataImporter {
                 if line.isEmpty { continue }
                 
                 let values = line.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                if let session = self.createSessionFromCSVRow(header: header, values: values, context: context) {
+                if self.createSessionFromCSVRow(header: header, values: values, context: context) != nil {
                     importedCount += 1
                 }
             }
@@ -192,7 +192,7 @@ class PillowDataImporter {
         session.isActive = false
         session.createdAt = Date()
         session.modifiedAt = Date()
-        session.deviceIdentifier = "Pillow CSV Import"
+        session.deviceIdentifier = AppConstants.DataProvenance.pillowCSVImport
         
         // Extract quality score if available
         if let qualityStr = sessionData["quality"] ?? sessionData["sleep_quality"],
@@ -237,7 +237,7 @@ class PillowDataImporter {
         session.isActive = false
         session.createdAt = Date()
         session.modifiedAt = Date()
-        session.deviceIdentifier = "Pillow JSON Import"
+        session.deviceIdentifier = AppConstants.DataProvenance.pillowJSONImport
         session.qualityScore = pillowSession.sleepQuality ?? 75.0
         
         // Import sleep stages

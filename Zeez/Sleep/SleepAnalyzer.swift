@@ -2,7 +2,9 @@ import CoreData
 import Foundation
 import os.log
 
-final class SleepAnalyzer {
+// Stateless (no stored instance properties), so it can safely hop queues
+// inside `context.perform` closures.
+final class SleepAnalyzer: Sendable {
     static let shared = SleepAnalyzer()
 
     private init() {}
@@ -59,7 +61,7 @@ final class SleepAnalyzer {
         // HealthKit-imported sessions carry source-reported stages. Never delete or
         // replace them with Zeez-inferred output. BackgroundTaskManager excludes these
         // sessions via predicate, but guard here as a safety net for other callers.
-        let isHealthKitImport = session.deviceIdentifier?.contains("HealthKit") == true
+        let isHealthKitImport = session.deviceIdentifier?.contains(AppConstants.DataProvenance.healthKitMarker) == true
         let hasExistingStages = (session.sleepStages?.count ?? 0) > 0
         if isHealthKitImport && hasExistingStages {
             ZeezLogger.info(ZeezLogger.sleepTracking, "Skipping analysis for HealthKit session with source-reported stages")

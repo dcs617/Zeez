@@ -5,7 +5,10 @@ import UIKit
 import os.log
 
 /// Manages scheduling and triggering of alarms
-class AlarmScheduler: NSObject {
+///
+/// @unchecked Sendable: the only mutable state (`isSchedulingInProgress`) is
+/// confined to `schedulingQueue`; everything else is immutable after init.
+final class AlarmScheduler: NSObject, @unchecked Sendable {
     static let shared = AlarmScheduler()
 
     private let notificationCenter: AlarmNotificationScheduling
@@ -426,7 +429,13 @@ class AlarmScheduler: NSObject {
         
         // Prepare sound selection outside the closure
         let selectedSound = alarm.alarmSound ?? "default"
-        
+
+        // Snapshot for the debug log below — `components` is a captured var,
+        // which Swift 6 rejects in concurrently-executing closures.
+        let alarmHour = components.hour ?? 0
+        let alarmMinute = components.minute ?? 0
+
+
         // Check critical alert capability and set appropriate interruption level and sound
         notificationCenter.criticalAlertsEnabled { [weak self] criticalEnabled in
             if isSmartWake {
@@ -464,7 +473,7 @@ class AlarmScheduler: NSObject {
                 } else {
                     // Only log in debug builds to reduce console spam
                     #if DEBUG
-                    ZeezLogger.debug(ZeezLogger.alarm, "✅ Scheduled \(identifier) for \(alarmName) at \(components.hour ?? 0):\(String(format: "%02d", components.minute ?? 0))")
+                    ZeezLogger.debug(ZeezLogger.alarm, "✅ Scheduled \(identifier) for \(alarmName) at \(alarmHour):\(String(format: "%02d", alarmMinute))")
                     #endif
                 }
             }

@@ -443,7 +443,7 @@ struct AlarmEditView: View {
             AlarmPermissionManager.shared.requestPermissionsWithExplainer { granted in
                 if !granted {
                     // Post notification to show denied permission flow
-                    NotificationCenter.default.post(name: NSNotification.Name("AlarmPermissionDenied"), object: nil)
+                    NotificationCenter.default.post(name: .alarmPermissionDenied, object: nil)
                     return
                 }
                 // Permissions granted, proceed with save

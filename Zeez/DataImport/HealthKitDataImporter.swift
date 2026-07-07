@@ -257,7 +257,7 @@ class HealthKitDataImporter {
         session.isActive = false
         session.createdAt = Date()
         session.modifiedAt = Date()
-        session.deviceIdentifier = "HealthKit Import"
+        session.deviceIdentifier = AppConstants.DataProvenance.healthKitImport
 
         for sample in samples {
             let sleepStage = SleepStage(context: context)
@@ -290,7 +290,7 @@ class HealthKitDataImporter {
         let margin: TimeInterval = 15 * 60
         request.predicate = NSPredicate(
             format: "deviceIdentifier == %@ AND startTime >= %@ AND startTime <= %@",
-            "HealthKit Import",
+            AppConstants.DataProvenance.healthKitImport,
             Date(timeInterval: -margin, since: start) as NSDate,
             Date(timeInterval: margin, since: start) as NSDate
         )
@@ -378,7 +378,7 @@ class HealthKitDataImporter {
     func checkImportStatus() -> (hasHealthKitData: Bool, sessionCount: Int, lastImport: Date?) {
         let context = persistenceController.container.viewContext
         let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        request.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", "HealthKit")
+        request.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", AppConstants.DataProvenance.healthKitMarker)
         do {
             let sessions = try context.fetch(request)
             let lastImport = sessions.compactMap { $0.createdAt }.max()

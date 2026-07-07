@@ -25,6 +25,8 @@ xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS 
 xcodebuild -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)' build
 ```
 
+The `Zeez` scheme is a shared scheme (`Zeez.xcodeproj/xcshareddata/xcschemes/Zeez.xcscheme`). Its launch action is wired to the local StoreKit configuration `ZeezTests/Zeez.storekit` (product IDs must match App Store Connect exactly), and its test action includes both ZeezTests and ZeezUITests — CI (`.github/workflows/tests.yml`) runs `-only-testing:ZeezTests`.
+
 ## Core Architecture
 
 ### App Entry Flow
@@ -42,7 +44,7 @@ At startup, `ZeezApp.setupApp()` runs `AlarmDataMigrationHelper` and starts `Ala
 
 ### Sleep Analysis Pipeline
 `SleepAnalyzer.shared.analyzeSleepSession(_:)` orchestrates analysis in four steps:
-1. Inline validation in `SleepAnalyzer` — checks the session has minimum data (`SessionValidationService` is dead code slated for deletion in roadmap 2.5)
+1. Inline validation in `SleepAnalyzer` — checks the session has valid times and minimum data
 2. `SleepStageAnalyzer` (`Sleep/Stage/`) — detects stages from movement + heart rate
 3. `SleepQualityCalculator` (`Sleep/Quality/`) — scores duration, efficiency, stage distribution, fragmentation, latency (research-based weights)
 4. Updates session with results in a background context

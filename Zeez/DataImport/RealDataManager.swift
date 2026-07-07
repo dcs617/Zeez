@@ -81,7 +81,7 @@ class RealDataManager {
     
     private func fetchNonMockSessions(context: NSManagedObjectContext) -> [SleepSession] {
         let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        request.predicate = NSPredicate(format: "NOT (deviceIdentifier CONTAINS[c] %@) AND deviceIdentifier != nil", "Mock")
+        request.predicate = NSPredicate(format: "NOT (deviceIdentifier CONTAINS[c] %@) AND deviceIdentifier != nil", AppConstants.DataProvenance.mockMarker)
         
         do {
             return try context.fetch(request)
@@ -93,7 +93,7 @@ class RealDataManager {
     
     private func fetchMockSessions(context: NSManagedObjectContext) -> [SleepSession] {
         let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        request.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@ OR deviceIdentifier == nil OR deviceIdentifier == %@", "Mock", "iPhone")
+        request.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@ OR deviceIdentifier == nil OR deviceIdentifier == %@", AppConstants.DataProvenance.mockMarker, AppConstants.DataProvenance.legacyMockDevice)
         
         do {
             return try context.fetch(request)
@@ -188,7 +188,7 @@ class RealDataManager {
             
             // Now check for real data sessions
             let realRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-            realRequest.predicate = NSPredicate(format: "NOT (deviceIdentifier CONTAINS[c] %@) AND deviceIdentifier != nil", "Mock")
+            realRequest.predicate = NSPredicate(format: "NOT (deviceIdentifier CONTAINS[c] %@) AND deviceIdentifier != nil", AppConstants.DataProvenance.mockMarker)
             realRequest.fetchLimit = 1
             
             let realCount = try context.count(for: realRequest)
@@ -196,7 +196,7 @@ class RealDataManager {
             
             // Also check specifically for HealthKit sessions
             let healthKitRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-            healthKitRequest.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", "HealthKit")
+            healthKitRequest.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", AppConstants.DataProvenance.healthKitMarker)
             let healthKitCount = try context.count(for: healthKitRequest)
             ZeezLogger.debug(ZeezLogger.coreData, "Found \(healthKitCount) HealthKit sessions")
             

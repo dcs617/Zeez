@@ -272,7 +272,7 @@ struct SettingsView: View {
         .onAppear {
             updateRealDataStatus()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ModalDismissed"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .modalDismissed)) { _ in
             // Refresh data status when modal is dismissed
             updateRealDataStatus()
         }
@@ -402,7 +402,7 @@ struct SettingsView: View {
         
         // Show the full-screen alarm
         NotificationCenter.default.post(
-            name: NSNotification.Name("ShowActiveAlarm"),
+            name: .showActiveAlarm,
             object: testAlarm
         )
         

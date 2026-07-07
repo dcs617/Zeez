@@ -14,6 +14,7 @@ struct ActiveAlarmView: View {
     @State private var currentTime = Date()
     @State private var isAnimating = false
     @State private var snoozeCount = 0
+    @State private var vibrationTimer: Timer?
     // Removed @State audioPlayer - now using centralized AlarmAudioController
     
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -214,13 +215,14 @@ struct ActiveAlarmView: View {
     }
     
     private func startContinuousVibration() {
-        // Create a repeating vibration pattern for vibration-only alarms
-        let timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+        // Create a repeating vibration pattern for vibration-only alarms.
+        // Kept in @State — the old objc_setAssociatedObject(self, …) approach boxed
+        // this struct into a fresh object per call, so the timer could never be
+        // found again and vibration survived dismissal.
+        vibrationTimer?.invalidate()
+        vibrationTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
             AudioServicesPlaySystemSound(SystemSoundID(kSystemSoundID_Vibrate))
         }
-        
-        // Store the timer so we can stop it
-        objc_setAssociatedObject(self, "vibrationTimer", timer, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         ZeezLogger.info(ZeezLogger.alarm, "📳 Started continuous vibration for vibration-only alarm")
     }
     
@@ -242,9 +244,9 @@ struct ActiveAlarmView: View {
     }
     
     private func stopContinuousVibration() {
-        if let timer = objc_getAssociatedObject(self, "vibrationTimer") as? Timer {
+        if let timer = vibrationTimer {
             timer.invalidate()
-            objc_setAssociatedObject(self, "vibrationTimer", nil, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            vibrationTimer = nil
             ZeezLogger.info(ZeezLogger.alarm, "🛑 Stopped continuous vibration")
         }
     }
@@ -277,8 +279,8 @@ struct ActiveAlarmView: View {
     
     return ActiveAlarmView(
         alarm: alarm,
-        onSnooze: { print("Snoozed") },
-        onDismiss: { print("Dismissed") }
+        onSnooze: {},
+        onDismiss: {}
     )
     .environment(\.managedObjectContext, context)
 }

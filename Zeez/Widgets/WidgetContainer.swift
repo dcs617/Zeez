@@ -115,16 +115,6 @@ struct WidgetContainer: View {
                     HeartRateView(session: latestSession)
                 }
             case .sleepDebt:
-                let metrics = SleepDebtMetrics(
-                    weeklyDebt: SleepDebtCalculator.shared.calculateCurrentDebt(context: viewContext),
-                    monthlyDebt: SleepDebtCalculator.shared.calculateCurrentDebt(context: viewContext),
-                    debtTrend: .stable,
-                    recoveryPlan: RecoveryPlan(
-                        recommendedAction: "Get extra sleep tonight",
-                        timeToRecover: "2 days",
-                        severity: .moderate
-                    )
-                )
                 // Simple debt display - SleepDebtSection removed in Phase 1A
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Sleep Debt")

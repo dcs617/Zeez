@@ -208,4 +208,28 @@ struct AppConstants {
         /// ⚠️ Placeholder host — publish the policy and confirm this URL before release.
         static let privacyPolicyURL = URL(string: "https://dcs617.github.io/zeez-privacy/")!
     }
+
+    // MARK: - Data Provenance
+
+    /// `SleepSession.deviceIdentifier` markers recording where a session came from.
+    /// Several fetch predicates match these with CONTAINS[c], so the marker substrings
+    /// (`healthKitMarker`, `mockMarker`) must stay prefixes/substrings of the full values.
+    struct DataProvenance {
+        /// Sessions imported from HealthKit
+        static let healthKitImport = "HealthKit Import"
+        /// Substring predicates use to recognize any HealthKit-sourced session
+        static let healthKitMarker = "HealthKit"
+
+        /// Sessions imported from a Pillow CSV export
+        static let pillowCSVImport = "Pillow CSV Import"
+        /// Sessions imported from a Pillow JSON export
+        static let pillowJSONImport = "Pillow JSON Import"
+
+        /// Sessions created by the debug mock-data generator
+        static let mockDevice = "Mock Data - iPhone"
+        /// Substring predicates use to recognize mock sessions
+        static let mockMarker = "Mock Data"
+        /// Legacy marker from early mock builds ("iPhone" identifiers) — still matched on wipe
+        static let legacyMockDevice = "iPhone"
+    }
 }
