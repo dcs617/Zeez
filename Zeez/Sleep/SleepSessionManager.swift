@@ -135,31 +135,42 @@ final class SleepSessionManager {
             completion(AppError.dataProcessingFailed)
             return
         }
-        
-        let context = persistenceController.container.viewContext
-        
+
+        // The HKSampleQuery result handler runs on a HealthKit background thread —
+        // only the objectID crosses into it; inserts happen on a background
+        // context's queue (snapshot pattern, second audit A3).
+        let sessionID = session.objectID
+
         fetchHeartRateData(startTime: startTime, endTime: endTime) { [weak self] result in
             guard let self = self else { return }
-            
+
             switch result {
             case .success(let heartRateData):
-                heartRateData.forEach { data in
-                    let heartRate = HeartRateData(context: context)
-                    heartRate.id = UUID()
-                    heartRate.timestamp = data.timestamp
-                    heartRate.value = data.value
-                    heartRate.deviceType = "Apple Watch"
-                    heartRate.session = session
+                let context = self.persistenceController.newBackgroundContext()
+                context.perform {
+                    do {
+                        guard let session = try context.existingObject(with: sessionID) as? SleepSession else {
+                            completion(AppError.dataProcessingFailed)
+                            return
+                        }
+
+                        heartRateData.forEach { data in
+                            let heartRate = HeartRateData(context: context)
+                            heartRate.id = UUID()
+                            heartRate.timestamp = data.timestamp
+                            heartRate.value = data.value
+                            heartRate.deviceType = "Apple Watch"
+                            heartRate.session = session
+                        }
+
+                        try context.save()
+                        completion(nil)
+                    } catch {
+                        self.errorManager.reportError(AppError.dataProcessingFailed)
+                        completion(AppError.dataProcessingFailed)
+                    }
                 }
-                
-                do {
-                    try context.save()
-                    completion(nil)
-                } catch {
-                    self.errorManager.reportError(AppError.dataProcessingFailed)
-                    completion(AppError.dataProcessingFailed)
-                }
-                
+
             case .failure(let error):
                 self.errorManager.reportError(error)
                 completion(error)

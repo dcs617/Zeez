@@ -98,6 +98,7 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 `Zeez/Sleep/SleepSessionManager.swift:132-168` — `syncWithHealthKit` creates `HeartRateData` in **viewContext** and saves inside the `HKSampleQuery` result handler (background thread). Runs on every manually recorded session end.
 - Fix: perform inserts in `newBackgroundContext().perform`, resolve the session by objectID.
 - Effort: Small. Validate: record/end a session with ConcurrencyDebug 1.
+- ✅ **Done 2026-07-07** — `syncWithHealthKit` now captures only `session.objectID` into the HK result handler and performs all `HeartRateData` inserts + save inside `newBackgroundContext().perform`, resolving the session via `existingObject(with:)`. Device record/end walkthrough with ConcurrencyDebug stays on the manual list. ZeezTests green.
 
 **A4. Background task hands a background-context session to the monitors** — High · Runtime/Core Data
 `Zeez/Infrastructure/BackgroundTaskManager.swift:429-432` passes a bg-context `SleepSession` to `EnvironmentalMonitor.startMonitoring(for:)`, which later does `reading.session = session` on **viewContext** (`EnvironmentalMonitor.swift:77-98`) — illegal cross-context relationship → NSInvalidArgumentException. Also conceptually wrong: a BGAppRefreshTask can't run a foreground Timer or mic session.
