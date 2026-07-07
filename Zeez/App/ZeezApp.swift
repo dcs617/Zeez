@@ -22,7 +22,10 @@ struct ZeezApp: App {
         
         // Run alarm data migration and validation (for heavy sleeper mode and other fixes)
         AlarmDataMigrationHelper.performMigrationAndValidation(context: persistenceController.container.viewContext)
-        
+
+        // One-time removal of legacy un-prefixed notification identifiers (2.7)
+        LegacyNotificationCleanup.runOnce()
+
         // Start alarm system
         AlarmObserver.shared.startObserving(context: persistenceController.container.viewContext)
         ZeezLogger.info(ZeezLogger.alarm, "Alarm system initialized")
