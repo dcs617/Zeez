@@ -248,9 +248,13 @@ final class BackgroundTaskManager {
         case .notPermitted:
             ZeezLogger.error(ZeezLogger.background, "Background tasks not permitted for task: \(taskId)")
 
+        // .immediateRunIneligible only exists in the Xcode 26 SDK; CI builds with
+        // Xcode 16.x, where it falls into @unknown default. Only reachable via the
+        // submit-for-immediate-run API, which Zeez doesn't use.
+        #if compiler(>=6.2)
         case .immediateRunIneligible:
-            // Only reachable via the submit-for-immediate-run API, which Zeez doesn't use.
             ZeezLogger.error(ZeezLogger.background, "Task ineligible for immediate run: \(taskId)")
+        #endif
 
         @unknown default:
             ZeezLogger.error(ZeezLogger.background, "Unknown scheduling error for task: \(taskId)", error: error)
