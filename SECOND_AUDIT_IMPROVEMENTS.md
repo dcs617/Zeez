@@ -92,6 +92,7 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 `Zeez/Watch/WatchConnectivityHandler.swift:448-520` — `session(_:didReceiveMessage:)` arrives on a WCSession background queue; `handleDataRequest` → `getCurrentSleepSummary()`/`getNextAlarmStatus()` fetch **viewContext** and read managed objects (incl. `derivedSleepMetrics`) on that queue. Fires every time the watch opens/refreshes its summary. Same class as the fixed 1.6/2.8 alarm bugs.
 - Fix: hop to the view context's queue (`viewContext.perform`) or build payloads in a background context via objectIDs.
 - Effort: Small. Validate: paired-sim/device round trip launched with `-com.apple.CoreData.ConcurrencyDebug 1`.
+- ✅ **Done 2026-07-07** — replaced `getCurrentSleepSummary`/`getNextAlarmStatus` (viewContext on WCSession queue) with `fetchWatchPayloads(includeSleep:includeAlarm:)` that builds plain-value payload dicts inside a background context's `perform`; `syncSleepData`/`performFullSync`/`handleDataRequest` now reply asynchronously from that queue. Paired-device ConcurrencyDebug round trip stays on the manual list. ZeezTests green.
 
 **A3. Core Data touched off-thread in end-of-session HealthKit sync** — High · Core Data/Runtime
 `Zeez/Sleep/SleepSessionManager.swift:132-168` — `syncWithHealthKit` creates `HeartRateData` in **viewContext** and saves inside the `HKSampleQuery` result handler (background thread). Runs on every manually recorded session end.

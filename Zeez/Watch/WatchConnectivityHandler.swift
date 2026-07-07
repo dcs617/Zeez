@@ -270,87 +270,107 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
     }
     
     func syncSleepData() {
-        guard let sleepSummary = getCurrentSleepSummary() else {
-            ZeezLogger.debug(ZeezLogger.network, "No sleep data available for watch sync")
-            return
-        }
-        
-        let message = WatchMessage(
-            type: WatchMessageType.sleepSummary,
-            data: sleepSummary,
-            priority: MessagePriority.medium
-        )
-        
-        sendMessage(message)
-    }
-    
-    func performFullSync() {
-        ZeezLogger.info(ZeezLogger.network, "Performing full watch sync")
-        
-        syncSleepData()
-        
-        if let alarmData = getNextAlarmStatus() {
-            let message = WatchMessage(
-                type: WatchMessageType.alarmStatus,
-                data: alarmData,
-                priority: MessagePriority.medium
-            )
-            sendMessage(message)
-        }
-        
-        DispatchQueue.main.async {
-            self.lastSyncTime = Date()
-        }
-    }
-    
-    // MARK: - Data Preparation
-    
-    private func getCurrentSleepSummary() -> [String: Any]? {
-        let context = PersistenceController.shared.container.viewContext
-        
-        let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \SleepSession.endTime, ascending: false)]
-        request.predicate = NSPredicate(format: "endTime != nil AND isActive == NO")
-        request.fetchLimit = 1
-        
-        do {
-            guard let latestSession = try context.fetch(request).first else {
-                return nil
+        fetchWatchPayloads(includeSleep: true, includeAlarm: false) { [weak self] sleepSummary, _ in
+            guard let self else { return }
+            guard let sleepSummary else {
+                ZeezLogger.debug(ZeezLogger.network, "No sleep data available for watch sync")
+                return
             }
 
-            return watchSleepSummaryPayload(for: latestSession)
-            
-        } catch {
-            ZeezLogger.error(ZeezLogger.coreData, "Error fetching sleep data for watch", error: error)
-            return nil
+            let message = WatchMessage(
+                type: WatchMessageType.sleepSummary,
+                data: sleepSummary,
+                priority: MessagePriority.medium
+            )
+
+            self.sendMessage(message)
         }
     }
-    
-    private func getNextAlarmStatus() -> [String: Any]? {
-        let context = PersistenceController.shared.container.viewContext
-        
-        let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-        request.predicate = NSPredicate(format: "enabled == YES AND time != nil")
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \AlarmConfiguration.time, ascending: true)]
-        request.fetchLimit = 1
-        
-        do {
-            guard let nextAlarm = try context.fetch(request).first,
-                  let alarmTime = nextAlarm.time else {
-                return nil
+
+    func performFullSync() {
+        ZeezLogger.info(ZeezLogger.network, "Performing full watch sync")
+
+        fetchWatchPayloads(includeSleep: true, includeAlarm: true) { [weak self] sleepSummary, alarmStatus in
+            guard let self else { return }
+
+            if let sleepSummary {
+                self.sendMessage(WatchMessage(
+                    type: WatchMessageType.sleepSummary,
+                    data: sleepSummary,
+                    priority: MessagePriority.medium
+                ))
             }
-            
-            return [
-                "time": alarmTime.timeIntervalSince1970,
-                "enabled": nextAlarm.enabled,
-                "smartWake": nextAlarm.smartWakeEnabled,
-                "smartWakeWindow": Int(nextAlarm.smartWakeWindow),
-                "name": nextAlarm.name ?? "Alarm"
-            ]
-            
-        } catch {
-            ZeezLogger.error(ZeezLogger.coreData, "Error fetching alarm data for watch", error: error)
-            return nil
+
+            if let alarmStatus {
+                self.sendMessage(WatchMessage(
+                    type: WatchMessageType.alarmStatus,
+                    data: alarmStatus,
+                    priority: MessagePriority.medium
+                ))
+            }
+
+            DispatchQueue.main.async {
+                self.lastSyncTime = Date()
+            }
+        }
+    }
+
+    // MARK: - Data Preparation
+
+    /// Builds the watch payload dictionaries inside a background context's queue.
+    ///
+    /// Callers arrive on arbitrary queues (WCSession delegate callbacks come in on a
+    /// background queue), so managed objects are never touched directly here — only the
+    /// plain-value dictionaries cross back out, per the alarm-stack snapshot pattern.
+    /// The completion runs on the background context's queue.
+    private func fetchWatchPayloads(
+        includeSleep: Bool,
+        includeAlarm: Bool,
+        completion: @escaping (_ sleepSummary: [String: Any]?, _ alarmStatus: [String: Any]?) -> Void
+    ) {
+        let context = PersistenceController.shared.newBackgroundContext()
+        context.perform {
+            var sleepSummary: [String: Any]?
+            var alarmStatus: [String: Any]?
+
+            if includeSleep {
+                let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+                request.sortDescriptors = [NSSortDescriptor(keyPath: \SleepSession.endTime, ascending: false)]
+                request.predicate = NSPredicate(format: "endTime != nil AND isActive == NO")
+                request.fetchLimit = 1
+
+                do {
+                    if let latestSession = try context.fetch(request).first {
+                        sleepSummary = watchSleepSummaryPayload(for: latestSession)
+                    }
+                } catch {
+                    ZeezLogger.error(ZeezLogger.coreData, "Error fetching sleep data for watch", error: error)
+                }
+            }
+
+            if includeAlarm {
+                let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
+                request.predicate = NSPredicate(format: "enabled == YES AND time != nil")
+                request.sortDescriptors = [NSSortDescriptor(keyPath: \AlarmConfiguration.time, ascending: true)]
+                request.fetchLimit = 1
+
+                do {
+                    if let nextAlarm = try context.fetch(request).first,
+                       let alarmTime = nextAlarm.time {
+                        alarmStatus = [
+                            "time": alarmTime.timeIntervalSince1970,
+                            "enabled": nextAlarm.enabled,
+                            "smartWake": nextAlarm.smartWakeEnabled,
+                            "smartWakeWindow": Int(nextAlarm.smartWakeWindow),
+                            "name": nextAlarm.name ?? "Alarm"
+                        ]
+                    }
+                } catch {
+                    ZeezLogger.error(ZeezLogger.coreData, "Error fetching alarm data for watch", error: error)
+                }
+            }
+
+            completion(sleepSummary, alarmStatus)
         }
     }
     
@@ -491,32 +511,30 @@ extension WatchConnectivityHandler: WCSessionDelegate {
     }
     
     private func handleDataRequest(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)?) {
-        var responseData: [String: Any] = [:]
-        
         let requestType = message["requestType"] as? String ?? "all"
-        
-        switch requestType {
-        case "sleep", "all":
-            if let sleepSummary = getCurrentSleepSummary() {
+
+        guard requestType == "sleep" || requestType == "alarm" || requestType == "all" else {
+            if requestType == "status" {
+                replyHandler?(["connectionInfo": getConnectionInfo()])
+            } else {
+                replyHandler?([:])
+            }
+            return
+        }
+
+        fetchWatchPayloads(
+            includeSleep: requestType == "sleep" || requestType == "all",
+            includeAlarm: requestType == "alarm" || requestType == "all"
+        ) { sleepSummary, alarmStatus in
+            var responseData: [String: Any] = [:]
+            if let sleepSummary {
                 responseData["sleepSummary"] = sleepSummary
             }
-            fallthrough
-            
-        case "alarm":
-            if requestType == "alarm" || requestType == "all" {
-                if let alarmStatus = getNextAlarmStatus() {
-                    responseData["alarmStatus"] = alarmStatus
-                }
+            if let alarmStatus {
+                responseData["alarmStatus"] = alarmStatus
             }
-            
-        case "status":
-            responseData["connectionInfo"] = getConnectionInfo()
-            
-        default:
-            break
+            replyHandler?(responseData)
         }
-        
-        replyHandler?(responseData)
     }
     
     private func handleStatusUpdate(_ message: [String: Any]) {
