@@ -515,6 +515,27 @@ single-sourced.
 
 ---
 
+## Open verifications needing a device / Daniel / App Store Connect
+
+Carried over from HANDOVER.md at Phase-2 closeout (2026-07-07). These are the only
+remaining open items from Phases 0–2; all code work is complete and verified in-simulator.
+
+- **1.1 end-to-end on a physical device:** set an alarm, force-quit the app, lock the
+  phone → follow-ups fire at cadence; Stop re-arms the next chain. (Also covers the
+  delegate-callback threading paths noted in the 1.6/2.8 row.)
+- **1.5 phone↔watch message round-trip** (no paired simulators were scriptable in the
+  dev environment).
+- **1.4 banner visual check** with ~5 smart-wake alarms creating real pending-notification
+  pressure.
+- **2.1 StoreKit on device:** sandbox purchase + restore; airplane-mode launch keeps
+  premium; product IDs confirmed/created in App Store Connect **exactly** as
+  `com.zeez.subscription.{premium,premiumplus}.{monthly,annual}`.
+- **2.3:** Organizer archive validation (needs signing/Xcode UI); manual walkthrough of
+  the delete-all-data flow; publish the real privacy-policy URL (placeholder
+  `https://dcs617.github.io/zeez-privacy/` in `AppConstants.Legal`).
+
+---
+
 ## Phase 3 — Post-release / nice-to-have (tracked, not scheduled)
 
 - Real WidgetKit extension (current `Zeez/Widgets/` is in-app cards only; naming misleads).
