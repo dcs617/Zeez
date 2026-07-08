@@ -6,9 +6,11 @@ import os.log
 final class SleepSessionValidator {
     static let shared = SleepSessionValidator()
     private let persistenceController: PersistenceController
-    
-    private init() {
-        self.persistenceController = .shared
+
+    /// Tests inject an in-memory controller (the overlap check fetches from
+    /// it); production uses the shared stack.
+    init(persistenceController: PersistenceController = .shared) {
+        self.persistenceController = persistenceController
     }
     
     /// Validates a sleep session before saving

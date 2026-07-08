@@ -5,14 +5,18 @@ import os.log
 
 final class SleepSessionManager {
     static let shared = SleepSessionManager()
-    
+
     private let persistenceController: PersistenceController
     private let healthStore: HKHealthStore
     private let errorManager = ErrorManager.shared
-    private let validator = SleepSessionValidator.shared
-    
-    private init() {
-        self.persistenceController = .shared
+    private let validator: SleepSessionValidator
+
+    /// Tests inject an in-memory controller (second audit A7) so the whole
+    /// end-of-session flow — validation, save, analysis — stays off the
+    /// shared store; production uses the shared stack.
+    init(persistenceController: PersistenceController = .shared) {
+        self.persistenceController = persistenceController
+        self.validator = SleepSessionValidator(persistenceController: persistenceController)
         self.healthStore = HKHealthStore()
     }
     
@@ -60,16 +64,12 @@ final class SleepSessionManager {
         session.endTime = Date()
         session.isActive = false
         session.modifiedAt = Date()
-        
-        // Calculate initial quality score
-        if let startTime = session.startTime,
-           let endTime = session.endTime {
-            let duration = DateHelper.calculateSleepDuration(startTime: startTime, endTime: endTime)
-            let hoursSleep = duration / 3600
-            let baseScore = min(max(hoursSleep * 10, 0), 100)
-            session.qualityScore = baseScore
-        }
-        
+
+        // qualityScore stays 0 = awaiting analysis. The old hoursSlept×10
+        // write here was a fabricated score (claims rule 4) whose nonzero
+        // value also excluded the session from the analysis backlog, so
+        // Zeez-recorded sessions never earned a real estimate (A7).
+
         do {
             // Validate session before saving
             try validator.validateSession(session)
@@ -83,14 +83,28 @@ final class SleepSessionManager {
             
             errorManager.showStatus("Sleep session saved")
             completion(.success(session))
-            
-            // Sync with HealthKit
+
+            // Sync heart-rate data from HealthKit, THEN analyze — the
+            // estimate must see the imported samples, so analysis is chained
+            // onto the sync completion (and still runs if the sync fails:
+            // the session may carry movement data on its own).
+            let sessionID = session.objectID
+            let container = persistenceController.container
             syncWithHealthKit(for: session) { error in
                 if let error = error {
                     self.errorManager.reportError(error)
                 }
+                Task {
+                    do {
+                        try await SleepAnalyzer.shared.analyzeSleepSession(objectID: sessionID, container: container)
+                    } catch {
+                        // Expected for e.g. sub-30-minute or sensor-less
+                        // sessions; the score simply stays unavailable.
+                        ZeezLogger.info(ZeezLogger.sleepTracking, "End-of-session analysis skipped: \(error.localizedDescription)")
+                    }
+                }
             }
-            
+
         } catch {
             context.rollback()
             errorManager.reportError(error)
