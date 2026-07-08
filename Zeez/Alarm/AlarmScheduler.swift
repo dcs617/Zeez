@@ -276,6 +276,63 @@ final class AlarmScheduler: NSObject, @unchecked Sendable {
             }
         }
     }
+
+    /// Foreground path (second audit A6): re-arms only the chains whose
+    /// firing has already passed, so a user who opens the app daily without
+    /// relaunching it keeps Heavy Sleeper protection for every firing — not
+    /// just the first after launch.
+    ///
+    /// Chain identifiers embed the next-fire epoch as their trailing stamp
+    /// ("alarm-<uuid>-fu-pre-<n>-<stamp>"). An alarm with any future-stamped
+    /// chain entry is current and left untouched, which is what keeps this
+    /// cheap enough to run on every foreground; a full reschedule is not.
+    func rearmStaleFollowUpChains(context: NSManagedObjectContext) {
+        context.perform { [weak self] in
+            let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
+            request.predicate = NSPredicate(format: "enabled == YES")
+
+            guard let alarms = try? context.fetch(request) else {
+                ZeezLogger.error(ZeezLogger.alarm, "Failed to fetch alarms for stale-chain re-arm")
+                return
+            }
+
+            let snapshots = alarms.compactMap(AlarmSnapshot.init)
+            guard !snapshots.isEmpty else { return }
+            self?.rearmStaleChains(for: snapshots)
+        }
+    }
+
+    private func rearmStaleChains(for snapshots: [AlarmSnapshot]) {
+        schedulingQueue.async { [weak self] in
+            guard let self = self else { return }
+            let now = Date().timeIntervalSince1970
+
+            self.notificationCenter.getPendingNotificationRequests { requests in
+                let pendingIDs = requests.map(\.identifier)
+
+                for snapshot in snapshots {
+                    let chainPrefix = "alarm-\(snapshot.idString)-fu-pre-"
+                    let chainIDs = pendingIDs.filter { $0.hasPrefix(chainPrefix) }
+
+                    // The stamp is the last hyphen-separated component; the
+                    // UUID's own hyphens sit before the "fu-pre" marker.
+                    let hasCurrentChain = chainIDs.contains { id in
+                        guard let stamp = id.split(separator: "-").last.flatMap({ Double($0) }) else {
+                            return false
+                        }
+                        return stamp > now
+                    }
+                    guard !hasCurrentChain else { continue }
+
+                    if !chainIDs.isEmpty {
+                        self.notificationCenter.removePendingNotificationRequests(withIdentifiers: chainIDs)
+                        ZeezLogger.info(ZeezLogger.alarm, "🔁 Removing \(chainIDs.count) stale chain entries for alarm \(snapshot.idString)")
+                    }
+                    self.scheduleFollowUpChain(for: snapshot)
+                }
+            }
+        }
+    }
     
     /// Cancel all scheduled alarms (mains, follow-ups, and snoozes).
     /// Removes only alarm-owned identifiers so other notifications

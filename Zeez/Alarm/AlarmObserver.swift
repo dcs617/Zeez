@@ -76,16 +76,20 @@ class AlarmObserver: NSObject {
         }
         .store(in: &cancellables)
         
-        // Only check when app enters foreground after being backgrounded for a while
+        // Follow-up chains are armed for the NEXT firing only, so a user who
+        // foregrounds the app daily but never relaunches it would lose Heavy
+        // Sleeper protection after the first firing (A6). The re-arm is
+        // throttled inside the scheduler: alarms whose pending chain stamp is
+        // still in the future are left untouched, so this stays cheap on
+        // every foreground — no full reschedule.
         NotificationCenter.default.publisher(
             for: UIApplication.willEnterForegroundNotification
         )
-        .sink { _ in
-            // Only reschedule if app was backgrounded for more than 1 hour
-            // This prevents excessive rescheduling during normal app usage
-            ZeezLogger.debug(ZeezLogger.alarm, "App entering foreground - checking if reschedule needed")
-            // For now, disable this to prevent excessive scheduling
-            // TODO: Re-enable rescheduleAlarmsIfNeeded() when needed
+        .sink { [weak self] _ in
+            ZeezLogger.debug(ZeezLogger.alarm, "App entering foreground - re-arming stale follow-up chains")
+            self?.scheduler.rearmStaleFollowUpChains(
+                context: PersistenceController.shared.container.viewContext
+            )
         }
         .store(in: &cancellables)
     }

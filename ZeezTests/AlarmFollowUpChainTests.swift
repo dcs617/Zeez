@@ -54,6 +54,25 @@ struct AlarmFollowUpChainTests {
         fake.pending.map(\.identifier).filter { $0.contains("alarm-\(alarmID)-main-") }
     }
 
+    /// Seeds a pre-armed chain entry as `armFollowUpChain` would have left it,
+    /// with a caller-chosen stamp (the next-fire epoch embedded in the ID).
+    private func seedChainEntry(_ fake: FakeNotificationCenter, alarmID: String, n: Int, stamp: Int) {
+        let content = UNMutableNotificationContent()
+        content.userInfo = ["alarmID": alarmID, "type": "fu"]
+        fake.add(
+            UNNotificationRequest(
+                identifier: "alarm-\(alarmID)-fu-pre-\(n)-\(stamp)",
+                content: content,
+                trigger: nil
+            ),
+            withCompletionHandler: nil
+        )
+    }
+
+    private func trailingStamp(_ id: String) -> Double? {
+        id.split(separator: "-").last.flatMap { Double($0) }
+    }
+
     // MARK: - Tests
 
     @Test func schedulingAnAlarmPreArmsTheFollowUpChain() async throws {
@@ -158,6 +177,55 @@ struct AlarmFollowUpChainTests {
         try await Task.sleep(nanoseconds: 1_000_000_000)
         #expect(mainIDs(fake, alarmID: alarmID).isEmpty)
         #expect(chainIDs(fake, alarmID: alarmID).isEmpty)
+    }
+
+    // MARK: - Foreground re-arm of stale chains (second audit A6)
+
+    @Test func foregroundRearmReplacesStaleChainWithNewStamp() async throws {
+        let controller = PersistenceController(inMemory: true)
+        let fake = FakeNotificationCenter()
+        let scheduler = AlarmScheduler(notificationCenter: fake)
+        let alarm = try makeAlarm(in: controller.container.viewContext, days: [2])
+        let alarmID = alarm.id!.uuidString
+
+        // The post-firing state: yesterday's chain entries, whose embedded
+        // next-fire stamp has passed, with nothing armed for the next firing.
+        let staleStamp = Int(Date().addingTimeInterval(-24 * 3600).timeIntervalSince1970)
+        for n in 1...6 {
+            seedChainEntry(fake, alarmID: alarmID, n: n, stamp: staleStamp)
+        }
+
+        let now = Date().timeIntervalSince1970
+        scheduler.rearmStaleFollowUpChains(context: controller.container.viewContext)
+
+        try await waitUntil("stale chain replaced by a future-stamped one") {
+            let ids = self.chainIDs(fake, alarmID: alarmID)
+            return ids.count == 6 && ids.allSatisfy { id in
+                guard let stamp = self.trailingStamp(id) else { return false }
+                return stamp > now
+            }
+        }
+    }
+
+    @Test func foregroundRearmLeavesCurrentChainUntouched() async throws {
+        let controller = PersistenceController(inMemory: true)
+        let fake = FakeNotificationCenter()
+        let scheduler = AlarmScheduler(notificationCenter: fake)
+        let alarm = try makeAlarm(in: controller.container.viewContext, days: [2])
+        let alarmID = alarm.id!.uuidString
+
+        // A future-stamped entry marks the chain as current. The stamp is
+        // deliberately different from the alarm's real next-fire epoch, so a
+        // spurious re-arm would show up as extra, differently-stamped entries.
+        let futureStamp = Int(Date().addingTimeInterval(7200).timeIntervalSince1970) + 1
+        seedChainEntry(fake, alarmID: alarmID, n: 1, stamp: futureStamp)
+
+        scheduler.rearmStaleFollowUpChains(context: controller.container.viewContext)
+
+        // Negative assertion — give the pipeline time to (wrongly) act.
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        #expect(chainIDs(fake, alarmID: alarmID) == ["alarm-\(alarmID)-fu-pre-1-\(futureStamp)"],
+                "A chain armed for a future firing must not be re-armed on foreground")
     }
 
     @Test func nextFireDatePicksEarliestSelectedWeekday() throws {
