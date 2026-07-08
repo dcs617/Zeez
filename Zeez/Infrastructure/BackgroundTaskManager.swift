@@ -399,43 +399,31 @@ final class BackgroundTaskManager {
         in context: NSManagedObjectContext,
         completion: @escaping (Bool) -> Void
     ) {
-        context.perform { [weak self] in
-            guard let self = self else {
-                completion(false)
-                return
-            }
-            
+        context.perform {
             let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             request.predicate = NSPredicate(format: "isActive == YES")
             request.fetchLimit = 1
-            
+
             do {
                 let sessions = try context.fetch(request)
-                guard let session = sessions.first else {
+                guard sessions.first != nil else {
                     // No active session - this is normal
                     completion(true)
                     return
                 }
-                
-                // Check if we should continue monitoring based on resource constraints
-                guard let resourceStatus = self.resourceMonitor?.getCurrentResourceStatus(),
-                      resourceStatus.canContinueMonitoring else {
-                    ZeezLogger.info(ZeezLogger.background, "Pausing monitoring due to resource constraints")
-                    completion(true)
-                    return
-                }
-                
-                // Update environmental data
-                EnvironmentalMonitor.shared.startMonitoring(for: session)
-                
-                // Update movement data  
-                MovementDataManager.shared.startMonitoring(for: session)
-                
-                try context.save()
+
+                // This task must NOT start the monitors. They are foreground-only
+                // (Timer/mic sampling a BGAppRefreshTask can't sustain), their
+                // lifecycle is owned by the session start path
+                // (SleepSessionManager/SleepControlView), and handing them this
+                // background-context session made EnvironmentalMonitor attach
+                // readings across contexts on viewContext — an illegal
+                // cross-context relationship (second audit A4).
+                ZeezLogger.debug(ZeezLogger.background, "Active sleep session present during background refresh")
                 completion(true)
-                
+
             } catch {
-                ZeezLogger.error(ZeezLogger.background, "Failed to update active sleep session", error: error)
+                ZeezLogger.error(ZeezLogger.background, "Failed to check active sleep session", error: error)
                 completion(false)
             }
         }
