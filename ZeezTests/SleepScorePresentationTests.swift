@@ -204,7 +204,7 @@ struct SleepScorePresentationTests {
             session.qualityScore = 1.0
             try context.save()
 
-            let payload = try #require(watchSleepSummaryPayload(for: session))
+            let payload = try #require(watchSleepSummary(for: session)).toPayload()
             #expect(payload["qualityAvailable"] as? Bool == false)
             #expect(payload["quality"] == nil)
         }
@@ -221,7 +221,7 @@ struct SleepScorePresentationTests {
             attachZeezEstimate(to: session, in: context)
             try context.save()
 
-            let payload = try #require(watchSleepSummaryPayload(for: session))
+            let payload = try #require(watchSleepSummary(for: session)).toPayload()
             #expect(payload["qualityAvailable"] as? Bool == true)
             #expect(payload["quality"] as? Double == 84)
         }

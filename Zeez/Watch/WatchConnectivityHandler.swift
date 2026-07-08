@@ -3,25 +3,23 @@ import WatchConnectivity
 import CoreData
 import os.log
 
-func watchSleepSummaryPayload(for session: SleepSession) -> [String: Any]? {
+/// Builds the typed watch summary from a session. Must be called on the
+/// session's context queue; the returned value is a plain struct that can
+/// cross queues freely. Wire shape lives in Shared/WatchDataModels.swift.
+func watchSleepSummary(for session: SleepSession) -> WatchSleepSummary? {
     guard let endTime = session.endTime,
           let startTime = session.startTime,
           let recordedInterval = session.derivedSleepMetrics.recordedSessionInterval.value else {
         return nil
     }
 
-    var payload: [String: Any] = [
-        "duration": recordedInterval,
-        "qualityAvailable": session.hasDisplayableScore,
-        "bedTime": startTime.timeIntervalSince1970,
-        "wakeTime": endTime.timeIntervalSince1970,
-        "cyclesCompleted": session.completedCycles,
-        "environmentalScore": session.environmentalScore
-    ]
-    if session.hasDisplayableScore {
-        payload["quality"] = session.qualityScore
-    }
-    return payload
+    return WatchSleepSummary(
+        duration: recordedInterval,
+        quality: session.hasDisplayableScore ? session.qualityScore : 0,
+        qualityAvailable: session.hasDisplayableScore,
+        bedTime: startTime,
+        wakeTime: endTime
+    )
 }
 
 /// Enhanced watch communication handler with improved reliability and features
@@ -35,106 +33,36 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
     
     private var session: WCSession
     private let messageQueue = WatchMessageQueue()
-    private let syncCoordinator = WatchSyncCoordinator()
-    private let compressionManager = WatchDataCompression()
     private var retryManager = RetryManager()
-    
-    // Connection monitoring
-    private var connectionTimer: Timer?
-    private var heartbeatInterval: TimeInterval = 30
-    private var missedHeartbeats = 0
-    private let maxMissedHeartbeats = 3
-    
+
+    /// Reachability-derived only. The old phone-side heartbeat machinery sent
+    /// low-priority userInfo transfers the watch never read and reported
+    /// unconditional success, so the "quality" it graded was fiction (A5).
     enum ConnectionQuality: String, CaseIterable {
         case none = "No Connection"
-        case poor = "Poor"
         case good = "Good"
-        case excellent = "Excellent"
     }
-    
+
     override private init() {
         self.session = WCSession.default
         super.init()
-        
+
         if WCSession.isSupported() {
             session.delegate = self
             session.activate()
-            startConnectionMonitoring()
         }
     }
-    
+
     // MARK: - Connection Monitoring
-    
-    private func startConnectionMonitoring() {
-        connectionTimer = Timer.scheduledTimer(withTimeInterval: heartbeatInterval, repeats: true) { [weak self] _ in
-            self?.sendHeartbeat()
-        }
-    }
-    
-    private func sendHeartbeat() {
-        guard session.isReachable else {
-            handleMissedHeartbeat()
-            return
-        }
-        
-        let heartbeat = WatchMessage(
-            type: WatchMessageType.requestData, // Using existing type for compatibility
-            data: ["heartbeat": true, "timestamp": Date().timeIntervalSince1970],
-            priority: MessagePriority.low
-        )
-        
-        sendMessage(heartbeat) { [weak self] success in
-            DispatchQueue.main.async {
-                if success {
-                    self?.missedHeartbeats = 0
-                    self?.updateConnectionQuality()
-                } else {
-                    self?.handleMissedHeartbeat()
-                }
-            }
-        }
-    }
-    
-    private func handleMissedHeartbeat() {
-        missedHeartbeats += 1
-        updateConnectionQuality()
-        
-        if missedHeartbeats >= maxMissedHeartbeats {
-            ZeezLogger.info(ZeezLogger.network, "Watch connection appears lost - attempting reconnection")
-            attemptReconnection()
-        }
-    }
-    
+
     private func updateConnectionQuality() {
-        let quality: ConnectionQuality
-        
-        if !session.isReachable {
-            quality = .none
-        } else if missedHeartbeats >= 2 {
-            quality = .poor
-        } else if missedHeartbeats == 1 {
-            quality = .good
-        } else {
-            quality = .excellent
-        }
-        
+        let quality: ConnectionQuality = session.isReachable ? .good : .none
+
         DispatchQueue.main.async {
             self.connectionQuality = quality
         }
     }
-    
-    private func attemptReconnection() {
-        if WCSession.isSupported() {
-            session.activate()
-            missedHeartbeats = 0
-            
-            // Resend any failed messages
-            messageQueue.retryFailedMessages { [weak self] message in
-                self?.sendMessage(message, completion: nil)
-            }
-        }
-    }
-    
+
     // MARK: - Enhanced Message Sending
     
     func sendMessage(_ message: WatchMessage, completion: ((Bool) -> Void)? = nil) {
@@ -145,41 +73,37 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
             self.pendingMessages = self.messageQueue.pendingCount
         }
         
-        // Attempt immediate send if watch is reachable
-        if session.isReachable {
-            performSend(message, completion: completion)
-        } else {
+        // Only interactive sendMessage needs a reachable counterpart;
+        // updateApplicationContext delivers whenever the watch next runs.
+        if message.priority == .high && !session.isReachable {
             ZeezLogger.debug(ZeezLogger.network, "Watch not reachable - message queued: \(message.type.rawValue)")
             completion?(false)
+            return
         }
+
+        performSend(message, completion: completion)
     }
-    
+
     private func performSend(_ message: WatchMessage, completion: ((Bool) -> Void)?) {
         do {
             let messageDict = try message.toDictionary()
-            let compressedDict = compressionManager.compressIfNeeded(messageDict)
-            
+
             switch message.priority {
             case .high:
-                session.sendMessage(compressedDict, replyHandler: { reply in
+                session.sendMessage(messageDict, replyHandler: { reply in
                     self.handleMessageSuccess(message, reply: reply)
                     completion?(true)
                 }, errorHandler: { error in
                     self.handleMessageFailure(message, error: error)
                     completion?(false)
                 })
-                
-            case .medium:
-                try session.updateApplicationContext(compressedDict)
-                handleMessageSuccess(message, reply: nil)
-                completion?(true)
-                
-            case .low:
-                session.transferUserInfo(compressedDict)
+
+            case .medium, .low:
+                try session.updateApplicationContext(messageDict)
                 handleMessageSuccess(message, reply: nil)
                 completion?(true)
             }
-            
+
         } catch {
             ZeezLogger.error(ZeezLogger.network, "Failed to prepare watch message", error: error)
             handleMessageFailure(message, error: error)
@@ -247,28 +171,26 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
         sendMessage(message)
     }
     
+    /// Must be called on `alarm`'s context queue; only plain values are
+    /// captured into the outgoing message.
     func updateAlarmContext(_ alarm: AlarmConfiguration) {
         guard let alarmTime = alarm.time else { return }
-        
-        let alarmData: [String: Any] = [
-            "type": "alarmUpdate",
-            "alarmID": alarm.id?.uuidString ?? "",
-            "time": alarmTime.timeIntervalSince1970,
-            "enabled": alarm.enabled,
-            "smartWake": alarm.smartWakeEnabled,
-            "smartWakeWindow": alarm.smartWakeWindow,
-            "name": alarm.name ?? "Alarm"
-        ]
-        
-        let message = WatchMessage(
-            type: WatchMessageType.alarmStatus,
-            data: alarmData,
-            priority: MessagePriority.medium
+
+        let alarmStatus = WatchAlarmStatus(
+            time: alarmTime,
+            enabled: alarm.enabled,
+            smartWake: alarm.smartWakeEnabled,
+            window: Int(alarm.smartWakeWindow),
+            name: alarm.name ?? "Alarm"
         )
-        
-        sendMessage(message)
+
+        sendMessage(WatchMessage(
+            type: WatchMessageType.alarmStatus,
+            data: WatchSyncEnvelope(alarmStatus: alarmStatus).toDictionary(),
+            priority: MessagePriority.medium
+        ))
     }
-    
+
     func syncSleepData() {
         fetchWatchPayloads(includeSleep: true, includeAlarm: false) { [weak self] sleepSummary, _ in
             guard let self else { return }
@@ -277,13 +199,11 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
                 return
             }
 
-            let message = WatchMessage(
+            self.sendMessage(WatchMessage(
                 type: WatchMessageType.sleepSummary,
-                data: sleepSummary,
+                data: WatchSyncEnvelope(sleepSummary: sleepSummary).toDictionary(),
                 priority: MessagePriority.medium
-            )
-
-            self.sendMessage(message)
+            ))
         }
     }
 
@@ -293,21 +213,17 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
         fetchWatchPayloads(includeSleep: true, includeAlarm: true) { [weak self] sleepSummary, alarmStatus in
             guard let self else { return }
 
-            if let sleepSummary {
-                self.sendMessage(WatchMessage(
-                    type: WatchMessageType.sleepSummary,
-                    data: sleepSummary,
-                    priority: MessagePriority.medium
-                ))
-            }
+            let envelope = WatchSyncEnvelope(sleepSummary: sleepSummary, alarmStatus: alarmStatus)
+            guard !envelope.isEmpty else { return }
 
-            if let alarmStatus {
-                self.sendMessage(WatchMessage(
-                    type: WatchMessageType.alarmStatus,
-                    data: alarmStatus,
-                    priority: MessagePriority.medium
-                ))
-            }
+            // Both payloads travel in ONE message: .medium maps to
+            // updateApplicationContext, whose single slot means a second
+            // sequential push would replace the first before delivery.
+            self.sendMessage(WatchMessage(
+                type: WatchMessageType.sleepSummary,
+                data: envelope.toDictionary(),
+                priority: MessagePriority.medium
+            ))
 
             DispatchQueue.main.async {
                 self.lastSyncTime = Date()
@@ -317,21 +233,21 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
 
     // MARK: - Data Preparation
 
-    /// Builds the watch payload dictionaries inside a background context's queue.
+    /// Builds the typed watch payloads inside a background context's queue.
     ///
     /// Callers arrive on arbitrary queues (WCSession delegate callbacks come in on a
-    /// background queue), so managed objects are never touched directly here — only the
-    /// plain-value dictionaries cross back out, per the alarm-stack snapshot pattern.
+    /// background queue), so managed objects are never touched directly here — only
+    /// plain value types cross back out, per the alarm-stack snapshot pattern.
     /// The completion runs on the background context's queue.
     private func fetchWatchPayloads(
         includeSleep: Bool,
         includeAlarm: Bool,
-        completion: @escaping (_ sleepSummary: [String: Any]?, _ alarmStatus: [String: Any]?) -> Void
+        completion: @escaping (_ sleepSummary: WatchSleepSummary?, _ alarmStatus: WatchAlarmStatus?) -> Void
     ) {
         let context = PersistenceController.shared.newBackgroundContext()
         context.perform {
-            var sleepSummary: [String: Any]?
-            var alarmStatus: [String: Any]?
+            var sleepSummary: WatchSleepSummary?
+            var alarmStatus: WatchAlarmStatus?
 
             if includeSleep {
                 let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
@@ -341,7 +257,7 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
 
                 do {
                     if let latestSession = try context.fetch(request).first {
-                        sleepSummary = watchSleepSummaryPayload(for: latestSession)
+                        sleepSummary = watchSleepSummary(for: latestSession)
                     }
                 } catch {
                     ZeezLogger.error(ZeezLogger.coreData, "Error fetching sleep data for watch", error: error)
@@ -357,13 +273,13 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
                 do {
                     if let nextAlarm = try context.fetch(request).first,
                        let alarmTime = nextAlarm.time {
-                        alarmStatus = [
-                            "time": alarmTime.timeIntervalSince1970,
-                            "enabled": nextAlarm.enabled,
-                            "smartWake": nextAlarm.smartWakeEnabled,
-                            "smartWakeWindow": Int(nextAlarm.smartWakeWindow),
-                            "name": nextAlarm.name ?? "Alarm"
-                        ]
+                        alarmStatus = WatchAlarmStatus(
+                            time: alarmTime,
+                            enabled: nextAlarm.enabled,
+                            smartWake: nextAlarm.smartWakeEnabled,
+                            window: Int(nextAlarm.smartWakeWindow),
+                            name: nextAlarm.name ?? "Alarm"
+                        )
                     }
                 } catch {
                     ZeezLogger.error(ZeezLogger.coreData, "Error fetching alarm data for watch", error: error)
@@ -393,10 +309,6 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
             self.pendingMessages = 0
         }
     }
-    
-    deinit {
-        connectionTimer?.invalidate()
-    }
 }
 
 // MARK: - WCSessionDelegate
@@ -411,7 +323,6 @@ extension WatchConnectivityHandler: WCSessionDelegate {
             
             if activationState == .activated {
                 ZeezLogger.info(ZeezLogger.network, "Watch connectivity activated")
-                self.missedHeartbeats = 0
                 self.updateConnectionQuality()
                 
                 // Perform initial sync
@@ -474,34 +385,31 @@ extension WatchConnectivityHandler: WCSessionDelegate {
         _ message: [String: Any],
         replyHandler: (([String: Any]) -> Void)?
     ) {
-        // Decompress if needed
-        let decompressedMessage = compressionManager.decompressIfNeeded(message)
-        
-        guard let command = decompressedMessage["command"] as? String else {
+        guard let command = message["command"] as? String else {
             replyHandler?(["error": "Invalid command"])
             return
         }
-        
+
         ZeezLogger.debug(ZeezLogger.network, "Received watch message: \(command)")
-        
+
         switch command {
         case "acknowledge":
             WakeUpProgressionManager.shared.acknowledgeWakeUp()
             replyHandler?(["status": "success", "timestamp": Date().timeIntervalSince1970])
-            
+
         case "snooze":
             WakeUpProgressionManager.shared.snoozeWakeUp()
             replyHandler?(["status": "success", "timestamp": Date().timeIntervalSince1970])
-            
+
         case "requestData":
-            handleDataRequest(decompressedMessage, replyHandler: replyHandler)
-            
+            handleDataRequest(message, replyHandler: replyHandler)
+
         case "heartbeat":
             // Respond to heartbeat
             replyHandler?(["heartbeat": "pong", "timestamp": Date().timeIntervalSince1970])
             
         case "statusUpdate":
-            handleStatusUpdate(decompressedMessage)
+            handleStatusUpdate(message)
             replyHandler?(["status": "received"])
             
         default:
@@ -526,14 +434,8 @@ extension WatchConnectivityHandler: WCSessionDelegate {
             includeSleep: requestType == "sleep" || requestType == "all",
             includeAlarm: requestType == "alarm" || requestType == "all"
         ) { sleepSummary, alarmStatus in
-            var responseData: [String: Any] = [:]
-            if let sleepSummary {
-                responseData["sleepSummary"] = sleepSummary
-            }
-            if let alarmStatus {
-                responseData["alarmStatus"] = alarmStatus
-            }
-            replyHandler?(responseData)
+            let envelope = WatchSyncEnvelope(sleepSummary: sleepSummary, alarmStatus: alarmStatus)
+            replyHandler?(envelope.toDictionary())
         }
     }
     

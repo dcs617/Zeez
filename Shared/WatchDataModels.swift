@@ -73,6 +73,132 @@ struct WakePatternData: Codable {
     }
 }
 
+// MARK: - Wire Payload Contract (second audit A5)
+//
+// WCSession dictionaries are the wire contract between app versions on two
+// devices. Every data update — pushes via updateApplicationContext or
+// sendMessage AND requestData replies — uses the same envelope shape: model
+// payloads are nested under `WatchSyncEnvelope.sleepSummaryKey` /
+// `.alarmStatusKey`. Payload fields must never be flattened into the
+// top-level message; the top level is reserved for routing metadata
+// ("command", "timestamp", ...). Changing any wire key is a breaking
+// protocol change — see WatchWireContractTests.
+
+extension WatchSleepSummary {
+    /// Wire keys for the nested sleep-summary payload.
+    enum WireKey {
+        static let duration = "duration"
+        static let quality = "quality"
+        static let qualityAvailable = "qualityAvailable"
+        static let bedTime = "bedTime"
+        static let wakeTime = "wakeTime"
+    }
+
+    /// Property-list-safe payload dictionary. The quality value is only
+    /// present when a displayable score exists — an absent key must never be
+    /// resurrected as a personal result on the watch (claims rule 4).
+    func toPayload() -> [String: Any] {
+        var payload: [String: Any] = [
+            WireKey.duration: lastNightDuration,
+            WireKey.qualityAvailable: isQualityScoreAvailable
+        ]
+        if isQualityScoreAvailable {
+            payload[WireKey.quality] = qualityScore
+        }
+        if let bedTime {
+            payload[WireKey.bedTime] = bedTime.timeIntervalSince1970
+        }
+        if let wakeTime {
+            payload[WireKey.wakeTime] = wakeTime.timeIntervalSince1970
+        }
+        return payload
+    }
+
+    init(payload: [String: Any]) {
+        self.init(
+            duration: payload[WireKey.duration] as? TimeInterval ?? 0,
+            quality: payload[WireKey.quality] as? Double ?? 0,
+            qualityAvailable: payload[WireKey.qualityAvailable] as? Bool ?? false,
+            bedTime: (payload[WireKey.bedTime] as? TimeInterval).map(Date.init(timeIntervalSince1970:)),
+            wakeTime: (payload[WireKey.wakeTime] as? TimeInterval).map(Date.init(timeIntervalSince1970:))
+        )
+    }
+}
+
+extension WatchAlarmStatus {
+    /// Wire keys for the nested alarm-status payload.
+    enum WireKey {
+        static let time = "time"
+        static let enabled = "enabled"
+        static let smartWake = "smartWake"
+        static let smartWakeWindow = "smartWakeWindow"
+        static let name = "name"
+    }
+
+    /// Property-list-safe payload dictionary.
+    func toPayload() -> [String: Any] {
+        var payload: [String: Any] = [
+            WireKey.enabled: isEnabled,
+            WireKey.smartWake: smartWakeEnabled,
+            WireKey.smartWakeWindow: smartWakeWindow,
+            WireKey.name: alarmName
+        ]
+        if let nextAlarmTime {
+            payload[WireKey.time] = nextAlarmTime.timeIntervalSince1970
+        }
+        return payload
+    }
+
+    init(payload: [String: Any]) {
+        self.init(
+            time: (payload[WireKey.time] as? TimeInterval).map(Date.init(timeIntervalSince1970:)),
+            enabled: payload[WireKey.enabled] as? Bool ?? false,
+            smartWake: payload[WireKey.smartWake] as? Bool ?? false,
+            window: payload[WireKey.smartWakeWindow] as? Int ?? 30,
+            name: payload[WireKey.name] as? String ?? "Alarm"
+        )
+    }
+}
+
+/// The single envelope both sides use for phone→watch data updates.
+///
+/// The phone merges `toDictionary()` into an outgoing message's data; the
+/// watch decodes any received message/applicationContext dictionary with
+/// `init(dictionary:)`. A legacy flattened message decodes as empty rather
+/// than as fabricated defaults.
+struct WatchSyncEnvelope {
+    static let sleepSummaryKey = "sleepSummary"
+    static let alarmStatusKey = "alarmStatus"
+
+    let sleepSummary: WatchSleepSummary?
+    let alarmStatus: WatchAlarmStatus?
+
+    init(sleepSummary: WatchSleepSummary? = nil, alarmStatus: WatchAlarmStatus? = nil) {
+        self.sleepSummary = sleepSummary
+        self.alarmStatus = alarmStatus
+    }
+
+    init(dictionary: [String: Any]) {
+        self.sleepSummary = (dictionary[Self.sleepSummaryKey] as? [String: Any])
+            .map(WatchSleepSummary.init(payload:))
+        self.alarmStatus = (dictionary[Self.alarmStatusKey] as? [String: Any])
+            .map(WatchAlarmStatus.init(payload:))
+    }
+
+    var isEmpty: Bool { sleepSummary == nil && alarmStatus == nil }
+
+    func toDictionary() -> [String: Any] {
+        var dictionary: [String: Any] = [:]
+        if let sleepSummary {
+            dictionary[Self.sleepSummaryKey] = sleepSummary.toPayload()
+        }
+        if let alarmStatus {
+            dictionary[Self.alarmStatusKey] = alarmStatus.toPayload()
+        }
+        return dictionary
+    }
+}
+
 // MARK: - Display Helpers
 
 extension WatchSleepSummary {

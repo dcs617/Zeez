@@ -206,50 +206,27 @@ class WatchConnectivityManager: NSObject, ObservableObject {
         hapticManager.stopAllPatterns()
     }
     
-    /// Handle data updates from iPhone
+    /// Handle data updates from iPhone (pushed messages, applicationContext,
+    /// and requestData replies all carry the same WatchSyncEnvelope shape).
+    /// Received payloads are cached so the offline path shows the last real
+    /// sync instead of empty defaults.
     private func handleDataUpdate(_ data: [String: Any]) {
-        if let sleepData = data["sleepSummary"] as? [String: Any] {
-            updateSleepSummary(from: sleepData)
+        let envelope = WatchSyncEnvelope(dictionary: data)
+        guard !envelope.isEmpty else { return }
+
+        if let summary = envelope.sleepSummary {
+            sleepSummary = summary
+            offlineStorage.cacheSleepSummary(summary.toPayload())
         }
-        
-        if let alarmData = data["alarmStatus"] as? [String: Any] {
-            updateAlarmStatus(from: alarmData)
+
+        if let alarm = envelope.alarmStatus {
+            alarmStatus = alarm
+            offlineStorage.cacheAlarmStatus(alarm.toPayload())
         }
-    }
-    
-    /// Update sleep summary from received data
-    private func updateSleepSummary(from data: [String: Any]) {
-        let duration = data["duration"] as? TimeInterval ?? 0
-        let quality = data["quality"] as? Double ?? 0
-        let qualityAvailable = data["qualityAvailable"] as? Bool ?? false
-        let bedTime = (data["bedTime"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
-        let wakeTime = (data["wakeTime"] as? TimeInterval).map { Date(timeIntervalSince1970: $0) }
-        
-        sleepSummary = WatchSleepSummary(
-            duration: duration,
-            quality: quality,
-            qualityAvailable: qualityAvailable,
-            bedTime: bedTime,
-            wakeTime: wakeTime
-        )
-    }
-    
-    /// Update alarm status from received data
-    private func updateAlarmStatus(from data: [String: Any]) {
-        let timeInterval = data["time"] as? TimeInterval
-        let nextTime = timeInterval.map { Date(timeIntervalSince1970: $0) }
-        let enabled = data["enabled"] as? Bool ?? false
-        let smartWake = data["smartWake"] as? Bool ?? false
-        let window = data["smartWakeWindow"] as? Int ?? 30
-        let name = data["name"] as? String ?? "Alarm"
-        
-        alarmStatus = WatchAlarmStatus(
-            time: nextTime,
-            enabled: enabled,
-            smartWake: smartWake,
-            window: window,
-            name: name
-        )
+
+        let syncDate = Date()
+        lastSyncTime = syncDate
+        offlineStorage.updateLastSyncTime(syncDate)
     }
     
     /// Handle wake pattern from iPhone
