@@ -129,7 +129,7 @@ struct WeeklyTrendCard: View {
     }
     
     private var averageDurationFormatted: String {
-        let totalDuration = sessions.map { $0.timeInSleep }.reduce(0, +)
+        let totalDuration = sessions.map { $0.recordedInterval }.reduce(0, +)
         let averageDuration = totalDuration / Double(max(sessions.count, 1))
         let hours = Int(averageDuration / 3600)
         let minutes = Int((averageDuration.truncatingRemainder(dividingBy: 3600)) / 60)

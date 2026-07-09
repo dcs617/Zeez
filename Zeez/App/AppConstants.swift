@@ -69,9 +69,6 @@ struct AppConstants {
         
         /// Minimum sleep time for quality warnings (7 * 3600 = 7 hours)
         static let qualityWarningThreshold: TimeInterval = 7 * 3600
-        
-        /// Default REM latency fallback (25 * 60 = 25 minutes)
-        static let defaultREMLatency: TimeInterval = 25 * 60
     }
     
     // MARK: - Sleep Cycle Constants

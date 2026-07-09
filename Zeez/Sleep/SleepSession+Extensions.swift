@@ -1,57 +1,24 @@
 import Foundation
 import os.log
 
-// MARK: - Time Data Structure
 extension SleepSession {
-    struct TimelyData {
-        let startTime: Date
-        let endTime: Date
-        let timeInSleep: TimeInterval
-        let timeInBed: TimeInterval
-        
-        init?(session: SleepSession) {
-            guard let start = session.startTime,
-                  let end = session.endTime else {
-                return nil
-            }
-            self.startTime = start
-            self.endTime = end
-            self.timeInSleep = end.timeIntervalSince(start)
-            self.timeInBed = end.timeIntervalSince(start)
-        }
-    }
-    
-    var timelyData: TimelyData? {
-        return TimelyData(session: self)
-    }
-    
     // MARK: - Time Calculations
-    var timeInSleep: TimeInterval {
+
+    /// Wall-clock span of the recorded session (`endTime - startTime`).
+    ///
+    /// This is a recorded interval, not time asleep: nothing here establishes that the
+    /// user was asleep for any of it. Never label it "time asleep" (claims rule 7) and
+    /// never use it as a sleep-efficiency denominator (rule 6). For asleep duration or
+    /// efficiency, use `derivedSleepMetrics`, which returns `unavailable` when the
+    /// qualifying Apple Health intervals are absent.
+    var recordedInterval: TimeInterval {
         guard let startTime = startTime,
               let endTime = endTime else {
             return 0
         }
         return endTime.timeIntervalSince(startTime)
     }
-    
-    var timeInBed: TimeInterval {
-        guard let startTime = startTime,
-              let endTime = endTime else {
-            return 0
-        }
-        return endTime.timeIntervalSince(startTime)
-    }
-    
-    var timeToFallAsleep: TimeInterval {
-        guard let stages = sleepStages?.allObjects as? [SleepStage],
-              let firstSleepStage = stages.sorted(by: { $0.startTime ?? Date() < $1.startTime ?? Date() }).first,
-              let stageStart = firstSleepStage.startTime,
-              let sessionStart = startTime else {
-            return AppConstants.Sleep.defaultREMLatency // Default fallback: 25 minutes
-        }
-        return stageStart.timeIntervalSince(sessionStart)
-    }
-    
+
     // MARK: - Score Display Policy
 
     /// Returns `true` when this session has a quality value that can be displayed.
@@ -94,12 +61,7 @@ extension SleepSession {
         derivedSleepMetrics.goalComparisonDuration.value
     }
 
-    // MARK: - Sleep Quality Calculations
-    var sleepEfficiency: Double {
-        guard timeInBed > 0 else { return 0 }
-        return (timeInSleep / timeInBed) * 100
-    }
-    
+    // MARK: - Heart Rate
     var averageHeartRate: Double {
         guard let heartRateData = heartRateData?.allObjects as? [HeartRateData],
               !heartRateData.isEmpty else {
@@ -130,55 +92,6 @@ extension SleepSession {
 
         return displayable.map { ($0.key.rawValue, $0.value) }
             .sorted { $0.0 < $1.0 }
-    }
-    
-    var totalSleepCycles: Int {
-        guard let stages = sleepStages?.allObjects as? [SleepStage] else {
-            return 0
-        }
-        
-        let displayableCount = stages.filter { SleepStageType.normalize($0.stageType) != nil }.count
-        return displayableCount / 4
-    }
-    
-    // MARK: - Environmental Analysis
-    var averageEnvironmentalScore: Double {
-        guard let readings = environmentalReadings?.allObjects as? [EnvironmentalReading],
-              !readings.isEmpty else {
-            return 0
-        }
-        
-        let scores = readings.map { reading -> Double in
-            // This is a simplified scoring mechanism
-            var score = 100.0
-            
-            // Unmeasured metrics are skipped (EnvironmentalReading.notMeasured) —
-            // a missing sensor must not read as a bad environment.
-
-            // Temperature optimal range: 18-22°C
-            if let temp = reading.measuredTemperature, temp < 18 || temp > 22 {
-                score -= 10
-            }
-
-            // Noise level optimal range: < 40 dB
-            if let noise = reading.measuredNoiseLevel, noise > 40 {
-                score -= 15
-            }
-
-            // Light level optimal range: < 10 lux
-            if let light = reading.measuredLightLevel, light > 10 {
-                score -= 10
-            }
-
-            // Humidity optimal range: 30-60%
-            if let humidity = reading.measuredHumidity, humidity < 30 || humidity > 60 {
-                score -= 10
-            }
-            
-            return max(0, score)
-        }
-        
-        return scores.reduce(0, +) / Double(scores.count)
     }
     
     // MARK: - Utility Methods

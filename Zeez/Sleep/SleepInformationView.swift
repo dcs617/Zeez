@@ -68,7 +68,7 @@ struct SleepInformationView: View {
             
             HStack(spacing: 20) {
                 CircularProgressView(
-                    value: timeInSleepHours(session),
+                    value: recordedIntervalHours(session),
                     total: 8,
                     lineWidth: 12,
                     size: 120
@@ -77,7 +77,7 @@ struct SleepInformationView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     MetricRow(
                         label: "Session Duration",
-                        value: formatDuration(session.timeInSleep)
+                        value: formatDuration(session.recordedInterval)
                     )
 
                     MetricRow(
@@ -93,7 +93,7 @@ struct SleepInformationView: View {
                 .fill(Color(UIColor.secondarySystemBackground))
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Recorded session duration section: Session duration \(formatDuration(session.timeInSleep)), reference sleep goal \(formatDuration(AppConstants.Sleep.targetDuration))")
+        .accessibilityLabel("Recorded session duration section: Session duration \(formatDuration(session.recordedInterval)), reference sleep goal \(formatDuration(AppConstants.Sleep.targetDuration))")
         .accessibilityHint("Shows the recorded session interval alongside your reference sleep goal")
         .accessibilityIdentifier("sleepDurationSection")
     }
@@ -156,8 +156,8 @@ struct SleepInformationView: View {
                 }
             } else {
                 HStack {
-                    let hours = Int(session.timeInSleep / 3600)
-                    let minutes = Int((session.timeInSleep.truncatingRemainder(dividingBy: 3600)) / 60)
+                    let hours = Int(session.recordedInterval / 3600)
+                    let minutes = Int((session.recordedInterval.truncatingRemainder(dividingBy: 3600)) / 60)
                     Text("\(hours)h \(minutes)m")
                         .font(.title)
                         .bold()
@@ -184,25 +184,25 @@ struct SleepInformationView: View {
                 TimeBreakdownRow(
                     label: "Deep Sleep",
                     duration: timeInStage(session, stage: "DEEP"),
-                    total: session.timeInSleep
+                    total: session.recordedInterval
                 )
                 
                 TimeBreakdownRow(
                     label: "Light Sleep",
                     duration: timeInStage(session, stage: "LIGHT"),
-                    total: session.timeInSleep
+                    total: session.recordedInterval
                 )
                 
                 TimeBreakdownRow(
                     label: "REM Sleep",
                     duration: timeInStage(session, stage: "REM"),
-                    total: session.timeInSleep
+                    total: session.recordedInterval
                 )
                 
                 TimeBreakdownRow(
                     label: "Time Awake",
                     duration: timeInStage(session, stage: "AWAKE"),
-                    total: session.timeInSleep
+                    total: session.recordedInterval
                 )
             }
         }
@@ -215,8 +215,8 @@ struct SleepInformationView: View {
     
     // MARK: - Helper Functions
     
-    private func timeInSleepHours(_ session: SleepSession) -> Double {
-        session.timeInSleep / 3600
+    private func recordedIntervalHours(_ session: SleepSession) -> Double {
+        session.recordedInterval / 3600
     }
     
     private func timeInBed(_ session: SleepSession) -> TimeInterval {

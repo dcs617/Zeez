@@ -19,8 +19,8 @@ struct SleepInfoCard: View {
                 GridRow {
                     SleepInfoRow(
                         icon: "moon.zzz.fill",
-                        title: "Time in sleep",
-                        value: formatDuration(session.timeInSleep)
+                        title: "Session duration",
+                        value: formatDuration(session.recordedInterval)
                     )
                     SleepInfoRow(
                         icon: "alarm.fill",

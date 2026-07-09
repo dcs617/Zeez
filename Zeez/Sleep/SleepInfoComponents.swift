@@ -149,9 +149,3 @@ struct SleepFactorRow: View {
         }
     }
 }
-
-extension SleepSession {
-    var timeAwake: TimeInterval {
-        timeInBed - timeInSleep
-    }
-}
