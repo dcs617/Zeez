@@ -318,11 +318,27 @@ filesystem-synchronized groups do not help). Bound by the claims contract: any s
 `qualityScore <= 1.0` no-score sentinel rather than render a number, and must read environmental values
 through the `measured*` accessors. Read `PARKED_CAPABILITIES.md` §4 and §6 first.
 
-**D3d. Dormant sleep-product Phases 3–6.** *Not an implementation item.* Against
-`Archive/SLEEP_REFACTORING_PLAN.md`: Phase 5 (experimental score) was substantially delivered by B8 plus
-A1/A7; Phase 3 (import integrity) partly by B9/B10/C6, leaving durable HealthKit sample identity; Phase 4
-partly by B4/B6; Phase 6 (owned-sensor staging) is a research project whose deliverable is a go/no-go
-report. Doc-only: reconcile the archive and re-file the residue into `PARKED_CAPABILITIES.md`.
+**D3d. Dormant sleep-product Phases 3–6.** *Not an implementation item.*
+- ✅ **Done 2026-07-09** — doc-only. `FUTURE_IMPROVEMENTS.md` called these "unexecuted Phases 3–6",
+  which was wrong in both directions: A–C delivered most of them under different names, and one phase
+  diverged from the plan deliberately. Each phase in `Archive/SLEEP_REFACTORING_PLAN.md` now carries a
+  status line. Phase 3 mostly landed via B9/B10/C6; Phase 4 via B4/B6/B7; Phase 5 substantially via B8
+  plus A1/A7; Phase 6 is untouched research. Residue registered as spec stubs in
+  `PARKED_CAPABILITIES.md` §8 (durable HealthKit sample identity; coverage reporting; a component
+  breakdown the user can see) and §9.
+- **Two findings the reconciliation surfaced, both recorded rather than fixed.** (1) Phase 5's exit
+  criterion "the score can explain itself from components" is **not met**: `QualityMetrics.components`
+  and `ZeezScoreComponent`'s weights never leave `SleepQualityCalculator`, so the score is still an
+  opaque number on screen. (2) Phase 6's exit criterion "no production stage inference without a
+  defensible evaluation" is in direct tension with what ships — `SleepStageAnalyzer` infers stages for
+  every Zeez-recorded session and B8 made `stageDistribution` a *required* component, so the score rests
+  on inference that has never been evaluated against a labeled reference. The "Experimental Zeez
+  Estimate" label is a **disclosure, not a validation**, and `PARKED_CAPABILITIES.md` §9 now says so.
+  Neither is a Phase D item; both need Daniel's decision.
+- Also corrected: Phase 5's plan text says "use imported Apple stages for inputs first; do not start with
+  Zeez-owned stage inference." The shipped design does the opposite on purpose — Apple Health sessions
+  with source-reported stages are **never** scored, because grading a source's own output is the larger
+  claims hazard (`ZEEZ_SCORE_SPECIFICATION.md` §2). Recorded as a divergence, not a defect.
 
 **D4. CI.** Add a watch-app build job and a scheduled UI smoke job.
 - ✅ **Done 2026-07-09** — shared the watch scheme (`xcshareddata/xcschemes/ZeezWatch Watch App.xcscheme`);

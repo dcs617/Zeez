@@ -50,9 +50,13 @@ Carried over from the archived roadmap's Phase 3.
 
 - Real WidgetKit extension. The in-app `Zeez/Widgets/` tree was deleted in **B1** (it was
   unreachable and carried fabricated readings); a genuine extension target has not been built.
-  Tracked as Phase D3; see `PARKED_CAPABILITIES.md` §4.
+  Tracked as Phase **D3c**; see `PARKED_CAPABILITIES.md` §4. Its Core Data prerequisite is done:
+  **D3a** moved the store into an App Group container, which had to happen before any user had data.
+  ⚠️ D3a is inert until the **App Groups capability is toggled once in Xcode** — CLI `xcodebuild`
+  strips profile-backed entitlements, so it cannot be done from the command line.
 - Apply for the critical-alerts entitlement (defensible for an alarm app); until granted,
-  keep the graceful `checkCriticalAlertsEnabled` degradation.
+  keep the graceful `checkCriticalAlertsEnabled` degradation. Phase **D3b** — paperwork only, no code
+  to write; file it early, Apple takes weeks.
 - Alarm health indicator in `AlarmSettingsView` ("N notifications scheduled; next fires
   at…"). Second audit **C5**; explicitly deferred past Phase C.
 - `NavigationView` → `NavigationStack` migration (start with `MainView` — remove the
@@ -60,10 +64,26 @@ Carried over from the archived roadmap's Phase 3.
 - Singleton graph → protocol injection, incrementally, following the
   `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern. Phase D2.
 
-## Sleep product roadmap (dormant)
+## Sleep product roadmap (reconciled 2026-07-09, second-audit D3d)
 
-`Archive/SLEEP_REFACTORING_PLAN.md` (2026-05-26) still holds unexecuted Phases 3–6
-(source-aware metrics engine, watch payload conformance, quality-score gating, owned-sensor
-staging research). If that work is ever revived, its claims rules remain binding:
-`SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` at the repo root is the **live** claims/labeling
-contract for all sleep metrics — it is deliberately not archived.
+`Archive/SLEEP_REFACTORING_PLAN.md` (2026-05-26) was described here as holding "unexecuted
+Phases 3–6". That was wrong in both directions: phases A–C delivered most of it under different
+names, and one phase diverged from the plan on purpose. Each phase in the archive now carries a
+status line. In summary:
+
+- **Phase 3 (import integrity)** — mostly delivered (B9, B10, C6). Outstanding: durable HealthKit
+  sample identity and an overlapping-source merge policy.
+- **Phase 4 (longitudinal review)** — mostly delivered (B4, B6, B7). Outstanding: date-range and
+  coverage reporting ("5 of 7 nights recorded").
+- **Phase 5 (experimental score)** — substantially delivered (B8, plus A1/A7). It **diverges** from
+  the plan on purpose: the score is computed only from Zeez-inferred stages and never grades
+  Apple-reported ones. Outstanding: a component breakdown the user can actually see, without which
+  the score cannot "explain itself" as the phase required.
+- **Phase 6 (owned-sensor staging)** — not started, and it is a research project whose deliverable is
+  a go/no-go report. Note that production **already** infers stages (`SleepStageAnalyzer`) and the
+  score depends on them, with an "Experimental" label standing in for an evaluation that has never
+  been run.
+
+The residue is registered as spec stubs in `PARKED_CAPABILITIES.md` §8 and §9. Claims rules remain
+binding on all of it: `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` and `ZEEZ_SCORE_SPECIFICATION.md` at
+the repo root are **live** contracts and are deliberately not archived.

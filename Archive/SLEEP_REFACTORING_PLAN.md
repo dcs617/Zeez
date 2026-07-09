@@ -292,6 +292,15 @@ Exit criteria:
 
 ### Phase 3: Import Integrity And Data Coverage
 
+Status: Partially delivered by the second audit (2026-07-09), outside this plan.
+**B9** downsamples heart rate into 60-second buckets on import; **B10** reports a
+per-type `RelatedDataOutcome` so a sub-import failure degrades the report rather
+than the import; **C6** counts data sources without materializing sessions and
+fixed a provenance bug where legacy `"iPhone"` mock sessions counted as real.
+**Still outstanding:** durable import identity from HealthKit sample identity
+rather than start-time proximity, overlapping-source merge policy, and
+user-visible coverage. Registered in `PARKED_CAPABILITIES.md` §8.
+
 Purpose: make Apple Health import sufficient for real longitudinal use.
 
 Work:
@@ -312,6 +321,15 @@ Exit criteria:
 
 ### Phase 4: Longitudinal Sleep Review
 
+Status: Partially delivered by the second audit (2026-07-09), outside this plan.
+`TrendsView` exists and is now claim-safe: **B4** relabeled the duration card as
+recorded session duration (in text and in VoiceOver), **B6** consolidated
+`SleepInformationView` on `DerivedSleepMetrics` and source-aware stage names, and
+**B7** removed the sleep-debt/recovery framing entirely. **Still outstanding:**
+date-range and coverage reporting ("5 of 7 nights recorded"). Registered in
+`PARKED_CAPABILITIES.md` §8. The widget question this phase deferred is answered:
+see second-audit D3a/D3c.
+
 Purpose: ship usefulness before inventing a proprietary score.
 
 Work:
@@ -331,6 +349,27 @@ Exit criteria:
   complete is the evidence?
 
 ### Phase 5: Experimental Zeez Score
+
+Status: Substantially delivered by the second audit (2026-07-09), outside this
+plan. **B8** wrote `ZEEZ_SCORE_SPECIFICATION.md` (a live contract, version
+`ZeezScore-3.0`) with components, weights, bands, a missing-input policy, derived
+confidence, versioning, and deterministic test vectors; **A7** stopped writing a
+fabricated `hoursSlept × 10` score; **A1** deleted the fabricated HRV grading.
+Exit criteria met: written specification and test vectors; components stored on
+`QualityMetrics`; missing inputs reduce availability rather than silently moving
+the score; no medical or Apple-equivalent claims.
+
+**Two deliberate divergences from the text below**, both recorded in the spec:
+
+1. This plan says "use imported Apple stages for inputs first; do not start with
+   Zeez-owned stage inference." The shipped design does the **opposite** — the
+   score is computed *only* from Zeez-inferred stages, and Apple Health sessions
+   carrying source-reported stages are **never** scored (spec §2, line 37: "Zeez
+   does not grade Apple's estimates"). Grading a source's own output turned out to
+   be the larger claims hazard.
+2. "Design a component score visible to the user" is **not** done. The components
+   exist on `QualityMetrics` but no surface renders the breakdown, so the score
+   cannot yet explain itself to a user. Registered in `PARKED_CAPABILITIES.md` §8.
 
 Purpose: develop quality scoring without overstating accuracy.
 
@@ -354,6 +393,19 @@ Exit criteria:
 - No medical or Apple-equivalent accuracy claims.
 
 ### Phase 6: Owned Sensor Analysis Research
+
+Status: Not started. This is a research project whose deliverable is a go/no-go
+report, not a coding task, and no commit has touched it.
+
+**Live tension worth stating plainly.** The exit criterion below reads "no
+production stage inference is enabled without a defensible evaluation."
+Production *does* infer stages: `SleepStageAnalyzer` derives them from movement
+and heart rate for every Zeez-recorded session, and B8 made `stageDistribution` a
+**required** component, so those inferred stages are what the Zeez score is built
+from. No dataset or device evaluation has been run — `ZEEZ_SCORE_SPECIFICATION.md`
+says so in its validation-status table. What stands in for an evaluation today is
+the Tier-3 "Experimental Zeez Estimate" labeling and the missing-input policy.
+That is a disclosure, not a validation. Registered in `PARKED_CAPABILITIES.md` §9.
 
 Purpose: decide whether Zeez should infer sleep stages independently.
 

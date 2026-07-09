@@ -255,3 +255,64 @@ the correct one, and no data backing exists.
 
 **Definition of done.** Real measurements with documented accuracy; a written correlation spec
 with test vectors; Tier-3 labeling throughout; a route into the app from `TrendsView`.
+
+---
+
+## 8. Sleep-product roadmap residue — *never built, not deleted*
+
+**Status:** Outstanding work from `Archive/SLEEP_REFACTORING_PLAN.md` Phases 3, 4, and 5, recorded
+here (second-audit D3d) because that plan is archived and phases A–C delivered most of it under
+different names. Nothing here is scheduled.
+
+**a. Durable HealthKit import identity (Phase 3).** Import currently deduplicates on start-time
+proximity. A correct implementation keys on HealthKit sample identity (`HKObject.uuid`) or stored
+import metadata, defines an overlapping-source merge policy, and makes re-import safe. B2's deleted
+Pillow importer failed exactly here — a ±1-hour tolerance matched across *any* source and silently
+dropped legitimate sessions. *Inputs required:* stable sample identity persisted on `SleepSession`,
+which is a Core Data model version bump. *Definition of done:* re-import neither duplicates nor
+discards; deterministic regression tests plus one documented device check.
+
+**b. Coverage reporting (Phases 3 and 4).** "5 of 7 nights recorded", and per-session input coverage
+(stages, asleep time, in-bed context, HR, respiratory, and what is missing) surfaced to the user.
+`QualityMetrics.inputCoverage` already computes this per session (B8) but nothing renders it.
+*Claims tier:* Tier 1 — it reports what was recorded, not what it means. *Missing-input policy:* a
+night with no recording is absent, never zero; trends must never average unavailable scores or
+fabricate missing nights.
+
+**c. A component score the user can see (Phase 5).** The score's exit criterion "can explain itself
+from components" is **not met**. `QualityMetrics.components` holds a per-component
+`ComponentResult` and `ZeezScoreComponent` carries the weights, but the values never leave
+`SleepQualityCalculator` — no view renders the breakdown, so the score is still an opaque number to
+the user. *Definition of done:* a breakdown surface that names each component, its weight, and
+whether it was available; the "Experimental Zeez Estimate" label in text **and** `accessibilityValue`
+(rule 10); the `qualityScore <= 1.0` sentinel rendered as "no estimate", never as a number.
+
+---
+
+## 9. Owned-sensor stage inference — *shipped, unvalidated*
+
+**Status:** Live in production. The **evaluation** is what is parked, not the code.
+`Archive/SLEEP_REFACTORING_PLAN.md` Phase 6.
+
+**What it does.** `Zeez/Sleep/Stage/SleepStageAnalyzer.swift` infers sleep stages from movement and
+heart rate for every Zeez-recorded session. B8 made `stageDistribution` a **required** score
+component, so those inferred stages are the substrate of the Zeez score.
+
+**The gap.** Phase 6's exit criterion is "no production stage inference is enabled without a
+defensible evaluation." No dataset or device evaluation has been run;
+`ZEEZ_SCORE_SPECIFICATION.md`'s validation-status table says so. What stands in for an evaluation is
+the Tier-3 "Experimental Zeez Estimate" label and the missing-input policy. **That is a disclosure,
+not a validation**, and the distinction should not blur over time.
+
+**Inputs required for an evaluation.** A labeled reference set with *comparable sensors*. Per the
+plan: MESA wrist actigraphy supports sleep/wake research; PSG/EEG-only datasets do **not** validate a
+watch-input stage model, and citing them would itself be a claims violation.
+
+**Claims tier and label.** Tier 3, and it must stay there. Inferred stages must never be presented
+as equivalent to Apple-Health-reported stages — `displayName(reportedByAppleHealth:)` and
+`stageSourceDescription` exist to keep the two visually distinct. The score deliberately refuses to
+grade Apple's own stages (spec §2), so the two provenances must never be merged into one denominator.
+
+**Definition of done.** A go/no-go report measuring inferred stages against a labeled reference,
+documenting failure cases. If no-go, the honest outcome is to stop scoring stage distribution rather
+than to keep labeling it experimental indefinitely.
