@@ -97,9 +97,12 @@ class RealDataManager {
             defer { dispatchGroup.leave() }
             
             switch result {
-            case .success(let count):
-                summary.healthKitSessions = count
-                ZeezLogger.info(ZeezLogger.coreData, "Imported \(count) HealthKit sessions")
+            case .success(let importResult):
+                summary.healthKitSessions = importResult.sessionCount
+                ZeezLogger.info(ZeezLogger.coreData, "Imported \(importResult.sessionCount) HealthKit sessions")
+                if importResult.hasPartialFailure {
+                    ZeezLogger.error(ZeezLogger.error, "Sessions imported but related data was incomplete")
+                }
             case .failure(let error):
                 errors.append(error)
                 ZeezLogger.error(ZeezLogger.error, "HealthKit import failed: \(error.localizedDescription)")

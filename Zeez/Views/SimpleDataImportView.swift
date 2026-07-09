@@ -4,6 +4,7 @@ import os.log
 struct SimpleDataImportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var importStatus: String = ""
+    @State private var importDidPartiallyFail = false
     @State private var isImporting = false
     @State private var showingAuthAlert = false
     @State private var authError: Error?
@@ -33,11 +34,15 @@ struct SimpleDataImportView: View {
             if !importStatus.isEmpty {
                 Text(importStatus)
                     .font(.body)
-                    .foregroundColor(importStatus.contains("Error") ? .red : .green)
-                    .multilineTextAlignment(.center)
+                    .foregroundColor(statusColor)
+                    .multilineTextAlignment(.leading)
                     .padding()
                     .background(Color.gray.opacity(0.1))
                     .cornerRadius(12)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Import status")
+                    .accessibilityValue(importStatus)
+                    .accessibilityIdentifier("importStatus")
             }
             
             Spacer()
@@ -99,6 +104,45 @@ struct SimpleDataImportView: View {
         }
     }
     
+    private var statusColor: Color {
+        if importStatus.hasPrefix("❌") { return .red }
+        if importDidPartiallyFail { return .orange }
+        return .green
+    }
+
+    /// Builds the completion message, naming any data type that did not import.
+    ///
+    /// The importer used to fire heart-rate and respiratory sub-imports and forget them, so
+    /// a user could be told "imported 30 sessions" while both were empty (second-audit B10).
+    static func statusMessage(for result: HealthKitImportResult) -> String {
+        guard result.sessionCount > 0 else {
+            return "ℹ️ No sleep data found in Apple Health. Make sure you're using the Sleep app or another sleep tracker that writes to HealthKit."
+        }
+
+        var message = "✅ Imported \(result.sessionCount) sleep \(result.sessionCount == 1 ? "session" : "sessions") from Apple Health."
+
+        message += "\n" + line(for: result.heartRate, type: "Heart rate")
+        message += "\n" + line(for: result.respiratory, type: "Respiratory rate")
+
+        if result.hasPartialFailure {
+            message += "\n\nYour sessions were saved. You can import again to retry the missing data."
+        }
+        return message
+    }
+
+    private static func line(for outcome: RelatedDataOutcome, type: String) -> String {
+        switch outcome {
+        case .imported(let count) where count > 0:
+            return "• \(type): \(count) readings"
+        case .imported:
+            return "• \(type): none recorded for these sessions"
+        case .unavailable:
+            return "• \(type): not available on this device"
+        case .failed:
+            return "⚠️ \(type): could not be imported"
+        }
+    }
+
     private func importHealthKitData() {
         guard !isImporting && isViewReady else { 
             ZeezLogger.debug(ZeezLogger.coreData, "Import blocked - isImporting: \(isImporting), isViewReady: \(isViewReady)")
@@ -130,16 +174,13 @@ struct SimpleDataImportView: View {
                             self.isImporting = false
                             
                             switch result {
-                            case .success(let count):
-                                if count > 0 {
-                                    self.importStatus = "✅ Successfully imported \(count) sleep sessions from HealthKit!"
-                                    ZeezLogger.info(ZeezLogger.coreData, "Successfully imported \(count) sleep sessions from HealthKit")
-                                } else {
-                                    self.importStatus = "ℹ️ No sleep data found in Apple Health. Make sure you're using the Sleep app or another sleep tracker that writes to HealthKit."
-                                    ZeezLogger.info(ZeezLogger.coreData, "No HealthKit sleep data found to import")
-                                }
+                            case .success(let importResult):
+                                self.importStatus = Self.statusMessage(for: importResult)
+                                self.importDidPartiallyFail = importResult.hasPartialFailure
+                                ZeezLogger.info(ZeezLogger.coreData, "Imported \(importResult.sessionCount) sessions; HR \(String(describing: importResult.heartRate)), respiratory \(String(describing: importResult.respiratory))")
                             case .failure(let error):
                                 self.importStatus = "❌ Error importing: \(error.localizedDescription)"
+                                self.importDidPartiallyFail = false
                                 ZeezLogger.error(ZeezLogger.error, "HealthKit import failed: \(error.localizedDescription)")
                             }
                         }

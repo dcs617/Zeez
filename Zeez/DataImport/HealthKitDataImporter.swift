@@ -3,6 +3,39 @@ import HealthKit
 import CoreData
 import os.log
 
+// MARK: - Import results
+
+/// Outcome of one related-data sub-import (heart rate, respiratory rate).
+///
+/// These used to be fire-and-forget: the importer reported "imported N sessions" while a
+/// sub-import could fail silently, leaving sessions without the physiological data the
+/// user expected. Each sub-import now reports for itself.
+enum RelatedDataOutcome: Equatable {
+    /// Completed; `readingCount` rows were stored across all imported sessions.
+    case imported(readingCount: Int)
+    /// The quantity type is not available on this device, so nothing was attempted.
+    case unavailable
+    /// At least one session's sub-import failed. Sessions themselves were still saved.
+    case failed(String)
+
+    var didFail: Bool {
+        if case .failed = self { return true }
+        return false
+    }
+}
+
+/// What `importSleepData` accomplished. Sessions are saved before related data is fetched,
+/// so a related-data failure never discards imported sessions — it is reported alongside.
+struct HealthKitImportResult: Equatable {
+    let sessionCount: Int
+    let heartRate: RelatedDataOutcome
+    let respiratory: RelatedDataOutcome
+
+    var hasPartialFailure: Bool {
+        heartRate.didFail || respiratory.didFail
+    }
+}
+
 // MARK: - Testable grouping helper (no HealthKit dependency)
 
 /// A minimal interval representation used to cluster sleep samples without coupling tests to HealthKit types.
@@ -143,7 +176,12 @@ class HealthKitDataImporter {
 
     // MARK: - Import Sleep Data
 
-    func importSleepData(from startDate: Date, to endDate: Date, completion: @escaping (Result<Int, Error>) -> Void) {
+    /// Imports sleep sessions and their related physiological data.
+    ///
+    /// Completion fires only once every sub-import has finished, so callers can report
+    /// per-type outcomes rather than assuming success (second-audit B10).
+    func importSleepData(from startDate: Date, to endDate: Date,
+                         completion: @escaping (Result<HealthKitImportResult, Error>) -> Void) {
         ZeezLogger.info(ZeezLogger.coreData, "Starting HealthKit sleep data import from \(startDate) to \(endDate)")
 
         fetchSleepAnalysisData(from: startDate, to: endDate) { [weak self] result in
@@ -182,9 +220,11 @@ class HealthKitDataImporter {
         healthStore.execute(query)
     }
 
-    private func processSleepData(_ sleepSamples: [HKCategorySample], completion: @escaping (Result<Int, Error>) -> Void) {
+    private func processSleepData(_ sleepSamples: [HKCategorySample],
+                                  completion: @escaping (Result<HealthKitImportResult, Error>) -> Void) {
         let context = persistenceController.container.newBackgroundContext()
         var importedCount = 0
+        var pendingRelatedImports: [(sessionID: NSManagedObjectID, start: Date, end: Date)] = []
 
         context.perform {
             do {
@@ -215,14 +255,11 @@ class HealthKitDataImporter {
                     let sessionID = try saveImportedSessionForRelatedData(session, in: context)
                     importedCount += 1
 
-                    // Import heart rate and respiratory data asynchronously.
-                    // Pass only the saved objectID to avoid crossing context-queue boundaries.
-                    let sessionStart = groupStart
-                    let sessionEnd = groupEnd
-                    self.importHeartRateData(sessionID: sessionID, from: sessionStart, to: sessionEnd)
-                    self.importRespiratoryData(sessionID: sessionID, from: sessionStart, to: sessionEnd)
+                    // Related data is fetched after the parent sessions are saved.
+                    // Only the saved objectID crosses context-queue boundaries.
+                    pendingRelatedImports.append((sessionID, groupStart, groupEnd))
 
-                    ZeezLogger.debug(ZeezLogger.coreData, "Imported session \(importedCount) (\(sessionStart) – \(sessionEnd))")
+                    ZeezLogger.debug(ZeezLogger.coreData, "Imported session \(importedCount) (\(groupStart) – \(groupEnd))")
                 }
 
                 if context.hasChanges {
@@ -230,13 +267,80 @@ class HealthKitDataImporter {
                     ZeezLogger.info(ZeezLogger.coreData, "Saved \(importedCount) imported session(s)")
                 }
 
-                DispatchQueue.main.async { completion(.success(importedCount)) }
+                let sessionCount = importedCount
+                self.importRelatedData(for: pendingRelatedImports) { heartRate, respiratory in
+                    let result = HealthKitImportResult(sessionCount: sessionCount,
+                                                       heartRate: heartRate,
+                                                       respiratory: respiratory)
+                    DispatchQueue.main.async { completion(.success(result)) }
+                }
 
             } catch {
                 ZeezLogger.error(ZeezLogger.error, "Failed to save imported sleep data: \(error.localizedDescription)")
                 DispatchQueue.main.async { completion(.failure(error)) }
             }
         }
+    }
+
+    /// Runs both sub-imports for every session and reports one outcome per data type.
+    ///
+    /// Sessions are already saved by the time this runs, so a sub-import failure degrades
+    /// the report rather than the import.
+    private func importRelatedData(
+        for sessions: [(sessionID: NSManagedObjectID, start: Date, end: Date)],
+        completion: @escaping (RelatedDataOutcome, RelatedDataOutcome) -> Void
+    ) {
+        guard !sessions.isEmpty else {
+            completion(.imported(readingCount: 0), .imported(readingCount: 0))
+            return
+        }
+
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var heartRateResults: [Result<Int, Error>] = []
+        var respiratoryResults: [Result<Int, Error>] = []
+
+        for session in sessions {
+            group.enter()
+            importHeartRateData(sessionID: session.sessionID, from: session.start, to: session.end) { result in
+                lock.withLock { heartRateResults.append(result) }
+                group.leave()
+            }
+
+            group.enter()
+            importRespiratoryData(sessionID: session.sessionID, from: session.start, to: session.end) { result in
+                lock.withLock { respiratoryResults.append(result) }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .global(qos: .userInitiated)) {
+            completion(Self.summarize(heartRateResults), Self.summarize(respiratoryResults))
+        }
+    }
+
+    /// Any failure makes the whole type a partial failure — the user is told which data is
+    /// incomplete rather than shown a success that silently lost a night's samples.
+    private static func summarize(_ results: [Result<Int, Error>]) -> RelatedDataOutcome {
+        var total = 0
+        var firstFailure: Error?
+
+        for result in results {
+            switch result {
+            case .success(let count):
+                total += count
+            case .failure(let error):
+                if firstFailure == nil { firstFailure = error }
+            }
+        }
+
+        if let firstFailure {
+            if let appError = firstFailure as? AppError, appError == .healthKitNotAvailable, total == 0 {
+                return .unavailable
+            }
+            return .failed(firstFailure.localizedDescription)
+        }
+        return .imported(readingCount: total)
     }
 
     // MARK: - Session Creation
@@ -304,15 +408,23 @@ class HealthKitDataImporter {
     ///
     /// Accepts an `NSManagedObjectID` instead of a `SleepSession` to avoid crossing
     /// Core Data context-queue boundaries with a managed object reference.
-    private func importHeartRateData(sessionID: NSManagedObjectID, from startTime: Date, to endTime: Date) {
-        guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
+    private func importHeartRateData(sessionID: NSManagedObjectID, from startTime: Date, to endTime: Date,
+                                     completion: @escaping (Result<Int, Error>) -> Void) {
+        guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+            completion(.failure(AppError.healthKitNotAvailable))
+            return
+        }
 
         let predicate = HKQuery.predicateForSamples(withStart: startTime, end: endTime, options: .strictStartDate)
         let query = HKSampleQuery(sampleType: heartRateType, predicate: predicate,
                                   limit: HKObjectQueryNoLimit, sortDescriptors: nil) { [weak self] _, samples, error in
-            guard let self else { return }
+            guard let self else {
+                completion(.failure(AppError.dataProcessingFailed))
+                return
+            }
             if let error = error {
                 ZeezLogger.error(ZeezLogger.error, "Failed to fetch heart rate data: \(error.localizedDescription)")
+                completion(.failure(error))
                 return
             }
 
@@ -331,7 +443,10 @@ class HealthKitDataImporter {
 
             let bgContext = self.persistenceController.container.newBackgroundContext()
             bgContext.perform {
-                guard let session = try? bgContext.existingObject(with: sessionID) as? SleepSession else { return }
+                guard let session = try? bgContext.existingObject(with: sessionID) as? SleepSession else {
+                    completion(.failure(AppError.dataProcessingFailed))
+                    return
+                }
                 for reading in readings {
                     let heartRate = HeartRateData(context: bgContext)
                     heartRate.id = UUID()
@@ -343,8 +458,10 @@ class HealthKitDataImporter {
                 }
                 do {
                     try bgContext.save()
+                    completion(.success(readings.count))
                 } catch {
                     ZeezLogger.error(ZeezLogger.error, "Failed to save heart rate data: \(error.localizedDescription)")
+                    completion(.failure(error))
                 }
             }
         }
@@ -352,22 +469,34 @@ class HealthKitDataImporter {
     }
 
     /// Import respiratory samples for the session identified by `sessionID`.
-    private func importRespiratoryData(sessionID: NSManagedObjectID, from startTime: Date, to endTime: Date) {
-        guard let respiratoryType = HKObjectType.quantityType(forIdentifier: .respiratoryRate) else { return }
+    private func importRespiratoryData(sessionID: NSManagedObjectID, from startTime: Date, to endTime: Date,
+                                       completion: @escaping (Result<Int, Error>) -> Void) {
+        guard let respiratoryType = HKObjectType.quantityType(forIdentifier: .respiratoryRate) else {
+            completion(.failure(AppError.healthKitNotAvailable))
+            return
+        }
 
         let predicate = HKQuery.predicateForSamples(withStart: startTime, end: endTime, options: .strictStartDate)
         let query = HKSampleQuery(sampleType: respiratoryType, predicate: predicate,
                                   limit: HKObjectQueryNoLimit, sortDescriptors: nil) { [weak self] _, samples, error in
-            guard let self else { return }
+            guard let self else {
+                completion(.failure(AppError.dataProcessingFailed))
+                return
+            }
             if let error = error {
                 ZeezLogger.error(ZeezLogger.error, "Failed to fetch respiratory data: \(error.localizedDescription)")
+                completion(.failure(error))
                 return
             }
 
+            let quantitySamples = (samples ?? []).compactMap { $0 as? HKQuantitySample }
             let bgContext = self.persistenceController.container.newBackgroundContext()
             bgContext.perform {
-                guard let session = try? bgContext.existingObject(with: sessionID) as? SleepSession else { return }
-                samples?.compactMap { $0 as? HKQuantitySample }.forEach { sample in
+                guard let session = try? bgContext.existingObject(with: sessionID) as? SleepSession else {
+                    completion(.failure(AppError.dataProcessingFailed))
+                    return
+                }
+                quantitySamples.forEach { sample in
                     let respiratoryData = RespiratoryData(context: bgContext)
                     respiratoryData.id = UUID()
                     respiratoryData.timestamp = sample.startDate
@@ -378,8 +507,10 @@ class HealthKitDataImporter {
                 }
                 do {
                     try bgContext.save()
+                    completion(.success(quantitySamples.count))
                 } catch {
                     ZeezLogger.error(ZeezLogger.error, "Failed to save respiratory data: \(error.localizedDescription)")
+                    completion(.failure(error))
                 }
             }
         }
