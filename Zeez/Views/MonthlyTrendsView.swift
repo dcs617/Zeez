@@ -49,7 +49,7 @@ struct MonthlyTrendsView: View {
                             }
                         }
                         .accessibilityLabel("View sleep goal shortfall")
-                        .accessibilityHint("Navigate to recorded sleep comparison details and sleep debt education")
+                        .accessibilityHint("Navigate to recorded sleep comparison details")
                         .accessibilityIdentifier("sleepDebtEducationLink")
                     }
                 }
@@ -199,7 +199,7 @@ struct MonthlyTrendsView: View {
                                             .foregroundColor(.blue)
                                     }
                                     .accessibilityLabel("View sleep goal shortfall details")
-                                    .accessibilityHint("Navigate to goal comparison and sleep debt education")
+                                    .accessibilityHint("Navigate to goal comparison details")
                                     .accessibilityIdentifier("sleepDebtInfoLink")
                                 }
                             }
@@ -253,19 +253,6 @@ struct MonthlyTrendsView: View {
         let hours = Int(duration / 3600)
         let minutes = Int((duration.truncatingRemainder(dividingBy: 3600)) / 60)
         return String(format: "%dh %02dm", hours, minutes)
-    }
-    
-    private func getSeverity(_ debt: TimeInterval) -> DebtSeverity {
-        let debtHours = debt / 3600
-        if debtHours <= 2 {
-            return .minimal
-        } else if debtHours <= 5 {
-            return .moderate
-        } else if debtHours <= 10 {
-            return .significant
-        } else {
-            return .severe
-        }
     }
 }
 

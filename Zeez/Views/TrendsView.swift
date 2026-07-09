@@ -7,9 +7,7 @@ struct TrendsView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @State private var selectedRange: TrendTimeRange = .days
     @State private var monthlyData: MonthlyTrendData?
-    @State private var sleepMetrics: SleepDebtMetrics?
     @State private var isLoading = false
-    @State private var showingRecommendations = false
     @AppStorage("dev_showPremiumFeatures") private var showPremiumFeatures = false
     @State private var selectedSession: SleepSession?
     
@@ -38,11 +36,6 @@ struct TrendsView: View {
         .onChange(of: selectedRange) { _, _ in
             Task {
                 await loadData()
-            }
-        }
-        .sheet(isPresented: $showingRecommendations) {
-            if let metrics = sleepMetrics {
-                RecommendationsView(metrics: metrics)
             }
         }
         .sheet(item: $selectedSession) { session in
@@ -138,13 +131,9 @@ struct TrendsView: View {
             .accessibilityLabel("Monthly sleep analysis chart")
             .accessibilityIdentifier("monthlyChartSection")
             
-            TrendInsightsSection(
-                insights: monthlyData.insights,
-                metrics: sleepMetrics,
-                showingRecommendations: $showingRecommendations
-            )
+            TrendInsightsSection(insights: monthlyData.insights)
             .padding(.horizontal)
-            .accessibilityLabel("Monthly sleep insights and recommendations")
+            .accessibilityLabel("Monthly sleep insights")
             .accessibilityIdentifier("monthlyInsightsSection")
         }
         
@@ -214,11 +203,6 @@ struct TrendsView: View {
     private func loadData() async {
         isLoading = true
         defer { isLoading = false }
-
-        // sleepMetrics intentionally left nil: fixed placeholder values have been removed.
-        // Real sleep-debt calculation is not yet implemented; the field is retained for
-        // future use when actual data is available.
-        sleepMetrics = nil
 
         // Load monthly trends if needed
         if selectedRange == .month {

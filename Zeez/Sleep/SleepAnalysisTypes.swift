@@ -230,18 +230,4 @@ final class SleepDebtCalculator {
     func getDebtHistory(forDays days: Int, context: NSManagedObjectContext) -> [(Date, Double)] {
         summary(forDays: days, context: context)?.days.map { ($0.date, $0.shortfall / 3600) } ?? []
     }
-
-    func calculateRecoveryDays(debtHours: Double) -> Int {
-        guard debtHours > 0 else { return 0 }
-        return Int(ceil(debtHours))
-    }
-
-    func getDebtSeverity(debtHours: Double) -> DebtSeverity {
-        switch debtHours {
-        case ..<2: return .minimal
-        case 2..<7: return .moderate
-        case 7..<14: return .significant
-        default: return .severe
-        }
-    }
 }

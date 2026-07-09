@@ -235,7 +235,7 @@ enum MonthlyInsight {
     case qualityDeclining
     case highConsistency
     case lowConsistency
-    case significantSleepDebt
+    case belowSelectedGoal
     case environmentalImprovementNeeded(recommendations: [EnvironmentalRecommendation])
     
     var description: String {
@@ -248,7 +248,7 @@ enum MonthlyInsight {
             return "Excellent sleep schedule consistency"
         case .lowConsistency:
             return "Consider stabilizing your sleep schedule"
-        case .significantSleepDebt:
+        case .belowSelectedGoal:
             return "Recorded sleep is below your selected goal"
         case .environmentalImprovementNeeded(let recommendations):
             return "Environmental improvements suggested:\n" +
@@ -266,7 +266,7 @@ enum MonthlyInsight {
             return "checkmark.circle"
         case .lowConsistency:
             return "exclamationmark.circle"
-        case .significantSleepDebt:
+        case .belowSelectedGoal:
             return "zzz"
         case .environmentalImprovementNeeded:
             return "leaf"

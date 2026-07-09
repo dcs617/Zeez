@@ -6,7 +6,7 @@ struct SleepInfoGuideView: View {
     
     private let metrics = [
         (title: "Sleep Efficiency", icon: "chart.pie.fill", description: "The percentage of time in bed that you spend actually sleeping. A score above 85% is considered good."),
-        (title: "Sleep Debt", icon: "hourglass", description: "The cumulative effect of not getting enough sleep. It's calculated based on the difference between your actual sleep and target sleep duration."),
+        (title: "Sleep Goal Shortfall", icon: "hourglass", description: "How far your recorded sleep fell below the goal you selected. It is a comparison with your own goal, not a measure of how much sleep your body needs."),
         (title: "Sleep Consistency", icon: "clock.fill", description: "How regular your sleep schedule is. Going to bed and waking up at consistent times improves sleep quality."),
         (title: "Environmental Factors", icon: "thermometer", description: "Optimal sleep conditions: Temperature (18-22°C), Humidity (30-50%), minimal light and noise levels.")
     ]

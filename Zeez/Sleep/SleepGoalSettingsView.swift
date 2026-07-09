@@ -16,7 +16,6 @@ struct SleepGoalSettingsView: View {
     @State private var targetBedtime: Date
     @State private var targetWakeTime: Date
     @State private var selectedDays: Set<Int>
-    @State private var showingRecommendations = false
     
     // Initialize from current preferences or defaults
     init() {
@@ -36,8 +35,6 @@ struct SleepGoalSettingsView: View {
                     .accessibilityIdentifier("sleepGoalSection")
                 scheduleSection
                     .accessibilityIdentifier("scheduleSection")
-                recommendationsSection
-                    .accessibilityIdentifier("recommendationsSection")
                 calculatedMetricsSection
                     .accessibilityIdentifier("calculatedMetricsSection")
             }
@@ -140,40 +137,18 @@ struct SleepGoalSettingsView: View {
         .accessibilityIdentifier("scheduleSectionContainer")
     }
     
-    private var recommendationsSection: some View {
-        Section {
-            Button(action: { showingRecommendations = true }) {
-                HStack {
-                    Image(systemName: "lightbulb")
-                        .foregroundColor(.yellow)
-                        .accessibilityHidden(true)
-                    Text("Get Personalized Recommendations")
-                }
-            }
-            .accessibilityLabel("Get personalized sleep recommendations")
-            .accessibilityHint("View sleep recommendations based on your personal profile and history")
-            .accessibilityIdentifier("recommendationsButton")
-        } footer: {
-            Text("Based on your age, activity level, and sleep history")
-                .accessibilityLabel("Recommendations are based on your age, activity level, and sleep history")
-                .accessibilityIdentifier("recommendationsFooter")
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("recommendationsSectionContainer")
-    }
-    
     private var calculatedMetricsSection: some View {
         Section {
             HStack {
-                Text("Weekly Sleep Debt")
+                Text("Weekly Sleep Goal Shortfall")
                 Spacer()
-                Text(calculateWeeklySleepDebt())
+                Text(calculateWeeklyGoalShortfall())
                     .foregroundColor(.secondary)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Weekly sleep debt \(calculateWeeklySleepDebt())")
+            .accessibilityLabel("Weekly sleep goal shortfall \(calculateWeeklyGoalShortfall())")
             .accessibilityHint("Recorded sleep duration below your selected goal during the past seven days")
-            .accessibilityIdentifier("weeklySleepDebt")
+            .accessibilityIdentifier("weeklyGoalShortfall")
             
             HStack {
                 Text("Monthly Average")
@@ -229,7 +204,7 @@ struct SleepGoalSettingsView: View {
         }
     }
     
-    private func calculateWeeklySleepDebt() -> String {
+    private func calculateWeeklyGoalShortfall() -> String {
         guard let summary = SleepDebtCalculator.shared.summary(context: viewContext),
               summary.coveredDayCount > 0 else {
             return "No data"

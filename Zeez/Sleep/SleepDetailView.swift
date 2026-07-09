@@ -88,14 +88,14 @@ struct SleepDetailView: View {
                         Image(systemName: "exclamationmark.triangle")
                             .foregroundColor(.orange)
                             .accessibilityHidden(true)
-                        Text("View Sleep Debt Analysis")
+                        Text("View Sleep Goal Shortfall")
                             .font(.caption)
                             .foregroundColor(.blue)
                     }
                 }
-                .accessibilityLabel("View sleep debt analysis")
-                .accessibilityHint("Navigate to learn about sleep debt and recovery")
-                .accessibilityIdentifier("sleepDebtLink")
+                .accessibilityLabel("View sleep goal shortfall")
+                .accessibilityHint("Navigate to learn how your recorded sleep compares with your selected goal")
+                .accessibilityIdentifier("sleepGoalShortfallLink")
             }
         }
         .padding()

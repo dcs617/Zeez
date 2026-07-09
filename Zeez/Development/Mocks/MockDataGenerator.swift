@@ -368,7 +368,7 @@ class MockDataGenerator {
            let startTime = session.startTime {
             metrics.totalSleepTime = endTime.timeIntervalSince(startTime)
             
-            // Calculate sleep debt based on 8-hour target
+            // Calculate the shortfall against the 8-hour goal
             let targetSleep: TimeInterval = AppConstants.Sleep.targetDuration
             metrics.sleepDebt = targetSleep - metrics.totalSleepTime
         }

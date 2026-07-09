@@ -191,7 +191,7 @@ struct AppConstants {
         /// Historical trend chart period (86400 = 1 day in seconds)
         static let oneDayInSeconds: TimeInterval = 86400
         
-        /// Sleep debt weekly calculation (7 * 3600 = 7 hours)
+        /// Weekly goal-shortfall calculation window (7 * 3600 = 7 hours)
         static let weeklyHours: TimeInterval = 7 * 3600
         
         /// Quality score maximum value for scaling (100%)
