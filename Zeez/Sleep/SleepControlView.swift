@@ -226,12 +226,13 @@ struct SleepControlView: View {
         // Request mic permission up front, but never block the session on it —
         // a denied mic just means noise is stored as "not measured" (2.9).
         EnvironmentalMonitor.shared.checkSensorAvailability { _ in
+            // `startSession` starts the environmental and movement monitors itself.
+            // Do not start them here too: the second start re-prompts for permissions,
+            // and A4 established that the foreground start path owns monitor lifecycle.
             SleepSessionManager.shared.startSession { result in
                 switch result {
-                case .success(let session):
-                    // Start all monitoring systems
-                    EnvironmentalMonitor.shared.startMonitoring(for: session)
-                    MovementDataManager.shared.startMonitoring(for: session)
+                case .success:
+                    break
 
                 case .failure(let error):
                     ZeezLogger.error(ZeezLogger.error, "Failed to create sleep session", error: error)
