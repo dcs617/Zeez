@@ -316,15 +316,28 @@ class HealthKitDataImporter {
                 return
             }
 
+            // Bucket before persisting: a dense night would otherwise write thousands of
+            // rows that every session read then faults in. See HeartRateDownsampler.
+            let unit = HKUnit(from: "count/min")
+            let sourceSamples = (samples ?? []).compactMap { $0 as? HKQuantitySample }.map {
+                HeartRateDownsampler.Sample(
+                    timestamp: $0.startDate,
+                    value: $0.quantity.doubleValue(for: unit),
+                    deviceType: $0.device?.name
+                )
+            }
+            let readings = HeartRateDownsampler.downsample(sourceSamples)
+            ZeezLogger.debug(ZeezLogger.coreData, "Heart rate: \(sourceSamples.count) samples → \(readings.count) stored readings")
+
             let bgContext = self.persistenceController.container.newBackgroundContext()
             bgContext.perform {
                 guard let session = try? bgContext.existingObject(with: sessionID) as? SleepSession else { return }
-                samples?.compactMap { $0 as? HKQuantitySample }.forEach { sample in
+                for reading in readings {
                     let heartRate = HeartRateData(context: bgContext)
                     heartRate.id = UUID()
-                    heartRate.timestamp = sample.startDate
-                    heartRate.value = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
-                    heartRate.deviceType = sample.device?.name ?? "Apple Watch"
+                    heartRate.timestamp = reading.timestamp
+                    heartRate.value = reading.value
+                    heartRate.deviceType = reading.deviceType ?? "Apple Watch"
                     heartRate.confidence = 90.0
                     heartRate.session = session
                 }

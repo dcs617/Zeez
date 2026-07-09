@@ -168,7 +168,12 @@ final class SleepSessionManager {
                             return
                         }
 
-                        heartRateData.forEach { data in
+                        // Same bucketing as the bulk importer, so a session's stored
+                        // heart-rate resolution does not depend on how it was created.
+                        let readings = HeartRateDownsampler.downsample(
+                            heartRateData.map { HeartRateDownsampler.Sample(timestamp: $0.timestamp, value: $0.value) }
+                        )
+                        readings.forEach { data in
                             let heartRate = HeartRateData(context: context)
                             heartRate.id = UUID()
                             heartRate.timestamp = data.timestamp
