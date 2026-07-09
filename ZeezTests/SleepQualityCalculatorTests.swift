@@ -14,6 +14,21 @@ struct SleepQualityCalculatorTests {
 
     // MARK: - Fixtures
 
+    /// Fixtures are anchored to a fixed instant rather than `Date()`.
+    ///
+    /// Sessions used to be built as `start = Date() - 8h` and `end = Date()`, two separate
+    /// clock reads. The recording window was therefore `28800 + δ` seconds, where δ is
+    /// however long elapsed between them. `sleepOpportunityResult` divides asleep time by
+    /// that window, so a vector expecting a ratio of exactly 0.5 got 0.49999999998 whenever
+    /// the two reads straddled a microsecond boundary — a flake that only appeared under
+    /// parallel load. The specification this suite exists to pin requires *deterministic*
+    /// test vectors, so the clock has no business here.
+    private static let sessionEnd = Date(timeIntervalSinceReferenceDate: 800_000_000)
+
+    private static func start(hoursBefore hours: Double) -> Date {
+        sessionEnd.addingTimeInterval(-hours * 3600)
+    }
+
     private func makeSession(in context: NSManagedObjectContext,
                              start: Date?, end: Date?) -> SleepSession {
         var session: SleepSession!
@@ -74,8 +89,8 @@ struct SleepQualityCalculatorTests {
     /// 8 h, 20 equal stages: deep 4 (20%), light 11 (55%), rem 5 (25%) — every share
     /// inside its optimal band; onset at t=0; zero wake episodes; opportunity 1.0.
     private func makePerfectSession(in context: NSManagedObjectContext) -> SleepSession {
-        let start = Date().addingTimeInterval(-8 * 3600)
-        let session = makeSession(in: context, start: start, end: Date())
+        let start = Self.start(hoursBefore: 8)
+        let session = makeSession(in: context, start: start, end: Self.sessionEnd)
         var cursor = start
         let stageLength = 8.0 * 3600 / 20
         let plan = Array(repeating: "DEEP", count: 4)
@@ -120,8 +135,8 @@ struct SleepQualityCalculatorTests {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
         let session = makeSession(in: context,
-                                  start: Date().addingTimeInterval(-8 * 3600),
-                                  end: Date())
+                                  start: Self.start(hoursBefore: 8),
+                                  end: Self.sessionEnd)
 
         // Pre-3.0 this scored 100/85/75/85/85 → a composite near 86.
         #expect(metrics(for: session, context: context) == nil)
@@ -140,8 +155,8 @@ struct SleepQualityCalculatorTests {
     func sessionWithOnlyAwakeStagesHasNoEstimate() throws {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        let start = Date().addingTimeInterval(-8 * 3600)
-        let session = makeSession(in: context, start: start, end: Date())
+        let start = Self.start(hoursBefore: 8)
+        let session = makeSession(in: context, start: start, end: Self.sessionEnd)
         addStage("AWAKE", to: session, in: context, start: start, duration: 8 * 3600)
 
         #expect(metrics(for: session, context: context) == nil)
@@ -161,8 +176,8 @@ struct SleepQualityCalculatorTests {
         // Onset at t=0: latency = 100.
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        let start = Date().addingTimeInterval(-8 * 3600)
-        let session = makeSession(in: context, start: start, end: Date())
+        let start = Self.start(hoursBefore: 8)
+        let session = makeSession(in: context, start: start, end: Self.sessionEnd)
 
         var cursor = start
         let stageLength = 4.0 * 3600 / 20  // asleep covers 4 h of the 8 h window
@@ -199,8 +214,8 @@ struct SleepQualityCalculatorTests {
             (8, 100), (6.5, 85), (9.5, 85), (5.5, 70), (4.5, 50), (3, 25), (13, 25)
         ]
         for c in cases {
-            let start = Date().addingTimeInterval(-c.hours * 3600)
-            let session = makeSession(in: context, start: start, end: Date())
+            let start = Self.start(hoursBefore: c.hours)
+            let session = makeSession(in: context, start: start, end: Self.sessionEnd)
             // Stages keep the estimate available so durationScore is observable.
             addStage("LIGHT", to: session, in: context, start: start, duration: c.hours * 3600)
 
@@ -215,8 +230,8 @@ struct SleepQualityCalculatorTests {
     func fourWakeEpisodesScore70() throws {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        let start = Date().addingTimeInterval(-8 * 3600)
-        let session = makeSession(in: context, start: start, end: Date())
+        let start = Self.start(hoursBefore: 8)
+        let session = makeSession(in: context, start: start, end: Self.sessionEnd)
 
         // sleep → (awake → sleep) ×4 = 4 mid-night wake episodes
         var cursor = start
@@ -238,12 +253,12 @@ struct SleepQualityCalculatorTests {
     func stageDistributionWeightsDurationsNotCounts() throws {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        let start = Date().addingTimeInterval(-8 * 3600)
+        let start = Self.start(hoursBefore: 8)
 
         // Light and REM records are fixed at 24 min each. Only the length of the four
         // DEEP records varies, so the stage RECORD COUNTS are identical in both sessions.
         func build(deepDuration: TimeInterval) -> SleepSession {
-            let session = makeSession(in: context, start: start, end: Date())
+            let session = makeSession(in: context, start: start, end: Self.sessionEnd)
             var cursor = start
             let plan = Array(repeating: "DEEP", count: 4)
                      + Array(repeating: "LIGHT", count: 11)
@@ -271,11 +286,11 @@ struct SleepQualityCalculatorTests {
     func unspecifiedAsleepDilutesRatherThanBeingRedistributed() throws {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        let start = Date().addingTimeInterval(-8 * 3600)
+        let start = Self.start(hoursBefore: 8)
 
         // Half the asleep time is unspecified. If it were redistributed into the typed
         // stages, the typed shares would still look optimal and score 100.
-        let session = makeSession(in: context, start: start, end: Date())
+        let session = makeSession(in: context, start: start, end: Self.sessionEnd)
         var cursor = start
         for (type, duration) in [("DEEP", 0.8 * 3600), ("LIGHT", 2.2 * 3600),
                                  ("REM", 1.0 * 3600), ("ASLEEP_UNSPECIFIED", 4.0 * 3600)] {
