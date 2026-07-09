@@ -185,6 +185,15 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 
 ### Phase C — early post-release / opportunistic
 
+**Status: complete (2026-07-09).** C0–C4 and C6 landed one commit per item on
+`feature/sleep-simplification` (`614284c`…`5a7fe1c`); **C5 is deferred by decision**, not
+outstanding, and remains tracked in `FUTURE_IMPROVEMENTS.md`. Baseline moved from 206 tests /
+33 suites to **218 tests / 36 suites, all green**; iOS and watch targets build. New live
+document: `PARKED_CAPABILITIES.md` (C0). Two defects were found *while* implementing and fixed
+in their own right: a latent clock-dependent flake in `SleepQualityCalculatorTests` (`a77cad9`,
+product code untouched) and a provenance bug where legacy `"iPhone"` mock sessions counted as
+real data (folded into C6 — see its note). Phase D not started — awaiting explicit approval.
+
 **Scope decisions taken with Daniel before implementation (2026-07-09):** `SleepInformationView`
 is **kept** (B6 made it correct and `SleepInformationViewTests` pins its stage-composition
 contract), the environmental cluster (`EnvironmentalAnalyzer`, `EnvironmentalInsightsView`,
