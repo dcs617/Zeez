@@ -229,7 +229,7 @@ struct EnhancedSleepDetailsView: View {
             rows.append(("Humidity", String(format: "%.0f%%", avgHumidity)))
         }
         if let avgNoise = average(readings.compactMap(\.measuredNoiseLevel)) {
-            rows.append(("Noise Level", String(format: "%.0f dB", avgNoise)))
+            rows.append(("Relative Noise Index", String(format: "%.0f %@", avgNoise, NoiseIndex.displayUnit)))
         }
         return rows
     }

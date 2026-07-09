@@ -119,7 +119,7 @@ struct EnvironmentalFactors: View {
         switch selectedTab {
         case 0: return "°C"
         case 1: return "%"
-        case 2: return "dB"
+        case 2: return NoiseIndex.displayUnit
         case 3: return "lux"
         default: return ""
         }
@@ -157,7 +157,7 @@ struct EnvironmentalFactors: View {
         switch selectedTab {
         case 0: return (18, 21)  // Temperature °C
         case 1: return (30, 50)  // Humidity %
-        case 2: return (0, 30)   // Noise dB
+        case 2: return (0, NoiseIndex.quietCeiling)   // Relative noise index
         case 3: return (0, 5)    // Light lux
         default: return (0, 0)
         }

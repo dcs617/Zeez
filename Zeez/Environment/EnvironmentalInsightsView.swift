@@ -155,12 +155,12 @@ struct EnvironmentalInsightsView: View {
                 .accessibilityIdentifier("humidityMetricsRow")
                 
                 metricRow(
-                    label: "Noise",
+                    label: "Noise Index",
                     metrics: analysis.noise,
-                    unit: "dB"
+                    unit: NoiseIndex.displayUnit
                 )
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Noise: average \(String(format: "%.1f", analysis.noise.average)) decibels, minimum \(String(format: "%.1f", analysis.noise.minimum)) decibels, maximum \(String(format: "%.1f", analysis.noise.maximum)) decibels")
+                .accessibilityLabel("Relative noise index: average \(String(format: "%.1f", analysis.noise.average)), minimum \(String(format: "%.1f", analysis.noise.minimum)), maximum \(String(format: "%.1f", analysis.noise.maximum)), on a 0 to 100 scale")
                 .accessibilityIdentifier("noiseMetricsRow")
                 
                 metricRow(

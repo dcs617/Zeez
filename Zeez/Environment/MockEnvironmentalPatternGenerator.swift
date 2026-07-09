@@ -10,11 +10,13 @@ struct MockEnvironmentalPatternGenerator {
         let light: Double
     }
     
-    /// Optimal ranges for sleep environment
+    /// Optimal ranges for sleep environment. `noise` is a relative noise index
+    /// (0–100, see `NoiseIndex`), matching what `EnvironmentalMonitor` records —
+    /// mocks must not emit decibels the monitor never produces.
     static let optimalRanges = (
         temperature: 18.0...22.0,
         humidity: 40.0...60.0,
-        noise: 20.0...40.0,
+        noise: 60.0...NoiseIndex.quietCeiling,
         light: 0.0...5.0
     )
     
@@ -46,17 +48,17 @@ struct MockEnvironmentalPatternGenerator {
             Double.random(in: 0...10)   // Night
         }
         
-        // Noise variation based on time
+        // Noise variation based on time, on the relative noise index scale
         let noiseVariation = if hour >= 7 && hour <= 22 {
             Double.random(in: 5...15)   // Daytime
         } else {
             Double.random(in: 0...5)    // Night
         }
-        
+
         return Reading(
             temperature: reading.temperature + tempVariation,
             humidity: reading.humidity + Double.random(in: -5...5),
-            noise: reading.noise + noiseVariation,
+            noise: min(reading.noise + noiseVariation, NoiseIndex.range.upperBound),
             light: lightVariation
         )
     }

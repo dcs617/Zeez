@@ -42,7 +42,7 @@
 /// ## EnvironmentalReading
 /// Records sleep environment conditions.
 /// - lightLevel: Ambient light (lux)
-/// - noiseLevel: Sound level (dB)
+/// - noiseLevel: Relative noise index, 0-100 (see `NoiseIndex`) — not decibels
 /// - temperature: Room temperature (°C)
 /// - humidity: Room humidity (%)
 /// - Relationships:

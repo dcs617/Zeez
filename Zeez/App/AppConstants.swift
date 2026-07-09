@@ -126,12 +126,9 @@ struct AppConstants {
             
             /// Maximum comfortable temperature (24°C)
             static let maximumTemperature: Double = 24
-            
-            /// Minimum noise level (20 dB)
-            static let minimumNoiseLevel: Double = 20
-            
-            /// Maximum acceptable noise level (50 dB)
-            static let maximumNoiseLevel: Double = 50
+
+            // Noise has no decibel constants: Zeez stores an uncalibrated
+            // relative index. Thresholds live in `NoiseIndex`.
         }
         
         /// Respiratory metrics validation

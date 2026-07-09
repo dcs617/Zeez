@@ -1,8 +1,13 @@
 import SwiftUI
 import os.log
 
-/// Represents different environmental factors that affect sleep quality
-/// Used throughout the app to track, analyze and display environmental conditions
+/// Represents different environmental factors that affect sleep quality.
+///
+/// This type backs the **educational** Learn screens, where the units and ranges
+/// below describe sleep environments in general. `.sound` is quoted in real decibels
+/// for that reason. Do not reuse these ranges to grade a recorded
+/// `EnvironmentalReading.noiseLevel`, which stores an uncalibrated relative index
+/// (see `NoiseIndex`), not dB.
 enum EnvironmentalFactor: String, CaseIterable, Identifiable {
     case temperature = "Temperature"
     case light = "Light"

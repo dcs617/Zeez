@@ -20,14 +20,14 @@ struct EnvironmentalDataView: View {
                     currentConditions
                     
                     MetricChartView(
-                        title: "Noise Level",
+                        title: "Relative Noise Index",
                         data: readings.compactMap { r in r.measuredNoiseLevel.map { (r.timestamp ?? Date(), $0) } },
                         color: .blue,
-                        unit: "dB"
+                        unit: NoiseIndex.displayUnit
                     )
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Noise level chart showing readings from \(readings.first?.timestamp?.formatted() ?? "unknown") to \(readings.last?.timestamp?.formatted() ?? "unknown")")
-                    .accessibilityHint("Shows noise levels during sleep session in decibels")
+                    .accessibilityLabel("Relative noise index chart showing readings from \(readings.first?.timestamp?.formatted() ?? "unknown") to \(readings.last?.timestamp?.formatted() ?? "unknown")")
+                    .accessibilityHint("Shows the relative noise index recorded during this sleep session, on a 0 to 100 scale")
                     .accessibilityIdentifier("noiseLevelChart")
                     
                     MetricChartView(
@@ -92,13 +92,13 @@ struct EnvironmentalDataView: View {
             LazyVGrid(columns: [.init(), .init()], spacing: 20) {
                 if let noise = readings.last?.measuredNoiseLevel {
                     MetricTile(
-                        title: "Noise",
-                        value: String(format: "%.1f dB", noise),
+                        title: "Noise Index",
+                        value: String(format: "%.1f %@", noise, NoiseIndex.displayUnit),
                         icon: "ear",
                         color: .blue
                     )
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Noise level \(String(format: "%.1f", noise)) decibels")
+                    .accessibilityLabel("Relative noise index \(String(format: "%.1f", noise)) of 100")
                     .accessibilityIdentifier("noiseMetricTile")
                 }
 

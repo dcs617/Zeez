@@ -30,9 +30,9 @@ struct AverageEnvironmentalReadingView: View {
                 if let noise = averages.noise {
                     environmentalMetric(
                         icon: "ear",
-                        title: "Noise",
+                        title: "Noise Index",
                         value: noise,
-                        unit: "dB",
+                        unit: NoiseIndex.displayUnit,
                         color: .blue
                     )
                 }

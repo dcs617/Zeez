@@ -206,8 +206,10 @@ final class SleepRecommendationSystem {
                 return false
             }
             
-            let highNoiseCount = readings.filter { $0.noiseLevel > 50 }.count
-            let highLightCount = readings.filter { $0.lightLevel > 20 }.count
+            // Noise is a relative index, not decibels (see NoiseIndex). Unmeasured
+            // metrics must not count as a problem, hence the measured* accessors.
+            let highNoiseCount = readings.filter { ($0.measuredNoiseLevel ?? 0) > NoiseIndex.elevatedFloor }.count
+            let highLightCount = readings.filter { ($0.measuredLightLevel ?? 0) > 20 }.count
             
             return Double(highNoiseCount + highLightCount) / Double(readings.count) > 0.3
         }.count

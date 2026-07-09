@@ -82,15 +82,15 @@ final class MockDataTests: XCTestCase {
             }
         }
 
-        // Environment: base temp 18–22 °C ± 2 sinusoidal → [16, 24];
-        // base noise 20–40 dB + up to 15 dB daytime variation → [20, 55]
-        // (MockEnvironmentalPatternGenerator).
+        // Environment: base temp 18–22 °C ± 2 sinusoidal → [16, 24].
+        // Noise is a relative index (0–100), not decibels: base 60–72 plus up to 15
+        // of daytime variation, clamped to 100 (MockEnvironmentalPatternGenerator).
         if let readings = session.environmentalReadings?.allObjects as? [EnvironmentalReading] {
             for reading in readings {
                 XCTAssertGreaterThanOrEqual(reading.temperature, 16)
                 XCTAssertLessThanOrEqual(reading.temperature, 24)
-                XCTAssertGreaterThanOrEqual(reading.noiseLevel, 20)
-                XCTAssertLessThanOrEqual(reading.noiseLevel, 55)
+                XCTAssertGreaterThanOrEqual(reading.noiseLevel, 60)
+                XCTAssertLessThanOrEqual(reading.noiseLevel, NoiseIndex.range.upperBound)
             }
         }
     }

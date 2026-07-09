@@ -146,6 +146,7 @@ final class EnvironmentalMonitor {
         }
     }
 
+    /// Returns a relative noise index (0–100), not decibels. See `NoiseIndex`.
     private func captureNoiseLevel() -> Double {
         // Mic denied or recorder unavailable — record "not measured", not silence.
         guard !microphoneDenied else { return EnvironmentalReading.notMeasured }
@@ -155,13 +156,7 @@ final class EnvironmentalMonitor {
         }
 
         recorder.updateMeters()
-        let averagePower = recorder.averagePower(forChannel: 0)
-
-        // Normalize the decibel reading (typical range is -160 to 0)
-        let normalizedValue = Double((averagePower + 160) / 160)
-
-        // Convert to percentage and ensure it's between 0 and 100
-        return min(max(normalizedValue * 100, 0), 100)
+        return NoiseIndex.fromAveragePower(recorder.averagePower(forChannel: 0))
     }
     
     deinit {

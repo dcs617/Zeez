@@ -208,12 +208,13 @@ class EnvironmentalAnalyzer {
             }
         }
         
-        // Noise recommendations
+        // Noise recommendations. Thresholds are on the relative noise index,
+        // not decibels — see NoiseIndex.
         if correlation.noiseImpact < 0.7 {
-            if noise.average > 40 {
+            if noise.average > NoiseIndex.elevatedFloor {
                 recommendations.append(.reduceNoise)
             }
-            if noise.variance > 10 {
+            if noise.variance > NoiseIndex.variabilityThreshold {
                 recommendations.append(.reduceSoundVariation)
             }
         }
@@ -285,7 +286,7 @@ enum EnvironmentalRecommendation {
         case .raiseHumidity:
             return "Increase humidity to prevent dryness (30-60% ideal)"
         case .reduceNoise:
-            return "Reduce ambient noise levels (<40 dB ideal)"
+            return "Reduce ambient noise (recorded noise index above \(Int(NoiseIndex.elevatedFloor)) \(NoiseIndex.displayUnit))"
         case .reduceSoundVariation:
             return "Minimize sudden sound changes during sleep"
         case .reduceLightLevel:
