@@ -9,11 +9,19 @@ struct DashboardView: View {
     @State private var showingDebugMenu = false
     
     @FetchRequest private var recentSessions: FetchedResults<SleepSession>
-    
+
+    /// Any completed session, ever — `recentSessions` only covers the last month, so it
+    /// cannot distinguish "first run" from "a quiet month" (second-audit B11).
+    @FetchRequest private var anyCompletedSession: FetchedResults<SleepSession>
+
     private var sessionArray: [SleepSession] {
         Array(recentSessions)
     }
-    
+
+    private var hasAnySleepData: Bool {
+        !anyCompletedSession.isEmpty
+    }
+
     init() {
         let calendar = Calendar.current
         let startOfLastMonth = calendar.date(byAdding: .month, value: -1, to: Date())!
@@ -23,6 +31,12 @@ struct DashboardView: View {
             predicate: predicate,
             animation: .default
         )
+
+        let existenceRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+        existenceRequest.predicate = NSPredicate(format: "isActive == NO")
+        existenceRequest.sortDescriptors = [NSSortDescriptor(keyPath: \SleepSession.startTime, ascending: false)]
+        existenceRequest.fetchLimit = 1
+        _anyCompletedSession = FetchRequest(fetchRequest: existenceRequest, animation: .default)
     }
     
     private var dayFormatter: DateFormatter = {
@@ -53,9 +67,15 @@ struct DashboardView: View {
                         .padding(.bottom, 8)
                     
                     VStack(spacing: 24) {
-                        weeklyProgressSection
-                        metricsSection
-                        infoCardsSection
+                        if hasAnySleepData {
+                            weeklyProgressSection
+                            metricsSection
+                            infoCardsSection
+                        } else {
+                            DashboardEmptyStateCard {
+                                ModalCoordinator.shared.present(.dataImport)
+                            }
+                        }
                         learningSectionCards
                         
                         if let firstSession = sessionArray.first {
