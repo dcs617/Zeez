@@ -103,7 +103,7 @@ class WatchConnectivityManager: NSObject, ObservableObject {
         updateConnectionQuality(.none)
         
         if !offlineMode {
-            print("📱 Connection lost - switching to offline mode")
+            WatchLogger.info(WatchLogger.connectivity, "Connection lost — switching to offline mode")
             enableOfflineMode()
         }
     }
@@ -161,7 +161,7 @@ class WatchConnectivityManager: NSObject, ObservableObject {
                 self?.handleDataUpdate(reply)
             }
         }) { error in
-            print("Error requesting data: \(error.localizedDescription)")
+            WatchLogger.error(WatchLogger.connectivity, "Failed to request data from iPhone", error: error)
         }
     }
     
@@ -174,7 +174,7 @@ class WatchConnectivityManager: NSObject, ObservableObject {
         
         let message = ["command": WatchMessageType.acknowledge.rawValue]
         session.sendMessage(message, replyHandler: nil) { error in
-            print("Error acknowledging alarm: \(error.localizedDescription)")
+            WatchLogger.error(WatchLogger.connectivity, "Failed to acknowledge alarm", error: error)
         }
         
         // Stop any current wake pattern
@@ -190,7 +190,7 @@ class WatchConnectivityManager: NSObject, ObservableObject {
         
         let message = ["command": WatchMessageType.snooze.rawValue]
         session.sendMessage(message, replyHandler: nil) { error in
-            print("Error snoozing alarm: \(error.localizedDescription)")
+            WatchLogger.error(WatchLogger.connectivity, "Failed to snooze alarm", error: error)
         }
         
         // Stop any current wake pattern

@@ -18,7 +18,7 @@ class WatchHapticManager: ObservableObject {
     
     /// Start playing a haptic wake-up pattern
     func startWakePattern(_ pattern: WakePatternData) {
-        print("🔸 Starting haptic wake pattern: \(pattern.pattern.rawValue) at \(pattern.intensity) intensity")
+        WatchLogger.debug(WatchLogger.haptics, "Starting wake pattern \(pattern.pattern.rawValue) at \(pattern.intensity) intensity")
         
         // Stop any existing pattern
         stopAllPatterns()
@@ -37,7 +37,7 @@ class WatchHapticManager: ObservableObject {
     
     /// Stop the current wake pattern
     func stopAllPatterns() {
-        print("🔹 Stopping all haptic patterns")
+        WatchLogger.debug(WatchLogger.haptics, "Stopping all haptic patterns")
         
         isPatternActive = false
         currentPattern = nil
