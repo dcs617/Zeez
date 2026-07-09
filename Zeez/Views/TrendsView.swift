@@ -96,15 +96,15 @@ struct TrendsView: View {
         // Duration Trends
         TrendMetricCard(
             title: "Sleep Duration",
-            subtitle: "Average time asleep",
+            subtitle: "Average recorded session duration",
             value: averageDurationFormatted
         ) {
             TrendChartComponents.DurationChart(
                 data: fetchSleepDurations(),
                 height: 150
             )
-            .accessibilityLabel("Sleep duration trend chart showing \(fetchSleepDurations().count) data points")
-            .accessibilityValue("Average duration \(averageDurationFormatted)")
+            .accessibilityLabel("Recorded session duration trend chart showing \(fetchSleepDurations().count) data points")
+            .accessibilityValue("Average recorded session duration \(averageDurationFormatted)")
             .accessibilityIdentifier("durationChart")
         }
         .padding(.horizontal)
@@ -248,11 +248,13 @@ struct TrendsView: View {
         return (try? viewContext.fetch(request)) ?? []
     }
     
+    /// Recorded session intervals (`end - start`), not qualified asleep time —
+    /// see the "Average recorded session duration" label on the card above.
     private func fetchSleepDurations() -> [(date: Date, value: Double)] {
         fetchSessions().compactMap { session -> (date: Date, value: Double)? in
             guard let start = session.startTime,
-                  let end = session.endTime else { return nil }
-            return (date: start, value: end.timeIntervalSince(start) / 3600)
+                  session.endTime != nil else { return nil }
+            return (date: start, value: session.recordedInterval / 3600)
         }
     }
     

@@ -143,6 +143,7 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 
 **B4. "Average time asleep" labels a session-interval metric** — Medium · Claims
 `Zeez/Views/TrendsView.swift:99` — the Duration trend card's subtitle says "Average time asleep" but `fetchSleepDurations()` (251-257) uses `end - start` for every source. Contract rule 7. Fix the label to "Average recorded session duration" (or compute qualified asleep for AH sessions). Effort: Small.
+- ✅ **Done 2026-07-09** — Duration card subtitle is now "Average recorded session duration"; the chart's `accessibilityLabel`/`accessibilityValue` carried the same "time asleep"/"duration" claim to VoiceOver and were reworded to match (rules 4 and 7 bind accessibility output too). `fetchSleepDurations()` now reads `session.recordedInterval` with a comment stating it is not qualified asleep time. ZeezTests 162/162 green.
 
 **B5. Noise units fiction (promoted)** — Medium · Claims
 `EnvironmentalMonitor.captureNoiseLevel` (149-165) stores a normalized 0–100 of `averagePower`; UI labels it dB; mocks generate real 20–55 dB. Pick one story (recommended: store true dBFS-derived approximation or relabel as "relative noise index 0–100"), align monitor, UI, mocks, and `EnvironmentalAnalyzer` thresholds (e.g. `> 40` comparisons assume dB). Effort: Small-Medium.
