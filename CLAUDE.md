@@ -46,10 +46,12 @@ At startup, `ZeezApp.setupApp()` runs `AlarmDataMigrationHelper` and starts `Ala
 `SleepAnalyzer.shared.analyzeSleepSession(_:)` orchestrates analysis in four steps:
 1. Inline validation in `SleepAnalyzer` — checks the session has valid times and minimum data
 2. `SleepStageAnalyzer` (`Sleep/Stage/`) — detects stages from movement + heart rate
-3. `SleepQualityCalculator` (`Sleep/Quality/`) — scores duration, efficiency, stage distribution, fragmentation, latency (research-based weights)
+3. `SleepQualityCalculator` (`Sleep/Quality/`) — scores duration, sleep opportunity, stage distribution, fragmentation, latency
 4. Updates session with results in a background context
 
-**`QualityMetrics`** (from `SleepQualityCalculator`) is the primary quality model. The overall score is a weighted composite: efficiency 30%, duration 25%, stage distribution 25%, fragmentation 15%, latency 5%.
+**`QualityMetrics`** (from `SleepQualityCalculator`) is the primary quality model. The overall score is a weighted composite: sleep opportunity 30%, duration 25%, stage distribution 25%, fragmentation 15%, latency 5%, renormalized over the components that are actually available.
+
+The score is a Tier-3 "Experimental Zeez Estimate" governed by **`ZEEZ_SCORE_SPECIFICATION.md`** (repo root), which is a live contract alongside `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md`. Key rules: missing inputs make a component *unavailable* (never a neutral default); `duration` and `stageDistribution` are required, so `calculateMetrics()` returns `nil` without them and `SleepAnalyzer` writes the `qualityScore = 1.0` sentinel; `confidenceScore` is derived from input coverage × sensor breadth. Bump `ZeezScore.version` and update the spec together whenever inputs, weights, bands, or the missing-input policy change.
 
 ### Directory Layout
 ```

@@ -1,149 +1,166 @@
 import CoreData
 import os.log
 
-struct QualityMetrics {
-    let overallScore: Double
-    let durationScore: Double
-    let efficiencyScore: Double
-    let stageDistributionScore: Double
-    let fragmentationScore: Double
-    let sleepLatencyScore: Double
-    
-    // Legacy support for existing code
-    var restfulnessScore: Double { stageDistributionScore }
-}
-
+/// Computes the Experimental Zeez Estimate for a Zeez-recorded session.
+///
+/// Implements `ZEEZ_SCORE_SPECIFICATION.md`. Two rules govern every branch below:
+/// a missing input makes its component `.unavailable` rather than a neutral default,
+/// and stage shares are weighted by *duration*, never by how many stage records exist.
+///
+/// `calculateMetrics()` returns `nil` when the session cannot support an estimate.
+/// Callers must not substitute a number in that case.
 class SleepQualityCalculator {
     private let session: SleepSession
-    
+
     init(session: SleepSession, context: NSManagedObjectContext) {
         self.session = session
     }
-    
-    func calculateMetrics() -> QualityMetrics {
-        let durationScore = calculateDurationScore()
-        let efficiencyScore = calculateSleepEfficiencyScore()
-        let stageDistributionScore = calculateStageDistributionScore()
-        let fragmentationScore = calculateFragmentationScore()
-        let sleepLatencyScore = calculateSleepLatencyScore()
-        
-        // Research-based weighted scoring
-        let overallScore = (
-            durationScore * 0.25 +         // 25% - Duration in optimal range
-            efficiencyScore * 0.30 +       // 30% - Time actually sleeping vs time in bed
-            stageDistributionScore * 0.25 + // 25% - Proper deep sleep and REM distribution
-            fragmentationScore * 0.15 +    // 15% - Number of awakenings
-            sleepLatencyScore * 0.05       // 5% - Time to fall asleep
-        )
-        
-        // Quality scores are derived health data — debug builds only.
-        ZeezLogger.debug(ZeezLogger.sleepTracking, "Quality scores - Overall: \(Int(overallScore)), Duration: \(Int(durationScore)), Efficiency: \(Int(efficiencyScore)), Stages: \(Int(stageDistributionScore)), Fragmentation: \(Int(fragmentationScore)), Latency: \(Int(sleepLatencyScore))")
-        
-        return QualityMetrics(
+
+    func calculateMetrics() -> QualityMetrics? {
+        let stages = (session.sleepStages?.allObjects as? [SleepStage]) ?? []
+        let asleepStages = stages.filter {
+            guard let type = SleepStageType.normalize($0.stageType) else { return false }
+            return type != .awake && $0.duration > 0
+        }
+
+        let components: [ZeezScoreComponent: ComponentResult] = [
+            .duration: durationResult(),
+            .sleepOpportunity: sleepOpportunityResult(asleepStages: asleepStages, stages: stages),
+            .stageDistribution: stageDistributionResult(asleepStages: asleepStages, stages: stages),
+            .fragmentation: fragmentationResult(stages: stages),
+            .latency: latencyResult(asleepStages: asleepStages, stages: stages)
+        ]
+
+        // Missing-input policy: required components gate the estimate entirely, and the
+        // rest shrink coverage. Nothing here falls back to a reassuring default.
+        for component in ZeezScoreComponent.allCases where component.isRequired {
+            guard components[component]?.score != nil else {
+                ZeezLogger.info(ZeezLogger.sleepTracking, "No estimate: required component \(component.rawValue) unavailable")
+                return nil
+            }
+        }
+
+        let availableWeight = components
+            .filter { $0.value.score != nil }
+            .reduce(0.0) { $0 + $1.key.weight }
+        let totalWeight = ZeezScoreComponent.allCases.reduce(0.0) { $0 + $1.weight }
+        let coverage = (availableWeight / totalWeight) * 100
+
+        guard coverage >= ZeezScore.minimumCoverage, availableWeight > 0 else {
+            ZeezLogger.info(ZeezLogger.sleepTracking, "No estimate: input coverage below minimum")
+            return nil
+        }
+
+        let weightedSum = components.reduce(0.0) { partial, entry in
+            guard let score = entry.value.score else { return partial }
+            return partial + score * entry.key.weight
+        }
+        let overallScore = weightedSum / availableWeight
+
+        let metrics = QualityMetrics(
             overallScore: overallScore,
-            durationScore: durationScore,
-            efficiencyScore: efficiencyScore,
-            stageDistributionScore: stageDistributionScore,
-            fragmentationScore: fragmentationScore,
-            sleepLatencyScore: sleepLatencyScore
+            components: components,
+            inputCoverage: coverage,
+            confidence: coverage * sensorBreadthFactor(),
+            version: ZeezScore.version
         )
+
+        // Quality scores are derived health data — debug builds only.
+        ZeezLogger.debug(
+            ZeezLogger.sleepTracking,
+            "Estimate \(Int(overallScore)) (coverage \(Int(coverage))%, confidence \(Int(metrics.confidence))%)"
+        )
+        return metrics
     }
-    
-    private func calculateDurationScore() -> Double {
-        guard let startTime = session.startTime,
-              let endTime = session.endTime else {
-            return 0
-        }
-        
-        let duration = endTime.timeIntervalSince(startTime)
-        let hours = duration / 3600
-        
-        // Optimal sleep duration is 7-9 hours for adults
-        switch hours {
-        case 7.0...9.0:
-            return 100.0
-        case 6.0..<7.0, 9.0..<10.0:
-            return 85.0
-        case 5.0..<6.0, 10.0..<11.0:
-            return 70.0
-        case 4.0..<5.0, 11.0..<12.0:
-            return 50.0
-        default:
-            return 25.0
+
+    // MARK: - Confidence
+
+    /// How many raw sensor series backed the stage inference. Stages with no retained
+    /// series (imported or regenerated) are trusted least.
+    private func sensorBreadthFactor() -> Double {
+        let hasMovement = (session.movementData?.count ?? 0) > 0
+        let hasHeartRate = (session.heartRateData?.count ?? 0) > 0
+        switch (hasMovement, hasHeartRate) {
+        case (true, true): return 1.0
+        case (true, false), (false, true): return 0.85
+        case (false, false): return 0.7
         }
     }
-    
-    private func calculateSleepEfficiencyScore() -> Double {
+
+    // MARK: - Components
+
+    private func durationResult() -> ComponentResult {
         guard let startTime = session.startTime,
               let endTime = session.endTime,
-              let stages = session.sleepStages?.allObjects as? [SleepStage],
-              !stages.isEmpty else {
-            return 85.0 // Default score if no stage data
+              endTime > startTime else {
+            return .unavailable(.invalidRecordedInterval)
         }
-        
-        let totalTimeInBed = endTime.timeIntervalSince(startTime)
-        let awakeStages = stages.filter { SleepStageType.awake.matches($0.stageType) }
-        let totalAwakeTime = awakeStages.reduce(0.0) { $0 + $1.duration }
-        let actualSleepTime = totalTimeInBed - totalAwakeTime
-        
-        let efficiency = actualSleepTime / totalTimeInBed
-        
-        // Sleep efficiency scoring based on research
-        switch efficiency {
-        case 0.90...1.0:
-            return 100.0
-        case 0.85..<0.90:
-            return 90.0
-        case 0.80..<0.85:
-            return 80.0
-        case 0.75..<0.80:
-            return 70.0
-        case 0.70..<0.75:
-            return 60.0
-        default:
-            return max(20.0, efficiency * 100) // Minimum 20 points
+
+        let hours = endTime.timeIntervalSince(startTime) / 3600
+
+        // Optimal sleep duration is 7-9 hours for adults
+        switch hours {
+        case 7.0...9.0: return .available(100.0)
+        case 6.0..<7.0, 9.0..<10.0: return .available(85.0)
+        case 5.0..<6.0, 10.0..<11.0: return .available(70.0)
+        case 4.0..<5.0, 11.0..<12.0: return .available(50.0)
+        default: return .available(25.0)
         }
     }
-    
-    private func calculateStageDistributionScore() -> Double {
-        guard let stages = session.sleepStages?.allObjects as? [SleepStage],
-              !stages.isEmpty else {
-            return 75.0 // Default moderate score if no stage data
-        }
-        
-        let sleepStages = stages.filter {
-            guard let type = SleepStageType.normalize($0.stageType) else { return false }
-            return type != .awake
-        }
-        guard !sleepStages.isEmpty else { return 30.0 }
 
-        let totalSleepStages = Double(sleepStages.count)
+    /// Asleep time over the recording window. The old implementation derived asleep time
+    /// as `window - awake`, which silently counted unlabeled gaps as sleep; this sums the
+    /// asleep intervals directly.
+    private func sleepOpportunityResult(asleepStages: [SleepStage], stages: [SleepStage]) -> ComponentResult {
+        guard !stages.isEmpty else { return .unavailable(.noStageIntervals) }
+        guard !asleepStages.isEmpty else { return .unavailable(.noAsleepIntervals) }
+        guard let startTime = session.startTime,
+              let endTime = session.endTime,
+              endTime > startTime else {
+            return .unavailable(.invalidRecordedInterval)
+        }
 
-        let deepSleepCount = Double(sleepStages.filter { SleepStageType.deepSleep.matches($0.stageType) }.count)
-        let lightSleepCount = Double(sleepStages.filter { SleepStageType.lightSleep.matches($0.stageType) }.count)
-        let remSleepCount = Double(sleepStages.filter { SleepStageType.rem.matches($0.stageType) }.count)
-        
-        let deepPercent = deepSleepCount / totalSleepStages
-        let lightPercent = lightSleepCount / totalSleepStages
-        let remPercent = remSleepCount / totalSleepStages
-        
-        // Research-based optimal ranges
-        let deepScore = scorePercentageInRange(deepPercent, optimal: (0.15, 0.20), acceptable: (0.10, 0.25))
-        let lightScore = scorePercentageInRange(lightPercent, optimal: (0.45, 0.55), acceptable: (0.35, 0.65))
-        let remScore = scorePercentageInRange(remPercent, optimal: (0.20, 0.25), acceptable: (0.15, 0.30))
-        
-        ZeezLogger.sleepTracking.debug("Stage distribution - Deep: \(deepPercent*100)%, Light: \(lightPercent*100)%, REM: \(remPercent*100)%")
-        
+        let window = endTime.timeIntervalSince(startTime)
+        let asleep = asleepStages.reduce(0.0) { $0 + $1.duration }
+        let ratio = min(asleep / window, 1.0)
+
+        switch ratio {
+        case 0.90...1.0: return .available(100.0)
+        case 0.85..<0.90: return .available(90.0)
+        case 0.80..<0.85: return .available(80.0)
+        case 0.75..<0.80: return .available(70.0)
+        case 0.70..<0.75: return .available(60.0)
+        default: return .available(max(20.0, ratio * 100))
+        }
+    }
+
+    /// Duration-weighted stage shares. `asleepUnspecified` stays in the denominator and is
+    /// never redistributed into Deep/Light/REM (claims rule 5), so an unspecified-heavy
+    /// session correctly scores lower on the typed stages rather than inventing them.
+    private func stageDistributionResult(asleepStages: [SleepStage], stages: [SleepStage]) -> ComponentResult {
+        guard !stages.isEmpty else { return .unavailable(.noStageIntervals) }
+        guard !asleepStages.isEmpty else { return .unavailable(.noAsleepIntervals) }
+
+        let totalAsleep = asleepStages.reduce(0.0) { $0 + $1.duration }
+        guard totalAsleep > 0 else { return .unavailable(.noAsleepIntervals) }
+
+        func share(_ type: SleepStageType) -> Double {
+            asleepStages
+                .filter { type.matches($0.stageType) }
+                .reduce(0.0) { $0 + $1.duration } / totalAsleep
+        }
+
+        let deepScore = scorePercentageInRange(share(.deepSleep), optimal: (0.15, 0.20), acceptable: (0.10, 0.25))
+        let lightScore = scorePercentageInRange(share(.lightSleep), optimal: (0.45, 0.55), acceptable: (0.35, 0.65))
+        let remScore = scorePercentageInRange(share(.rem), optimal: (0.20, 0.25), acceptable: (0.15, 0.30))
+
         // Weighted average: Deep sleep most important for quality
-        return deepScore * 0.4 + remScore * 0.35 + lightScore * 0.25
+        return .available(deepScore * 0.4 + remScore * 0.35 + lightScore * 0.25)
     }
-    
-    private func calculateFragmentationScore() -> Double {
-        guard let stages = session.sleepStages?.allObjects as? [SleepStage],
-              !stages.isEmpty else {
-            return 85.0 // Default score if no stage data
-        }
-        
+
+    private func fragmentationResult(stages: [SleepStage]) -> ComponentResult {
+        guard !stages.isEmpty else { return .unavailable(.noStageIntervals) }
+
         // Count wake episodes during the night (excluding initial and final wake periods)
         let sortedStages = stages.sorted { ($0.startTime ?? Date.distantPast) < ($1.startTime ?? Date.distantPast) }
         var wakeEpisodes = 0
@@ -159,61 +176,39 @@ class SleepQualityCalculator {
                 inSleep = true
             }
         }
-        
-        // Score based on number of wake episodes
+
         switch wakeEpisodes {
-        case 0...1:
-            return 100.0
-        case 2...3:
-            return 85.0
-        case 4...5:
-            return 70.0
-        case 6...8:
-            return 55.0
-        case 9...12:
-            return 40.0
-        default:
-            return 25.0
+        case 0...1: return .available(100.0)
+        case 2...3: return .available(85.0)
+        case 4...5: return .available(70.0)
+        case 6...8: return .available(55.0)
+        case 9...12: return .available(40.0)
+        default: return .available(25.0)
         }
     }
-    
-    private func calculateSleepLatencyScore() -> Double {
-        guard let stages = session.sleepStages?.allObjects as? [SleepStage],
-              !stages.isEmpty,
-              let startTime = session.startTime else {
-            return 85.0 // Default score if no stage data
-        }
-        
-        // Find first non-awake stage to estimate sleep onset
-        let sortedStages = stages.sorted { ($0.startTime ?? Date.distantPast) < ($1.startTime ?? Date.distantPast) }
-        
-        guard let firstSleepStage = sortedStages.first(where: {
-            guard let type = SleepStageType.normalize($0.stageType) else { return false }
-            return type != .awake
-        }),
-              let sleepOnsetTime = firstSleepStage.startTime else {
-            return 50.0 // Poor score if never fell asleep
-        }
-        
-        let sleepLatency = sleepOnsetTime.timeIntervalSince(startTime) / 60 // Convert to minutes
-        
-        // Sleep latency scoring (time to fall asleep)
-        switch sleepLatency {
-        case 0...10:
-            return 100.0 // Fell asleep quickly (very good)
-        case 10...20:
-            return 90.0  // Normal sleep latency
-        case 20...30:
-            return 75.0  // Slightly elevated
-        case 30...45:
-            return 60.0  // Concerning latency
-        case 45...60:
-            return 45.0  // Poor sleep onset
-        default:
-            return 25.0  // Very poor sleep onset (> 1 hour)
+
+    /// Recording start to first inferred asleep interval. Zeez owns the recording window,
+    /// so its start boundary is known — unlike an Apple Watch `inBed` sample, which may
+    /// omit boundary awake detail and therefore cannot support a latency claim.
+    private func latencyResult(asleepStages: [SleepStage], stages: [SleepStage]) -> ComponentResult {
+        guard !stages.isEmpty else { return .unavailable(.noStageIntervals) }
+        guard let startTime = session.startTime else { return .unavailable(.invalidRecordedInterval) }
+
+        let onsets = asleepStages.compactMap(\.startTime)
+        guard let sleepOnsetTime = onsets.min() else { return .unavailable(.noAsleepIntervals) }
+
+        let latencyMinutes = sleepOnsetTime.timeIntervalSince(startTime) / 60
+
+        switch latencyMinutes {
+        case ..<10: return .available(100.0)
+        case 10..<20: return .available(90.0)
+        case 20..<30: return .available(75.0)
+        case 30..<45: return .available(60.0)
+        case 45..<60: return .available(45.0)
+        default: return .available(25.0)
         }
     }
-    
+
     private func scorePercentageInRange(_ percentage: Double, optimal: (Double, Double), acceptable: (Double, Double)) -> Double {
         if percentage >= optimal.0 && percentage <= optimal.1 {
             return 100.0

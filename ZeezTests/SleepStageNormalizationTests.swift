@@ -176,7 +176,7 @@ struct SleepStageNormalizationTests {
             try context.save()
 
             let calcUpper = SleepQualityCalculator(session: session, context: context)
-            let metricsUpper = calcUpper.calculateMetrics()
+            let metricsUpper = try #require(calcUpper.calculateMetrics())
 
             // Reset stages to lowercase equivalents
             if let stages = session.sleepStages?.allObjects as? [SleepStage] {
@@ -188,11 +188,16 @@ struct SleepStageNormalizationTests {
             try context.save()
 
             let calcLower = SleepQualityCalculator(session: session, context: context)
-            let metricsLower = calcLower.calculateMetrics()
+            let metricsLower = try #require(calcLower.calculateMetrics())
 
-            #expect(abs(metricsUpper.stageDistributionScore - metricsLower.stageDistributionScore) < 0.01,
+            let upperDistribution = try #require(metricsUpper.stageDistributionScore)
+            let lowerDistribution = try #require(metricsLower.stageDistributionScore)
+            #expect(abs(upperDistribution - lowerDistribution) < 0.01,
                     "Stage distribution scores must be identical for uppercase vs lowercase stored values")
-            #expect(abs(metricsUpper.fragmentationScore - metricsLower.fragmentationScore) < 0.01,
+
+            let upperFragmentation = try #require(metricsUpper.fragmentationScore)
+            let lowerFragmentation = try #require(metricsLower.fragmentationScore)
+            #expect(abs(upperFragmentation - lowerFragmentation) < 0.01,
                     "Fragmentation scores must be identical for uppercase vs lowercase stored values")
         }
     }

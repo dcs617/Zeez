@@ -104,9 +104,17 @@ final class SleepAnalyzer: Sendable {
             throw error
         }
 
-        // Calculate quality metrics
+        // Calculate quality metrics. A session whose required inputs are missing gets no
+        // estimate at all — never a neutral default (claims rule 4, ZEEZ_SCORE_SPECIFICATION.md).
         let qualityCalculator = SleepQualityCalculator(session: session, context: context)
-        let qualityMetrics = qualityCalculator.calculateMetrics()
+        guard let qualityMetrics = qualityCalculator.calculateMetrics() else {
+            ZeezLogger.info(ZeezLogger.sleepTracking, "Stages inferred but inputs cannot support an estimate")
+            // Sentinel (1.0): UI treats qualityScore <= 1.0 as "no displayable score",
+            // and BackgroundTaskManager stops retrying.
+            session.qualityScore = 1.0
+            try context.save()
+            return
+        }
 
         // Persist analysis results
         session.qualityScore = qualityMetrics.overallScore
@@ -115,9 +123,10 @@ final class SleepAnalyzer: Sendable {
         qualityScore.id = UUID()
         qualityScore.timestamp = Date()
         qualityScore.overallScore = qualityMetrics.overallScore
-        qualityScore.calculationVersion = "SleepAnalyzer-2.0"
+        qualityScore.calculationVersion = qualityMetrics.version
         qualityScore.isPersonalized = false
-        qualityScore.confidenceScore = 85.0
+        // Derived from input coverage and sensor breadth, not a constant.
+        qualityScore.confidenceScore = qualityMetrics.confidence
         qualityScore.session = session
 
         try context.save()

@@ -25,7 +25,7 @@ struct SleepScorePresentationTests {
         let qualityScore = SleepQualityScore(context: context)
         qualityScore.id = UUID()
         qualityScore.overallScore = session.qualityScore
-        qualityScore.calculationVersion = "SleepAnalyzer-2.0"
+        qualityScore.calculationVersion = ZeezScore.version
         qualityScore.isPersonalized = false
         qualityScore.session = session
     }
@@ -135,7 +135,7 @@ struct SleepScorePresentationTests {
 
             let entities = session.qualityScores?.allObjects as? [SleepQualityScore] ?? []
             #expect(entities.count == 1, "One SleepQualityScore entity should be attached after analysis")
-            #expect(entities.first?.calculationVersion?.contains("SleepAnalyzer") == true)
+            #expect(entities.first?.calculationVersion?.contains("ZeezScore") == true)
             #expect(session.hasDisplayableScore, "Session with a Zeez estimate must be displayable")
             #expect(session.hasZeezEstimatedScore)
         }
