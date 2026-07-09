@@ -133,123 +133,148 @@ struct SleepInformationView: View {
         }
     }
     
+    /// Efficiency comes from `DerivedSleepMetrics`, which divides qualified asleep time
+    /// by *reported* in-bed time. The recording interval is not an in-bed denominator
+    /// (claims rule 6), so sessions without reported `inBed` intervals show unavailable.
     private func sleepEfficiencySection(_ session: SleepSession) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            let (efficiency, hasEfficiencyInputs) = calculateEfficiency(session)
-            let sectionTitle = hasEfficiencyInputs ? "Sleep Efficiency (Est.)" : "Session Duration"
+        let efficiency = session.derivedSleepMetrics.sleepEfficiency
 
-            Text(sectionTitle)
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(efficiency.value == nil ? "Recorded Session Duration" : "Derived Sleep Efficiency")
                 .font(.headline)
 
-            if hasEfficiencyInputs {
+            if let value = efficiency.value {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(Int(efficiency))%")
+                        Text("\(Int(value))%")
                             .font(.title)
                             .bold()
-                        Text("Based on recorded awake time")
+                        Text("Time asleep as a percentage of reported time in bed")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                        Text("Derived from Apple Health records")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    CircularProgressView(value: efficiency, total: 100, lineWidth: 8, size: 60)
+                    CircularProgressView(value: value, total: 100, lineWidth: 8, size: 60)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Derived sleep efficiency \(Int(value)) percent")
+                .accessibilityHint("Time asleep as a percentage of time in bed reported by Apple Health")
             } else {
-                HStack {
-                    let hours = Int(session.recordedInterval / 3600)
-                    let minutes = Int((session.recordedInterval.truncatingRemainder(dividingBy: 3600)) / 60)
-                    Text("\(hours)h \(minutes)m")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(formatDuration(session.recordedInterval))
                         .font(.title)
                         .bold()
-                    Spacer()
-                    Text("Efficiency unavailable")
+                    Text("Sleep efficiency unavailable")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text(efficiencyUnavailableExplanation(session))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Sleep efficiency unavailable. Recorded session duration \(formatDuration(session.recordedInterval))")
+                .accessibilityHint(efficiencyUnavailableExplanation(session))
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background {
             RoundedRectangle(cornerRadius: 15)
                 .fill(Color(UIColor.secondarySystemBackground))
         }
+        .accessibilityIdentifier("sleepEfficiencySection")
     }
-    
+
+    /// Stage composition is a percentage *of staged sleep*: `inBed` and awake rows are
+    /// excluded from the denominator (rules 5 and 6), `asleepUnspecified` is preserved
+    /// as its own row, and stage names carry their source (rule 1).
     private func timeBreakdownSection(_ session: SleepSession) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Time Breakdown")
+        let metrics = session.derivedSleepMetrics
+        let reportedByAppleHealth = metrics.hasAppleHealthProvenance
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Sleep Stage Composition")
                 .font(.headline)
-            
-            VStack(spacing: 16) {
-                TimeBreakdownRow(
-                    label: "Deep Sleep",
-                    duration: timeInStage(session, stage: "DEEP"),
-                    total: session.recordedInterval
-                )
-                
-                TimeBreakdownRow(
-                    label: "Light Sleep",
-                    duration: timeInStage(session, stage: "LIGHT"),
-                    total: session.recordedInterval
-                )
-                
-                TimeBreakdownRow(
-                    label: "REM Sleep",
-                    duration: timeInStage(session, stage: "REM"),
-                    total: session.recordedInterval
-                )
-                
-                TimeBreakdownRow(
-                    label: "Time Awake",
-                    duration: timeInStage(session, stage: "AWAKE"),
-                    total: session.recordedInterval
-                )
+
+            if let composition = metrics.asleepStageComposition.value {
+                let stagedTotal = composition.values.reduce(0, +)
+
+                Text(session.stageSourceDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("stageCompositionProvenance")
+
+                VStack(spacing: 16) {
+                    ForEach(Self.compositionStageOrder, id: \.self) { stage in
+                        if let duration = composition[stage], duration > 0 {
+                            TimeBreakdownRow(
+                                label: stage.displayName(reportedByAppleHealth: reportedByAppleHealth),
+                                duration: duration,
+                                total: stagedTotal
+                            )
+                        }
+                    }
+                }
+
+                Text("Percentages are of staged sleep (\(formatDuration(stagedTotal))). Time in bed and awake periods are excluded.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Sleep stage composition unavailable")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text("This session has no sleep stage intervals Zeez can total.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Awake time is reported alongside the composition, never inside its
+            // denominator, and only when Apple Health reported awake intervals.
+            if let awake = metrics.recordedAwakeDuration.value {
+                Divider()
+                HStack {
+                    Text("Recorded awake time")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(formatDuration(awake))
+                        .bold()
+                }
+                Text("Awake intervals reported by Apple Health. Apple Watch may omit awake periods at the start or end of a session, so this is not a complete count of awakenings.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background {
             RoundedRectangle(cornerRadius: 15)
                 .fill(Color(UIColor.secondarySystemBackground))
         }
+        .accessibilityIdentifier("stageCompositionSection")
     }
-    
+
     // MARK: - Helper Functions
-    
+
+    /// Every asleep stage, in presentation order. `awake` is absent by design, and every
+    /// other stage must appear here or its time silently vanishes from the breakdown —
+    /// which is how `asleepUnspecified` went missing. Pinned by `SleepInformationViewTests`.
+    static let compositionStageOrder: [SleepStageType] = [
+        .deepSleep, .lightSleep, .rem, .asleepUnspecified
+    ]
+
     private func recordedIntervalHours(_ session: SleepSession) -> Double {
         session.recordedInterval / 3600
     }
-    
-    private func timeInBed(_ session: SleepSession) -> TimeInterval {
-        guard let start = session.startTime,
-              let end = session.endTime else { return 0 }
-        return end.timeIntervalSince(start)
-    }
-    
-    /// Efficiency requires an explicit recorded awake interval.
-    private func calculateEfficiency(_ session: SleepSession) -> (Double, Bool) {
-        let bedTime = timeInBed(session)
-        guard bedTime > 0 else { return (0, false) }
 
-        let stages = session.sleepStages?.allObjects as? [SleepStage] ?? []
-        let storedStages = stages.map {
-            StoredSleepStageDuration(type: $0.stageType, duration: $0.duration)
-        }
-        guard hasRecordedAwakeInterval(in: storedStages) else { return (0, false) }
-
-        let awakeTime = stages
-            .filter { SleepStageType.awake.matches($0.stageType) }
-            .reduce(0.0) { $0 + $1.duration }
-        let actualSleep = bedTime - awakeTime
-        return ((actualSleep / bedTime) * 100, true)
+    private func efficiencyUnavailableExplanation(_ session: SleepSession) -> String {
+        session.derivedSleepMetrics.reportedInBedDuration.value == nil
+            ? "Requires time in bed reported by Apple Health."
+            : "Requires reported time in bed and time asleep for this session."
     }
 
-    private func timeInStage(_ session: SleepSession, stage: String) -> TimeInterval {
-        guard let stages = session.sleepStages?.allObjects as? [SleepStage] else { return 0 }
-        return stages
-            .filter { SleepStageType.normalize(stage) == SleepStageType.normalize($0.stageType) }
-            .reduce(0) { $0 + $1.duration }
-    }
-    
     private func formatDuration(_ duration: TimeInterval) -> String {
         let hours = Int(duration / 3600)
         let minutes = Int((duration.truncatingRemainder(dividingBy: 3600)) / 60)
@@ -390,8 +415,11 @@ struct TimeBreakdownRow: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
+        .accessibilityValue("\(formatDuration(duration)), \(Int(percentage)) percent of staged sleep")
     }
-    
+
     private func formatDuration(_ duration: TimeInterval) -> String {
         let hours = Int(duration / 3600)
         let minutes = Int((duration.truncatingRemainder(dividingBy: 3600)) / 60)
