@@ -62,7 +62,6 @@ Zeez/
 ├── CoreData/        # Core Data entity class files (paired +CoreDataClass / +CoreDataProperties)
 ├── Shared/          # ModalCoordinator and other cross-cutting components
 ├── Watch/           # WatchConnectivityHandler, WatchCommunicationSupport, WatchSleepSummary+CoreData
-├── Widgets/         # Widget, WidgetContainer
 ├── Development/     # DeveloperSettings
 │   └── Mocks/       # MockDataGenerator, MockSleepPatternGenerator
 ├── Sleep/           # Sleep analysis and views
