@@ -324,18 +324,35 @@ A1/A7; Phase 3 (import integrity) partly by B9/B10/C6, leaving durable HealthKit
 partly by B4/B6; Phase 6 (owned-sensor staging) is a research project whose deliverable is a go/no-go
 report. Doc-only: reconcile the archive and re-file the residue into `PARKED_CAPABILITIES.md`.
 
-**D4. CI.** Add a watch-app build job and a scheduled UI smoke job. The watch scheme **is not shared** —
-only `Zeez.xcscheme` lives in `xcshareddata` — so CI cannot build the watch app until it is. Use
-`-destination 'generic/platform=watchOS Simulator'` for a build-only job rather than naming a simulator
-whose name drifts between runner images. The UI smoke job must run a **Debug** build:
-`OnboardingManager` reads `-uiTestCompletedOnboarding` inside `#if DEBUG`, so a Release run hangs on
-onboarding. Restrict it to `MainViewUITests` and `OnboardingUITests`; the other three UI tests are Xcode
-template boilerplate. Keep the `#if compiler(>=6.2)` SDK-drift gate discipline.
+**D4. CI.** Add a watch-app build job and a scheduled UI smoke job.
+- ✅ **Done 2026-07-09** — shared the watch scheme (`xcshareddata/xcschemes/ZeezWatch Watch App.xcscheme`);
+  only `Zeez.xcscheme` was shared, so CI could not build the watch app at all. `watch-build` uses
+  `-destination 'generic/platform=watchOS Simulator'` rather than naming a simulator model whose name
+  drifts between runner images. `ui-smoke` runs on `schedule` (07:00 UTC) + `workflow_dispatch` only,
+  never on push — UI tests need a warm booted simulator and their failure modes are noisy enough to erode
+  trust in a required check. It pins `-configuration Debug` because `OnboardingManager` and `ZeezApp` read
+  their launch-argument overrides inside `#if DEBUG`, so a Release run would hang on onboarding, and it
+  excludes `ZeezUITests`/`ZeezUITestsLaunchTests` (Xcode template boilerplate; `testLaunchPerformance`
+  measures a cold runner). The `concurrency` group now keys on `github.event_name` so a nightly ui-smoke
+  cannot cancel a push's unit-tests.
+- **`testSleepTabLoads` was asserting pre-B11 behavior and had never run.** It waited for the
+  "Sleep Metrics" header, with a comment claiming it was "present regardless of whether any sleep data
+  exists" — true until B11 made `metricsSection` conditional on `hasAnySleepData` and replaced it with
+  `DashboardEmptyStateCard` on an empty store. The test was wrong, not the app. Replaced with
+  `testFirstRunDashboardShowsEmptyStateAndOpensImporter`, which asserts the card renders and its button
+  routes to the importer — automating the first-run check §5 previously listed as manual. It needs a
+  deterministic empty store, so `ZeezApp` gained a DEBUG-only `-uiTestResetStore` launch argument beside
+  `OnboardingManager`'s existing ones; it calls `clearAllData()` from `init()`, before `WindowGroup` builds
+  `RootView` and any `@FetchRequest` observes the old store. UI: 6/6 green. ZeezTests 225/225 green;
+  watch target builds via the new shared scheme.
 
 ## 5. Release-gating checklist
 
 **Physical iPhone:** alarm E2E (force-quit, locked, chain cadence, Stop re-arms — after A6); mic-denied environmental path; HealthKit import of a real Apple Watch night (incl. `asleepUnspecified` display); record/end session with ConcurrencyDebug 1 (A3); delete-all-data walkthrough.
-**First run (simulator is enough):** with an empty store, the dashboard shows `DashboardEmptyStateCard` and its button opens the importer (B11); after importing, the metric cards return. Also confirm the importer's completion message names heart-rate and respiratory outcomes (B10).
+**First run (simulator is enough):** the empty-store dashboard and its route into the importer are now
+covered by `MainViewUITests.testFirstRunDashboardShowsEmptyStateAndOpensImporter` in the `ui-smoke` CI job
+(D4) — no longer a manual check. Still manual: after importing, confirm the metric cards return, and that
+the importer's completion message names heart-rate and respiratory outcomes (B10).
 **Paired Apple Watch:** summary push after a new session (**blocked by A5**), requestData refresh, wake-pattern haptics, snooze/stop from watch, offline cache behavior.
 **App Store Connect:** create/confirm the 4 product IDs char-for-char; sandbox purchase + restore; airplane-mode launch keeps premium; privacy-policy URL live; App Privacy questionnaire = "no data collected" consistent with manifests. The HealthKit read scope is now exactly `sleepAnalysis`, `heartRate`, `respiratoryRate` (B13) — answer the questionnaire against that set, not the old four.
 **App Group / store location (D3a):** toggle **App Groups** once in Xcode's Signing & Capabilities pane

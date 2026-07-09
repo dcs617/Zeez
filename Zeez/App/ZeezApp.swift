@@ -6,7 +6,19 @@ import os.log
 struct ZeezApp: App {
     @UIApplicationDelegateAdaptor(ApplicationDelegate.self) var appDelegate
     let persistenceController = PersistenceController.shared
-    
+
+    init() {
+        #if DEBUG
+        // UI tests of the first-run dashboard need an empty store, and the simulator's
+        // store outlives the app install. Mirrors OnboardingManager's launch-argument
+        // overrides; runs before WindowGroup builds RootView, so no @FetchRequest has
+        // observed the old store. DEBUG-only, like the arguments it sits beside.
+        if CommandLine.arguments.contains("-uiTestResetStore") {
+            persistenceController.clearAllData()
+        }
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

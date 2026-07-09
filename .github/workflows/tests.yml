@@ -1,25 +1,32 @@
-# Unit-test CI (roadmap 2.4 step 5).
+# Unit-test CI (roadmap 2.4 step 5), watch-app build, and a scheduled UI smoke
+# job (second-audit D4).
 #
-# Runs the ZeezTests bundle only: the suites are hermetic (in-memory Core
-# Data + injected fake notification center) and need no notification
-# permission or signing. UI tests are excluded — they need a booted, warm
-# simulator and are run locally/manually for now.
+# unit-tests runs the ZeezTests bundle only: the suites are hermetic (in-memory
+# Core Data + injected fake notification center) and need no notification
+# permission or signing.
 #
-# NOTE: authored offline; the runner image's exact Xcode path may need a
-# bump when this first executes (see the xcode-select step).
+# ui-smoke is deliberately NOT on push. UI tests need a booted, warm simulator,
+# take minutes rather than seconds, and their failure modes (element ambiguity,
+# animation timing) are noisy enough to erode trust in a required check.
 name: tests
 
 on:
   push:
     branches: [main, "feature/**"]
   pull_request:
+  schedule:
+    # 07:00 UTC daily. UI smoke only; nothing here gates a merge.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
 
 concurrency:
-  group: tests-${{ github.ref }}
+  # Keyed by event too: a nightly ui-smoke on main must not cancel a push's unit-tests.
+  group: tests-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   unit-tests:
+    if: github.event_name != 'schedule'
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -27,7 +34,8 @@ jobs:
 
       - name: Select Xcode
         run: |
-          # Prefer the newest Xcode 16.x on the runner image.
+          # Prefer the newest Xcode 16.x on the runner image. This machine develops
+          # against Xcode 26, so new-SDK symbols must sit behind #if compiler(>=6.2).
           XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
           sudo xcode-select -s "${XCODE:-/Applications/Xcode.app}"
           xcodebuild -version
@@ -40,3 +48,56 @@ jobs:
             -scheme Zeez \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             -only-testing:ZeezTests
+
+  watch-build:
+    if: github.event_name != 'schedule'
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          sudo xcode-select -s "${XCODE:-/Applications/Xcode.app}"
+          xcodebuild -version
+
+      - name: Build watch app
+        run: |
+          set -o pipefail
+          # A generic destination avoids pinning a simulator model name, which drifts
+          # between runner images. Build-only: the watch target has no tests worth running,
+          # and repo-root Shared/ compiles into both targets, so this is what catches a
+          # phone-side change that breaks the watch.
+          xcodebuild build \
+            -project Zeez.xcodeproj \
+            -scheme 'ZeezWatch Watch App' \
+            -destination 'generic/platform=watchOS Simulator'
+
+  ui-smoke:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          sudo xcode-select -s "${XCODE:-/Applications/Xcode.app}"
+          xcodebuild -version
+
+      - name: Run UI smoke tests
+        run: |
+          set -o pipefail
+          # Debug only: OnboardingManager and ZeezApp read -uiTestCompletedOnboarding /
+          # -uiTestResetStore inside #if DEBUG, so a Release build would hang on onboarding.
+          # ZeezUITests.swift and ZeezUITestsLaunchTests are Xcode template boilerplate and
+          # are excluded — testLaunchPerformance in particular measures a cold runner.
+          xcodebuild test \
+            -project Zeez.xcodeproj \
+            -scheme Zeez \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -only-testing:ZeezUITests/MainViewUITests \
+            -only-testing:ZeezUITests/OnboardingUITests
