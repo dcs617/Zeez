@@ -6,7 +6,9 @@ import os.log
 struct SleepControlView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @StateObject private var batteryMonitor = BatteryMonitor()
-    
+
+    @FetchRequest(sortDescriptors: []) private var preferences: FetchedResults<UserPreferences>
+
     @State private var showingGoalSettings = false
     @State private var isPreparingSession = false
     @State private var showingSessionSummary = false
@@ -133,6 +135,38 @@ struct SleepControlView: View {
         }
     }
     
+    /// The user's saved goal, or `nil` when they have not selected one.
+    ///
+    /// This card used to print "10:30 PM" and "8h 00m" as string literals regardless of
+    /// what the user had saved (second-audit B12). A goal is a user selection, so when
+    /// none exists the card says so rather than showing a plausible default.
+    private var activeGoal: UserPreferences? {
+        guard let prefs = preferences.first, prefs.sleepGoalEnabled else { return nil }
+        return prefs
+    }
+
+    private var targetBedtimeText: String {
+        guard let bedtime = activeGoal?.targetBedtime else { return "Not set" }
+        return bedtime.formatted(date: .omitted, time: .shortened)
+    }
+
+    private var targetDurationText: String {
+        guard let goal = activeGoal else { return "Not set" }
+
+        let duration: TimeInterval
+        if let bedtime = goal.targetBedtime, let wakeTime = goal.targetWakeTime {
+            duration = SleepGoalPolicy.duration(from: bedtime, to: wakeTime)
+        } else if goal.targetSleepDuration > 0 {
+            duration = goal.targetSleepDuration
+        } else {
+            return "Not set"
+        }
+
+        let hours = Int(duration) / 3600
+        let minutes = (Int(duration) % 3600) / 60
+        return String(format: "%dh %02dm", hours, minutes)
+    }
+
     private var sleepGoalSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -155,29 +189,27 @@ struct SleepControlView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .accessibilityIdentifier("bedtimeLabel")
-                    Text("10:30 PM")
+                    Text(targetBedtimeText)
                         .font(.title3)
-                        .accessibilityLabel("Target bedtime 10:30 PM")
                         .accessibilityIdentifier("bedtimeValue")
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Target bedtime 10:30 PM")
+                .accessibilityLabel("Target bedtime \(targetBedtimeText)")
                 .accessibilityIdentifier("bedtimeSection")
-                
+
                 Spacer()
-                
+
                 VStack(alignment: .trailing) {
                     Text("Target Duration")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .accessibilityIdentifier("durationLabel")
-                    Text("8h 00m")
+                    Text(targetDurationText)
                         .font(.title3)
-                        .accessibilityLabel("Target duration 8 hours")
                         .accessibilityIdentifier("durationValue")
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Target sleep duration 8 hours")
+                .accessibilityLabel("Target sleep duration \(targetDurationText)")
                 .accessibilityIdentifier("durationSection")
             }
         }

@@ -172,6 +172,7 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 
 **B12. Sleep goal card shows hardcoded values** — Medium · UX/Trust
 `Zeez/Sleep/SleepControlView.swift:158,174` — "10:30 PM" and "8h 00m" are string literals, ignoring the user's saved goal (`UserPreferences.targetBedtime` / Settings sleep-goal section). Bind to preferences or drop the card. Effort: Small.
+- ✅ **Done 2026-07-09** — the card now reads a `UserPreferences` `@FetchRequest`: bedtime from `targetBedtime`, duration from `SleepGoalPolicy.duration(from:to:)` (falling back to the persisted `targetSleepDuration`). When no goal is saved, or `sleepGoalEnabled` is off, both read **"Not set"** rather than a plausible default — a goal is a user selection, so a fabricated one is exactly the rule-4 failure. Accessibility labels interpolate the real values instead of the hardcoded "10:30 PM"/"8 hours". `SleepGoalPolicy`'s overnight wrap is already covered by `SleepDebtTrackingTests`. ZeezTests 203/203 green.
 
 **B13. HealthKit auth scope drift** — Low · Privacy
 `SleepSessionManager.requestHealthKitAuthorization` (108-113) requests `restingHeartRate`, which nothing imports; onboarding/importer request the minimal 3-type set. Consolidate to one auth helper with the minimal set. Effort: Small.
