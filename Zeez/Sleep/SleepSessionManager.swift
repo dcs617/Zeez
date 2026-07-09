@@ -113,20 +113,13 @@ final class SleepSessionManager {
     }
     
     func requestHealthKitAuthorization(completion: @escaping (Bool, Error?) -> Void) {
-        guard HKHealthStore.isHealthDataAvailable() else {
+        guard HealthKitAuthorization.isAvailable else {
             errorManager.showError(.healthKitNotAvailable)
             completion(false, AppError.healthKitNotAvailable)
             return
         }
-        
-        let typesToRead: Set<HKObjectType> = [
-            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .restingHeartRate)!,
-            HKObjectType.quantityType(forIdentifier: .respiratoryRate)!
-        ]
-        
-        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { success, error in
+
+        HealthKitAuthorization.request(using: healthStore) { success, error in
             if !success {
                 self.errorManager.showError(.healthKitPermissionDenied)
             }

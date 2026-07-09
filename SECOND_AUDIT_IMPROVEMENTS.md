@@ -129,6 +129,11 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 
 ### Phase B — fix before App Store submission
 
+**Status: complete (2026-07-09).** B1–B13 landed one commit per item on
+`feature/sleep-simplification`. Baseline moved from 162 tests / 27 suites to **206 tests /
+33 suites, all green**; iOS and watch targets build. New live documents: `ZEEZ_SCORE_SPECIFICATION.md`
+(B8). Phase C/D not started — awaiting explicit approval.
+
 **B1. Delete the dead in-app "Widgets" tree** — Medium · Maintainability/Claims
 `Zeez/Widgets/Widget.swift`, `WidgetContainer.swift`, `Zeez/Views/WidgetViews.swift`, `WidgetPickerView.swift` — unreachable; contains hardcoded "Room Temperature 20°C / Optimal" (`WidgetContainer.swift:131-137`), "Simplified debt tracking coming in Phase 2" (line 122), "accumulated sleep debt and recovery status" copy (line 167), and premium flags nothing enforces. (Promotion of the FUTURE item.) Effort: Small.
 - ✅ **Done 2026-07-09** — deleted `Zeez/Widgets/` (`Widget.swift`, `WidgetContainer.swift`) and `Zeez/Views/{WidgetViews,WidgetPickerView}.swift` after confirming every declaration (`WidgetType`, `WidgetConfiguration`, `StatBox`, the six widget views) was referenced only from within the tree; removed the `Widgets/` row from CLAUDE.md's directory table. ZeezTests 162/162 green.
@@ -176,6 +181,7 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 
 **B13. HealthKit auth scope drift** — Low · Privacy
 `SleepSessionManager.requestHealthKitAuthorization` (108-113) requests `restingHeartRate`, which nothing imports; onboarding/importer request the minimal 3-type set. Consolidate to one auth helper with the minimal set. Effort: Small.
+- ✅ **Done 2026-07-09** — new `DataImport/HealthKitAuthorization.swift` owns the read scope (`sleepAnalysis`, `heartRate`, `respiratoryRate`) and both the completion-handler and `async` request forms; `SleepSessionManager`, `HealthKitDataImporter`, and `OnboardingManager` all route through it, so `restingHeartRate` is no longer requested. Force-unwrapped `HKObjectType` lookups became safe inserts. New `HealthKitAuthorizationTests` pins the scope to exactly those three types and asserts `restingHeartRate` is absent. ZeezTests 206/206 green; iOS and watch targets build.
 
 ### Phase C — early post-release / opportunistic
 
@@ -203,11 +209,13 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 **Physical iPhone:** alarm E2E (force-quit, locked, chain cadence, Stop re-arms — after A6); mic-denied environmental path; HealthKit import of a real Apple Watch night (incl. `asleepUnspecified` display); record/end session with ConcurrencyDebug 1 (A3); delete-all-data walkthrough.
 **First run (simulator is enough):** with an empty store, the dashboard shows `DashboardEmptyStateCard` and its button opens the importer (B11); after importing, the metric cards return. Also confirm the importer's completion message names heart-rate and respiratory outcomes (B10).
 **Paired Apple Watch:** summary push after a new session (**blocked by A5**), requestData refresh, wake-pattern haptics, snooze/stop from watch, offline cache behavior.
-**App Store Connect:** create/confirm the 4 product IDs char-for-char; sandbox purchase + restore; airplane-mode launch keeps premium; privacy-policy URL live; App Privacy questionnaire = "no data collected" consistent with manifests.
+**App Store Connect:** create/confirm the 4 product IDs char-for-char; sandbox purchase + restore; airplane-mode launch keeps premium; privacy-policy URL live; App Privacy questionnaire = "no data collected" consistent with manifests. The HealthKit read scope is now exactly `sleepAnalysis`, `heartRate`, `respiratoryRate` (B13) — answer the questionnaire against that set, not the old four.
 **Organizer/archive:** validate archive; confirm no `NSCameraUsageDescription` needed (AVCaptureDevice fully removed); background modes = `processing` only.
 **TestFlight:** several nights of real alarm/sleep usage; battery observation (watch heartbeat machinery until A5 cleanup).
-**Accessibility:** VoiceOver pass over Dashboard, session details, Trends charts, watch app; confirm every score utterance carries "Experimental Zeez estimate"; Dynamic Type on dashboard cards.
-**Privacy/claims review:** re-read active surfaces against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` after B-phase lands; review App Store description copy against the same contract before submission.
+**Accessibility:** VoiceOver pass over Dashboard, session details, Trends charts, watch app; confirm every score utterance carries "Experimental Zeez estimate"; Dynamic Type on dashboard cards. Phase B reworded several VoiceOver strings (Trends duration chart B4, noise index B5, stage composition B6, sleep-goal card B12) — re-listen to those.
+**Environmental units:** noise is now a relative index 0–100, not dB (B5). On device, confirm the Sleep Details environmental row reads "Relative Noise Index … of 100" and that a mic-denied session shows unavailable rather than 0.
+**Score behaviour:** a recorded session with sensor data but no inferrable stages must show **no** score (B8's `qualityScore = 1.0` sentinel), not a neutral one; a scored session's `SleepQualityScore.calculationVersion` must read `ZeezScore-3.0` and its `confidenceScore` must vary with sensor breadth rather than always being 85.
+**Privacy/claims review:** re-read active surfaces against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` now that B-phase has landed, and read `ZEEZ_SCORE_SPECIFICATION.md` alongside it (B8 — the spec is binding and must be re-checked whenever `ZeezScore.version` changes); review App Store description copy against both before submission. `ClinicalVocabularyGuardTests` (B7) enforces the prohibited-vocabulary rules in CI, but it exempts `Zeez/Learn` — review Learn copy by hand.
 
 ## 6. Suggested validation commands
 

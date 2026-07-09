@@ -146,25 +146,15 @@ class HealthKitDataImporter {
     // MARK: - Authorization
 
     func requestFullAuthorization(completion: @escaping (Bool, Error?) -> Void) {
-        guard HKHealthStore.isHealthDataAvailable() else {
+        guard HealthKitAuthorization.isAvailable else {
             ZeezLogger.error(ZeezLogger.error, "HealthKit is not available on this device")
             completion(false, AppError.healthKitNotAvailable)
             return
         }
 
-        // Request only the types the importer actually maps into Core Data
-        // (sleep sessions, HeartRateData, respiratory readings) — the same
-        // minimal set onboarding requests. Add types here only alongside
-        // import code that consumes them.
-        let typesToRead: Set<HKObjectType> = [
-            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .respiratoryRate)!
-        ]
+        ZeezLogger.info(ZeezLogger.coreData, "Requesting HealthKit authorization for \(HealthKitAuthorization.readTypes.count) data types")
 
-        ZeezLogger.info(ZeezLogger.coreData, "Requesting HealthKit authorization for \(typesToRead.count) data types")
-
-        healthStore.requestAuthorization(toShare: nil, read: typesToRead) { success, error in
+        HealthKitAuthorization.request(using: healthStore) { success, error in
             if let error = error {
                 ZeezLogger.error(ZeezLogger.error, "HealthKit authorization error: \(error.localizedDescription)")
             } else {

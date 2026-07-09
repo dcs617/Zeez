@@ -140,21 +140,15 @@ final class OnboardingManager: ObservableObject {
     }
 
     private func requestHealthKitPermissions() async {
-        guard HKHealthStore.isHealthDataAvailable() else {
+        guard HealthKitAuthorization.isAvailable else {
             // HealthKit unavailable (e.g., iPad) — advance without requesting.
             await proceedToNextStep()
             return
         }
 
-        // Read-only: the app imports data from Apple Health; it never writes back.
-        let typesToRead: Set<HKObjectType> = [
-            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .respiratoryRate)!
-        ]
-
         do {
-            try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
+            // Read-only, minimal scope — see HealthKitAuthorization.
+            try await HealthKitAuthorization.request(using: healthStore)
             // Only mark complete when the request presented without a system-level error.
             // Read grant status is intentionally unknowable via HealthKit API (privacy by design).
             healthKitSetupCompleted = true
