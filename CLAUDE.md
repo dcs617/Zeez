@@ -58,7 +58,7 @@ Zeez/
 ├── Infrastructure/  # ZeezLogger, ErrorManager, BackgroundTaskManager, AnalyticsManager, ResourceMonitor
 ├── Utilities/       # Extensions and helpers: Array+Statistics, DateHelper, FormatterUtils, CollectionExtensions
 ├── Commerce/        # PremiumFeatures, PremiumFeatureGating, StoreKitManager, SubscriptionEvents
-├── DataImport/      # HealthKitDataImporter, PillowDataImporter, RealDataManager
+├── DataImport/      # HealthKitDataImporter, RealDataManager
 ├── CoreData/        # Core Data entity class files (paired +CoreDataClass / +CoreDataProperties)
 ├── Shared/          # ModalCoordinator and other cross-cutting components
 ├── Watch/           # WatchConnectivityHandler, WatchCommunicationSupport, WatchSleepSummary+CoreData
@@ -88,7 +88,7 @@ Zeez/
 - `AlarmObserver.shared` — notification and alarm lifecycle management
 - `BackgroundTaskManager.shared` — BGTask registration and execution for sleep data processing
 - `StoreKitManager.shared` — StoreKit 2 subscription handling (async/await, transaction listener)
-- `RealDataManager.shared` (`DataImport/`) — coordinates HealthKit and Pillow data import
+- `RealDataManager.shared` (`DataImport/`) — coordinates HealthKit data import
 - `ErrorManager.shared` — centralized error tracking
 - `AnalyticsManager.shared` — analytics events
 - `ModalCoordinator.shared` — global sheet presentation from `RootView`
@@ -97,7 +97,7 @@ Zeez/
 `Commerce/PremiumFeatures.swift` defines `PremiumFeature` enum. `PremiumFeatureGating` checks entitlements. `StoreKitManager` manages subscription products and `purchasedSubscriptions`.
 
 ### Data Import
-Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImportView.swift`). `DataImport/HealthKitDataImporter` and `DataImport/PillowDataImporter` map to Core Data, coordinated by `DataImport/RealDataManager`. Mock data generation is manually triggered via the debug menu in DEBUG builds — it is **not** generated automatically at launch.
+Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImportView.swift`). `DataImport/HealthKitDataImporter` maps Apple Health data to Core Data, coordinated by `DataImport/RealDataManager`. Mock data generation is manually triggered via the debug menu in DEBUG builds — it is **not** generated automatically at launch.
 
 ### watchOS Companion
 `ZeezWatch Watch App/` is a separate target. iOS↔watch communication uses `Watch/WatchConnectivityHandler.swift` on the iOS side, mirrored by `WatchConnectivityManager.swift` on the watch side. Message/model types (`WatchSleepSummary`, `WatchAlarmStatus`, `WatchMessageType`, `HapticPattern`, `WakePatternData`) are defined once in the repo-root `Shared/` folder, which is a synchronized group compiled into **both** app targets — keep that folder free of Core Data and platform-specific imports (iOS-only bridges go in `Zeez/Watch/`).

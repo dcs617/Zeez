@@ -129,6 +129,8 @@ struct SleepDataPreservationTests {
         try withInMemoryContext { context in
             // Real sessions from different non-mock sources
             _ = makeRealSession(in: context, deviceIdentifier: "HealthKit Import")
+            // Legacy identifier: the Pillow importer is gone, but sessions it wrote
+            // still exist in shipped stores and must not be treated as mock data.
             _ = makeRealSession(in: context, deviceIdentifier: "Pillow Import")
             _ = makeRealSession(in: context, deviceIdentifier: "Manual Entry")
             _ = makeMockSession(in: context)

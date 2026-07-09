@@ -222,12 +222,6 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
                 
-                if let pillowCount = dataSources[.pillow]?.count, pillowCount > 0 {
-                    Text("Pillow: \(pillowCount) sessions")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
                 if let mockCount = dataSources[.mock]?.count, mockCount > 0 {
                     Text("Mock: \(mockCount) sessions")
                         .font(.caption)

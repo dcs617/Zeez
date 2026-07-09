@@ -4,7 +4,7 @@ import HealthKit
 @testable import Zeez
 
 /// Tests that SleepStageType.normalize decodes both the uppercase (mock/analyzer) and
-/// lowercase (HealthKit/Pillow import) stored representations consistently.
+/// lowercase (HealthKit import / legacy store) stored representations consistently.
 struct SleepStageNormalizationTests {
 
     // MARK: - Canonical Decoding

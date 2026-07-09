@@ -3,8 +3,8 @@ import os.log
 
 /// Defines the different types of sleep stages tracked by the app.
 ///
-/// Raw values are uppercase (e.g. "AWAKE"). HealthKit and Pillow importers historically
-/// stored lowercase values ("awake", "deep", etc.). Use `normalize(_:)` everywhere a
+/// Raw values are uppercase (e.g. "AWAKE"). The HealthKit importer and older stores
+/// use lowercase values ("awake", "deep", etc.). Use `normalize(_:)` everywhere a
 /// stored `stageType` string must be decoded to avoid silent mismatches.
 enum SleepStageType: String, CaseIterable {
     case awake = "AWAKE"
@@ -50,7 +50,7 @@ enum SleepStageType: String, CaseIterable {
     // MARK: - Canonical Decoding
 
     /// Decode a stored `stageType` string from either uppercase (mock/analyzer-generated)
-    /// or lowercase (HealthKit/Pillow-imported) spellings, returning `nil` for unknown values
+    /// or lowercase (HealthKit-imported) spellings, returning `nil` for unknown values
     /// such as "inBed" or "unknown".
     static func normalize(_ string: String?) -> SleepStageType? {
         guard let string, !string.isEmpty else { return nil }

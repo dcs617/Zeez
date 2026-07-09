@@ -227,11 +227,6 @@ struct AppConstants {
         /// Substring predicates use to recognize any HealthKit-sourced session
         static let healthKitMarker = "HealthKit"
 
-        /// Sessions imported from a Pillow CSV export
-        static let pillowCSVImport = "Pillow CSV Import"
-        /// Sessions imported from a Pillow JSON export
-        static let pillowJSONImport = "Pillow JSON Import"
-
         /// Sessions created by the debug mock-data generator
         static let mockDevice = "Mock Data - iPhone"
         /// Substring predicates use to recognize mock sessions

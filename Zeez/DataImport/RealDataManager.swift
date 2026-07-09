@@ -4,7 +4,6 @@ import os.log
 
 enum SleepDataSource {
     case healthKit
-    case pillow
     case manual
     case mock
 }
@@ -14,8 +13,7 @@ class RealDataManager {
     
     private let persistenceController = PersistenceController.shared
     private let healthKitImporter = HealthKitDataImporter.shared
-    private let pillowImporter = PillowDataImporter.shared
-    
+
     private init() {}
     
     // MARK: - Data Source Management
@@ -29,13 +27,6 @@ class RealDataManager {
         sources[.healthKit] = (
             count: healthKitSessions.count,
             lastImport: healthKitSessions.compactMap { $0.createdAt }.max()
-        )
-        
-        // Pillow data
-        let pillowSessions = fetchSessions(containing: "Pillow", context: context)
-        sources[.pillow] = (
-            count: pillowSessions.count,
-            lastImport: pillowSessions.compactMap { $0.createdAt }.max()
         )
         
         // Manual/Real data (not mock)
@@ -63,18 +54,6 @@ class RealDataManager {
             return try context.fetch(request)
         } catch {
             ZeezLogger.error(ZeezLogger.error, "Failed to fetch sessions for \(deviceIdentifier): \(error.localizedDescription)")
-            return []
-        }
-    }
-    
-    private func fetchSessions(containing identifier: String, context: NSManagedObjectContext) -> [SleepSession] {
-        let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        request.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", identifier)
-        
-        do {
-            return try context.fetch(request)
-        } catch {
-            ZeezLogger.error(ZeezLogger.error, "Failed to fetch sessions containing \(identifier): \(error.localizedDescription)")
             return []
         }
     }
@@ -131,7 +110,7 @@ class RealDataManager {
             if !errors.isEmpty {
                 completion(.failure(errors.first!))
             } else {
-                summary.totalImported = summary.healthKitSessions + summary.pillowSessions + summary.manualSessions
+                summary.totalImported = summary.healthKitSessions + summary.manualSessions
                 completion(.success(summary))
             }
         }
@@ -251,7 +230,6 @@ class RealDataManager {
 
 struct ImportSummary {
     var healthKitSessions: Int = 0
-    var pillowSessions: Int = 0
     var manualSessions: Int = 0
     var totalImported: Int = 0
     
