@@ -1,0 +1,257 @@
+# Parked Capabilities
+
+Status: Live register of removed and dormant product capabilities
+Created: 2026-07-09 (second-audit item C0)
+Binding contracts: `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md`, `ZEEZ_SCORE_SPECIFICATION.md`
+
+## Why this file exists
+
+Audit phases A and B removed several capabilities. Every removal was justified — the code was
+unreachable, fabricated data, or made claims the product cannot support — but the *intent*
+behind each feature was recorded only in `SECOND_AUDIT_IMPROVEMENTS.md`, an audit tracker that
+will be archived like `IMPROVEMENT_ROADMAP.md` before it. That would leave no answer to the
+question "were we ever going to build this?"
+
+**This register preserves the specification, not the implementation.** For most entries below
+the deleted code is a liability rather than a head start: the HRV section computed "RMSSD" from
+averaged HealthKit samples, which is not HRV at any sampling rate. Restoring that file would
+restore a wrong implementation. What is worth keeping is the statement of what a correct
+implementation requires — which is exactly what the claims contract demands *before* any Tier-3
+feature ships (line 62: "written specification, versioned inputs, deterministic test vectors").
+
+Nothing here is scheduled. An entry means "the idea survived the deletion", not "this is next."
+
+## How to recover deleted code
+
+Git retains everything. To find the commit that deleted a file and read it back:
+
+```bash
+git log --diff-filter=D --format=%h -1 -- <path>   # → <sha> of the deleting commit
+git show <sha>^:<path>                              # print the file as it last existed
+```
+
+This is deliberately SHA-free, so it survives rebases. Known SHAs are listed per entry as a
+convenience, not as the primary handle.
+
+---
+
+## 1. Heart-rate variability timeline
+
+**Removed:** A1 (`8dd9d47`) — `Zeez/Views/HeartRate/HRVChart.swift`, `calculateHRV` in
+`Zeez/Views/HeartRateView+Helpers.swift`.
+
+**What it did.** Showed an "HRV" chart and insights panel on the Heart Rate screen, grading
+results poor / fair / good / excellent.
+
+**Why removed.** Two independent violations. It derived "RMSSD" from *averaged* HealthKit
+heart-rate samples rather than beat-to-beat intervals, so the quantity was not HRV. And when
+fewer than three windows existed it invented chart points with `Double.random(in: -0.15...0.15)`
+and presented them as the user's personal timeline. The grading was an unvalidated Tier-3+
+health judgment.
+
+**Inputs required.** `HKQuantityTypeIdentifier.heartRateVariabilitySDNN`, imported directly.
+The claims contract (line 84) states "HRV import support requires confirmation" — the HealthKit
+type and its unit must be documented before the read scope is widened. Today's scope is exactly
+`sleepAnalysis`, `heartRate`, `respiratoryRate` (B13), pinned by `HealthKitAuthorizationTests`;
+adding a fourth type also changes the App Privacy questionnaire answer.
+
+**Claims tier and label.** Tier 3. Must be conspicuously marked "Experimental Zeez Estimate",
+with inputs, exclusions, and unavailable behavior specified. No quality grading, ever — the
+contract prohibits "recovery/readiness" and inferred-disorder wording on this row.
+
+**Missing-input policy.** Absent SDNN samples render the section *unavailable*, never a neutral
+or interpolated value. Never synthesize points to fill a sparse chart (rule 4).
+
+**Validation status.** None. No dataset or device evaluation has been run.
+
+**Definition of done.** SDNN imported and unit-tested; a written spec in the style of
+`ZEEZ_SCORE_SPECIFICATION.md`; deterministic test vectors; "Experimental" label present in the
+chart, its `accessibilityValue`, and any watch payload; `HeartRateClaimsGuardTests` updated to
+permit the new symbol while still forbidding randomized fills.
+
+---
+
+## 2. Pillow CSV / JSON import
+
+**Removed:** B2 (`b7dc142`) — `Zeez/DataImport/PillowDataImporter.swift`,
+`Zeez/Views/DataImportView.swift`.
+
+**What it did.** Imported sleep sessions exported from the Pillow app. Reachable only from
+`DataImportView`, which was itself unreferenced.
+
+**Why removed.** Dead, and defective in five ways that each violate rule 4 (never fabricate a
+missing input): missing quality became a hardcoded `75.0`; a CSV quality fallback computed
+`duration × 12`; an unknown stage became `"light"`, inventing stage information; a ±1-hour dedup
+tolerance matched against **any** source, silently dropping legitimate imports; the CSV parser
+split on commas without honoring quoting, and parsed dates in `TimeZone.current` rather than the
+export's zone.
+
+**Inputs required.** A documented Pillow export schema. Without one, quality and stage fields
+must be treated as absent rather than guessed.
+
+**Claims tier and label.** Tier 1 for values Pillow itself reports, provided provenance is shown
+("reported by Pillow"). Any Zeez-derived quantity computed from them is Tier 3.
+
+**Missing-input policy.** Absent quality → no score, not `75.0`. Unknown stage →
+`asleepUnspecified`, never `light`. Dedup must compare within a source, not across sources.
+
+**Validation status.** None.
+
+**Definition of done.** All five defects fixed; a quoted-CSV parser with fixture tests; timezone
+taken from the export; dedup scoped by `deviceIdentifier`; provenance surfaced in the UI. Note
+the `"Pillow Import"` string still appears as a test fixture, because legacy shipped stores hold
+that identifier and those sessions must survive `clearMockData` — do not repurpose it.
+
+---
+
+## 3. Sleep debt and recovery framing
+
+**Removed:** B7 (`b0c58ef`) — `Zeez/Sleep/Debt/DebtSeverity.swift`,
+`Zeez/Sleep/Debt/SleepDebtMetrics.swift`, `Zeez/Learn/Sleep/LearnSleepDebtHistoryView.swift`,
+`Zeez/Learn/Sleep/LearnSleepDebtDetailView.swift`, and `RecommendationsView`.
+
+**What it did.** Graded accumulated "sleep debt" as minimal / moderate / significant / severe,
+attached health-risk impacts ("weakened immune system", "cardiovascular strain"), produced a
+"Recovery Timeline" and "recovery plan", and told severe users to "consult a healthcare
+professional".
+
+**Why removed.** Tier 4 (medical / clinical conclusions) — outside what this product may claim
+at any confidence level. Two of these surfaces were **live**, not dormant, contrary to the
+tracker's assumption: `SleepGoalSettingsView` displayed "Weekly Sleep Debt" over a value that was
+already a goal shortfall.
+
+**Inputs required.** None that would make the original framing permissible. A user-selected sleep
+goal is not a determination of physiological need, so a shortfall against it is not "debt".
+
+**Claims tier and label.** Any revival must use **goal-shortfall** vocabulary and stay within
+Tier 2 (arithmetic against a user-chosen target). `ClinicalVocabularyGuardTests` enforces the
+prohibited phrases across every non-Learn tree and will fail the build if they return.
+
+**Note.** `Zeez/Learn/LearnSleepDebtView.swift` remains live and is intentionally exempt: it
+teaches sleep debt as a published concept (NHLBI framing) rather than reporting the user's own,
+and says so on screen. `DailyMetrics.sleepDebt` also remains, as a persisted Core Data attribute
+— renaming it requires a new model version, so the name stays and the *presentation* is what the
+guard test polices.
+
+**Validation status.** Not applicable; the framing is prohibited rather than unvalidated.
+
+---
+
+## 4. Real WidgetKit extension
+
+**Removed:** B1 (`ee534b8`) — `Zeez/Widgets/Widget.swift`, `Zeez/Widgets/WidgetContainer.swift`,
+`Zeez/Views/WidgetViews.swift`, `Zeez/Views/WidgetPickerView.swift`.
+
+**What it did.** Nothing — the tree was unreachable in-app cards, misleadingly named "Widgets".
+It contained a hardcoded "Room Temperature 20°C / Optimal" reading, "coming in Phase 2"
+placeholder copy, "accumulated sleep debt and recovery status" wording, and premium flags nothing
+enforced.
+
+**Why removed.** Dead code carrying three separate claims violations.
+
+**Definition of done.** A real WidgetKit extension target (not in-app cards). Tracked as Phase D3
+in `SECOND_AUDIT_IMPROVEMENTS.md`. Every value it surfaces is bound by the same claims rules as
+the in-app equivalent, including the "Experimental Zeez Estimate" label on any score and the
+`measured*` accessors for environmental readings (never the raw sentinel attributes).
+
+---
+
+## 5. Personalized sleep recommendations
+
+**Removed:** C2 — `Zeez/Sleep/SleepRecommendationSystem.swift`,
+`Zeez/Sleep/SleepRecommendationGenerator.swift`, `Zeez/Sleep/SleepRecommendationTypes.swift`.
+
+**What it did.** Nothing reachable. `SleepRecommendationSystem.generateRecommendations(ageGroup:
+activityLevel:)` would have produced an optimal schedule, quality tips, and schedule adjustments.
+B7 deleted its only would-be caller: a "Get Personalized Recommendations" button in
+`SleepGoalSettingsView` that set state with no sheet attached, so it did nothing when tapped.
+
+**Why removed.** Dead, and claims-blocked. `AgeGroup.recommendedSleepRange` returned a
+physiological sleep-need range (7–9 h) and `ActivityLevel.sleepAdjustment` added up to 1.5 h based
+on activity. Determining how much sleep a person *needs* is a Tier-4 clinical conclusion. It also
+required age and activity-level data the app has never collected and does not ask for — the
+button promised advice derived from inputs that do not exist.
+
+**Inputs required.** Either the app starts collecting age and activity level (a privacy-manifest
+and App Privacy questionnaire change, currently "no data collected"), or recommendations are
+restricted to the user's *own* recorded history against their *own* selected goal.
+
+**Claims tier and label.** Personal suggestions are Tier 3 at best (claims matrix line 62:
+"correlations, or personal suggestions whose accuracy or usefulness has not been independently
+established"). Published-norm ranges may be cited as education in the Learn tree, attributed, and
+never applied to the individual as a determination of need.
+
+**Missing-input policy.** No age or activity data → no recommendation. Do not default to "adult".
+
+**Validation status.** None.
+
+**Definition of done.** A decision on whether Zeez collects age/activity at all; a written spec;
+goal-shortfall rather than sleep-need vocabulary. `ClinicalVocabularyGuardTests` now asserts
+`SleepRecommendationSystem` stays deleted, so reviving the type name is a deliberate act.
+
+---
+
+## 6. Session detail, monthly trends, and environmental display views
+
+**Removed:** C2 — `Zeez/Sleep/SleepDetailView.swift`, `Zeez/Views/MonthlyTrendsView.swift`,
+`Zeez/Environment/EnvironmentalDataView.swift`, `Zeez/Environment/EnvironmentalFactors.swift`,
+`Zeez/Environment/AverageEnvironmentalReadingView.swift`.
+
+**What they did.** A per-session detail screen, a monthly trends screen, and three environmental
+display views. All unreachable — no callers outside their own `#Preview` blocks.
+
+**Why removed.** Pure dead UI. They drifted out of sync with the data model (B5 had to update the
+noise labels in views nobody could open), and each one that survives is a surface a future claims
+review must re-read.
+
+**Note on rebuild.** These are presentation only; the data they showed is intact and now better.
+Rebuild against `DerivedSleepMetrics`, `asleepStageComposition`, `NoiseIndex`, and the
+`measured*` environmental accessors rather than restoring the files — the deleted versions predate
+all four. `MonthlyTrendsDataProvider`, `TrendInsightsSection`, and `MonthlyChartSection` were
+**not** deleted; they remain live behind `TrendsView` and are the natural home for monthly
+presentation.
+
+**Claims tier and label.** Whatever they display. A rebuilt session-detail screen showing a Zeez
+score must carry the "Experimental Zeez Estimate" label in text *and* `accessibilityValue`
+(rule 10), and must respect the `qualityScore <= 1.0` no-score sentinel.
+
+---
+
+## 7. Environmental correlation and insights — *parked in tree, not deleted*
+
+**Status:** Present in the codebase, deliberately dormant. Not scheduled.
+
+**Files:** `Zeez/Environment/EnvironmentalAnalyzer.swift`,
+`Zeez/Environment/EnvironmentalInsightsView.swift`,
+`Zeez/Environment/EnhancedEnvironmentalScoring.swift`,
+`Zeez/Environment/EnvironmentalRecommendationTracker.swift`.
+
+**Why it looks dead but is not.** `EnvironmentalInsightsView` and `EnhancedEnvironmentalScoring`
+have no callers; they are the only consumers of `EnvironmentalAnalyzer`, which is in turn the only
+consumer of `EnvironmentalRecommendationTracker`. A dead-code sweep would take all four. The
+subsystem stays because the parking was deliberate and documented — `MonthlyTrendsDataProvider`
+carries the reason at its `generateMonthlyInsights` call site:
+
+> `// Sleep-debt and environmental insights are omitted until the underlying`
+> `// measurements and computation are production-ready and data-backed.`
+
+`EnvironmentalAnalyzer` is also not stale: B5 rewrote its thresholds and copy when noise moved
+from fabricated dB to the relative index.
+
+**What holds it in the build.** `MonthlyInsight.environmentalImprovementNeeded(recommendations:)`
+references `EnvironmentalRecommendation`. The case is never constructed; it exists so the wiring
+survives. Deleting the case is the first step of retiring the subsystem, should that be decided.
+
+**Claims tier and label.** Correlations between environment and sleep are Tier 3 (claims line 62),
+and "caused poor sleep" is explicitly prohibited. Recommendations derived from them are Tier 3.
+Environmental readings must be consumed through the `measured*` accessors — the raw attributes use
+the `-1` sentinel and read as a freezing, pitch-dark room when absent.
+
+**Missing-input policy.** A mic-denied session has no noise reading. It must render unavailable,
+never `0` and never "quiet".
+
+**Validation status.** None. The gating comment's bar — "production-ready and data-backed" — is
+the correct one, and no data backing exists.
+
+**Definition of done.** Real measurements with documented accuracy; a written correlation spec
+with test vectors; Tier-3 labeling throughout; a route into the app from `TrendsView`.

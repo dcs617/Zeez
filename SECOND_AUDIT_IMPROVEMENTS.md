@@ -185,17 +185,32 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 
 ### Phase C — early post-release / opportunistic
 
+**Scope decisions taken with Daniel before implementation (2026-07-09):** `SleepInformationView`
+is **kept** (B6 made it correct and `SleepInformationViewTests` pins its stage-composition
+contract), the environmental cluster (`EnvironmentalAnalyzer`, `EnvironmentalInsightsView`,
+`EnhancedEnvironmentalScoring`, `EnvironmentalRecommendationTracker`) is **left in tree** as a
+deliberately parked subsystem, and **C5 stays deferred**. Everything C2 deletes is registered in
+`PARKED_CAPABILITIES.md` first (C0).
+
+**C0. Removed capabilities were never logged as future work** — Medium · Process
+Surfaced while scoping C2. `FUTURE_IMPROVEMENTS.md` (the live tracker) never recorded the HRV section (A1), the Pillow importer (B2), or sleep debt/recovery (B7), and is stale in both directions: it still lists five items Phase B completed and still describes `Zeez/Widgets/`, deleted in B1. The only record of *why* each was removed lives in this file's ✅ notes — and this file is headed for `Archive/` exactly as `IMPROVEMENT_ROADMAP.md` was. Deletions are correct; losing their rationale is not.
+- Fix: a doc-only commit before any further deletion. New live register `PARKED_CAPABILITIES.md` (spec stub per capability: what it did, why removed, recovery command, inputs required, claims tier + label, missing-input policy, validation status, definition of done); repair `FUTURE_IMPROVEMENTS.md`; fix `CLAUDE.md`'s stale `Sleep/Debt/` row.
+- Effort: Small (docs). Validate: none needed; no code changes.
+- ✅ **Done 2026-07-09** — new `PARKED_CAPABILITIES.md` (live register) with seven spec-stub entries: HRV timeline (A1), Pillow import (B2), sleep debt/recovery (B7), real WidgetKit extension (B1), personalized recommendations (C2), the dead detail/trends/environmental views (C2), and the environmental-correlation subsystem — the last **parked in tree, not deleted**, quoting `generateMonthlyInsights`'s gating comment so a future reader cannot mistake it for abandoned code. Recovery is documented SHA-free (`git log --diff-filter=D -- <path>`). Repaired `FUTURE_IMPROVEMENTS.md`: struck the five items Phase B shipped (B5/B8/B9/B10/B11) with their IDs, corrected the `Zeez/Widgets/` description, tagged the survivors with their D-phase numbers. Fixed `CLAUDE.md`'s stale `Sleep/Debt/` directory row (B7 removed that directory) and pointed the claims paragraph at the new register. Doc-only; ZeezTests untouched at 206/206.
+
 **C1. Double start of monitors on session start** — Low · Runtime — `SleepSessionManager.startSession` (47-48) and `SleepControlView.prepareSession` (201-202) both call `startMonitoring`. Harmless today (stop-then-start) but wasteful and permission-prompts twice. Remove one call site. Effort: Small.
 
 **C2. `DataQualityReport` traps on empty input** — Low · Runtime — `RealDataManager.swift:301` `0..<(count-1)` crashes when `sessions` is empty (the error path at line 245 constructs exactly that). Currently dead code — fix the guard or delete the type with the dead-code sweep (`analyzeDataQuality`, `importAllAvailableData`'s unused Pillow/manual fields, `SleepRecommendationSystem` — no view references). Effort: Small.
+- **Scope corrections found by grep before implementing** (the tracker's line numbers predate A/B and its assumptions were narrower than reality): `importAllAvailableData` is *wholly* dead, not just its unused fields — nothing calls it, so `ImportSummary` and `RealDataManager.healthKitImporter` go with it. `SleepRecommendationSystem` is the sole consumer of `SleepRecommendationGenerator.swift` and `SleepRecommendationTypes.swift`, making it a three-file cluster. `HealthKitDataImporter.checkImportStatus` — half of **C6** — has zero callers, so it is deleted here rather than optimized there. `SleepDetailView` is the sole consumer of `AverageEnvironmentalReadingView`. Phase B also flagged `MonthlyTrendsView`, `EnvironmentalDataView` and `EnvironmentalFactors` as unreachable; confirmed, and deleted. `MonthlyTrendsDataProvider`/`TrendInsightsSection`/`MonthlyChartSection` are **live** via `TrendsView` and stay.
 
 **C3. `scheduleAllAlarms` drops concurrent requests** — Low · Alarm — `AlarmScheduler.swift:54-57` skips (rather than coalesces) a reschedule that arrives mid-flight; a stale-state window if an edit lands during launch rescheduling. Queue a trailing rerun instead. Effort: Small.
 
 **C4. Watch target uses `print`** — Low · Maintainability — `WatchConnectivityManager.swift:164,177,193` etc.; add a small os.log wrapper to the watch target (ZeezLogger is iOS-only). Effort: Small.
 
-**C5. Alarm health indicator in `AlarmSettingsView`** — from FUTURE, keep post-release. 
+**C5. Alarm health indicator in `AlarmSettingsView`** — from FUTURE, keep post-release. **Confirmed deferred (2026-07-09):** out of Phase C scope. It is the only C item that adds UI rather than removing or fixing something, and §2 already lists it under "Stay deferred". Remains in `FUTURE_IMPROVEMENTS.md`.
 
 **C6. `checkImportStatus`/`getDataSources` fetch full objects to count** — Low · Performance — use `count(for:)`/aggregate fetches. Effort: Small.
+- Reduced in scope: `checkImportStatus` is dead and is deleted by C2, so this item covers `getDataSources` (live, called from `SettingsView.swift:207`) only.
 
 ### Phase D — architecture / longer term
 
@@ -215,7 +230,7 @@ NavigationStack migration, singleton → protocol injection, alarm health indica
 **Accessibility:** VoiceOver pass over Dashboard, session details, Trends charts, watch app; confirm every score utterance carries "Experimental Zeez estimate"; Dynamic Type on dashboard cards. Phase B reworded several VoiceOver strings (Trends duration chart B4, noise index B5, stage composition B6, sleep-goal card B12) — re-listen to those.
 **Environmental units:** noise is now a relative index 0–100, not dB (B5). On device, confirm the Sleep Details environmental row reads "Relative Noise Index … of 100" and that a mic-denied session shows unavailable rather than 0.
 **Score behaviour:** a recorded session with sensor data but no inferrable stages must show **no** score (B8's `qualityScore = 1.0` sentinel), not a neutral one; a scored session's `SleepQualityScore.calculationVersion` must read `ZeezScore-3.0` and its `confidenceScore` must vary with sensor breadth rather than always being 85.
-**Privacy/claims review:** re-read active surfaces against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` now that B-phase has landed, and read `ZEEZ_SCORE_SPECIFICATION.md` alongside it (B8 — the spec is binding and must be re-checked whenever `ZeezScore.version` changes); review App Store description copy against both before submission. `ClinicalVocabularyGuardTests` (B7) enforces the prohibited-vocabulary rules in CI, but it exempts `Zeez/Learn` — review Learn copy by hand.
+**Privacy/claims review:** re-read active surfaces against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` now that B-phase has landed, and read `ZEEZ_SCORE_SPECIFICATION.md` alongside it (B8 — the spec is binding and must be re-checked whenever `ZeezScore.version` changes); review App Store description copy against both before submission. `PARKED_CAPABILITIES.md` (C0) records the claims bar each removed feature must clear before returning — check it before re-adding any surface, and never let App Store copy promise a capability listed there. `ClinicalVocabularyGuardTests` (B7) enforces the prohibited-vocabulary rules in CI, but it exempts `Zeez/Learn` — review Learn copy by hand.
 
 ## 6. Suggested validation commands
 

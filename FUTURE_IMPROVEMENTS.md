@@ -23,31 +23,42 @@ work is complete and verified in-simulator.
   walkthrough of the delete-all-data flow; publish the real privacy-policy URL
   (placeholder `https://dcs617.github.io/zeez-privacy/` in `AppConstants.Legal`).
 
+## Removed capabilities
+
+Features deleted during the second audit are registered in **`PARKED_CAPABILITIES.md`** at the
+repo root, with the reason, the recovery command, and what the claims contract requires before
+each could ship. Deletion is not abandonment; that file is where the intent lives.
+
 ## Post-release / nice-to-have (tracked, not scheduled)
 
 Carried over from the archived roadmap's Phase 3.
 
-- Real WidgetKit extension (current `Zeez/Widgets/` is in-app cards only; naming misleads).
+**Completed by the second audit (2026-07-09), kept here for provenance:**
+
+- ~~Heart-rate downsampling on HealthKit import.~~ Done — second audit **B9**
+  (`DataImport/HeartRateDownsampler.swift`, 60-second buckets).
+- ~~Duration-weighted stage-distribution scoring; derive `confidenceScore`.~~ Done — **B8**.
+  See `ZEEZ_SCORE_SPECIFICATION.md`, now a live contract.
+- ~~Import UX: completion signal and partial-failure reporting.~~ Done — **B10**
+  (`HealthKitImportResult` with a per-type `RelatedDataOutcome`).
+- ~~First-run empty-dashboard state that routes to HealthKit import.~~ Done — **B11**
+  (`Views/Dashboard/DashboardEmptyStateCard.swift`).
+- ~~Environmental noise units fiction.~~ Done — **B5**. Noise is a relative index 0–100
+  (`Environment/NoiseIndex.swift`), explicitly not dB SPL.
+
+**Still open:**
+
+- Real WidgetKit extension. The in-app `Zeez/Widgets/` tree was deleted in **B1** (it was
+  unreachable and carried fabricated readings); a genuine extension target has not been built.
+  Tracked as Phase D3; see `PARKED_CAPABILITIES.md` §4.
 - Apply for the critical-alerts entitlement (defensible for an alarm app); until granted,
   keep the graceful `checkCriticalAlertsEnabled` degradation.
-- Heart-rate downsampling on HealthKit import (a full night = thousands of `HeartRateData`
-  managed objects; store growth).
-- Duration-weighted stage-distribution scoring in
-  `Zeez/Sleep/Quality/SleepQualityCalculator.swift` (currently counts stages, which skews
-  with variable-length HealthKit stages); derive `confidenceScore` instead of the
-  hardcoded `85.0` in `SleepAnalyzer`.
-- Import UX: completion signal for the fire-and-forget HR/respiratory sub-imports; partial
-  failure reporting.
 - Alarm health indicator in `AlarmSettingsView` ("N notifications scheduled; next fires
-  at…").
+  at…"). Second audit **C5**; explicitly deferred past Phase C.
 - `NavigationView` → `NavigationStack` migration (start with `MainView` — remove the
-  NavigationView wrapping the TabView; give each tab its own NavigationStack).
+  NavigationView wrapping the TabView; give each tab its own NavigationStack). Phase D1.
 - Singleton graph → protocol injection, incrementally, following the
-  `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern.
-- First-run empty-dashboard state that routes to HealthKit import.
-- Environmental noise units fiction (flagged during 2.9, pre-existing): `EnvironmentalMonitor`
-  stores a normalized 0–100 of `averagePower`, but the UI labels it "dB" and mock data
-  generates real 20–55 dB values — pick one unit story and align monitor, UI, and mocks.
+  `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern. Phase D2.
 
 ## Sleep product roadmap (dormant)
 

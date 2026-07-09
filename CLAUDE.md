@@ -51,7 +51,7 @@ At startup, `ZeezApp.setupApp()` runs `AlarmDataMigrationHelper` and starts `Ala
 
 **`QualityMetrics`** (from `SleepQualityCalculator`) is the primary quality model. The overall score is a weighted composite: sleep opportunity 30%, duration 25%, stage distribution 25%, fragmentation 15%, latency 5%, renormalized over the components that are actually available.
 
-The score is a Tier-3 "Experimental Zeez Estimate" governed by **`ZEEZ_SCORE_SPECIFICATION.md`** (repo root), which is a live contract alongside `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md`. Key rules: missing inputs make a component *unavailable* (never a neutral default); `duration` and `stageDistribution` are required, so `calculateMetrics()` returns `nil` without them and `SleepAnalyzer` writes the `qualityScore = 1.0` sentinel; `confidenceScore` is derived from input coverage × sensor breadth. Bump `ZeezScore.version` and update the spec together whenever inputs, weights, bands, or the missing-input policy change.
+The score is a Tier-3 "Experimental Zeez Estimate" governed by **`ZEEZ_SCORE_SPECIFICATION.md`** (repo root), which is a live contract alongside `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md`. Capabilities removed by the audits — and the claims bar each must clear before it can return — are registered in **`PARKED_CAPABILITIES.md`**; consult it before rebuilding a feature that looks missing. Key rules: missing inputs make a component *unavailable* (never a neutral default); `duration` and `stageDistribution` are required, so `calculateMetrics()` returns `nil` without them and `SleepAnalyzer` writes the `qualityScore = 1.0` sentinel; `confidenceScore` is derived from input coverage × sensor breadth. Bump `ZeezScore.version` and update the spec together whenever inputs, weights, bands, or the missing-input policy change.
 
 ### Directory Layout
 ```
@@ -68,7 +68,6 @@ Zeez/
 │   └── Mocks/       # MockDataGenerator, MockSleepPatternGenerator
 ├── Sleep/           # Sleep analysis and views
 │   ├── Cycle/       # Cycle chart and info views (visualization only)
-│   ├── Debt/        # SleepDebtMetrics
 │   ├── Quality/     # SleepQualityCalculator, SleepQualityView
 │   └── Stage/       # SleepStageAnalyzer, SleepStageTypes, SleepStageView
 ├── Alarm/           # AlarmScheduler, AlarmObserver, AlarmAudioController, all alarm views
