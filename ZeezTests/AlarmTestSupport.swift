@@ -15,6 +15,44 @@ final class FakeNotificationCenter: AlarmNotificationScheduling, @unchecked Send
     /// What `criticalAlertsEnabled` reports; tests can flip it.
     var criticalEnabled = false
 
+    /// When true, `getPendingNotificationRequests` captures its completion instead of
+    /// invoking it, leaving the caller mid-flight until `releaseHeldPendingRequests()`.
+    /// `scheduleAllSnapshots` does all of its work inside that completion, so this is
+    /// what makes a concurrent reschedule observable (C3). Off by default: every other
+    /// suite relies on the synchronous behaviour.
+    var holdPendingRequests = false
+
+    private var heldCompletion: (@Sendable ([UNNotificationRequest]) -> Void)?
+    private var removeCallCount = 0
+
+    /// How many times `removePendingNotificationRequests` has been called.
+    ///
+    /// In a full reschedule this fires exactly once per pass, and only when there are
+    /// existing alarm-owned notifications to clear. It is the one signal that counts
+    /// scheduling passes cleanly: `getPendingNotificationRequests` is called by the
+    /// deferred budget audit *and* once per alarm inside `scheduleFollowUpChain`, so
+    /// counting those would measure the wrong thing.
+    var removeCalls: Int {
+        lock.lock(); defer { lock.unlock() }
+        return removeCallCount
+    }
+
+    var isHoldingPendingRequests: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return heldCompletion != nil
+    }
+
+    /// Stops holding and lets the captured run continue. Subsequent calls pass through.
+    func releaseHeldPendingRequests() {
+        lock.lock()
+        holdPendingRequests = false
+        let completion = heldCompletion
+        heldCompletion = nil
+        let snapshot = storage
+        lock.unlock()
+        completion?(snapshot)
+    }
+
     var pending: [UNNotificationRequest] {
         lock.lock(); defer { lock.unlock() }
         return storage
@@ -29,11 +67,20 @@ final class FakeNotificationCenter: AlarmNotificationScheduling, @unchecked Send
     }
 
     func getPendingNotificationRequests(completionHandler: @escaping @Sendable ([UNNotificationRequest]) -> Void) {
-        completionHandler(pending)
+        lock.lock()
+        if holdPendingRequests {
+            heldCompletion = completionHandler
+            lock.unlock()
+            return
+        }
+        let snapshot = storage
+        lock.unlock()
+        completionHandler(snapshot)
     }
 
     func removePendingNotificationRequests(withIdentifiers identifiers: [String]) {
         lock.lock()
+        removeCallCount += 1
         storage.removeAll { identifiers.contains($0.identifier) }
         lock.unlock()
     }

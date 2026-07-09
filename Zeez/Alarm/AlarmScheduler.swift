@@ -6,8 +6,9 @@ import os.log
 
 /// Manages scheduling and triggering of alarms
 ///
-/// @unchecked Sendable: the only mutable state (`isSchedulingInProgress`) is
-/// confined to `schedulingQueue`; everything else is immutable after init.
+/// @unchecked Sendable: the only mutable state (`isSchedulingInProgress` and
+/// `pendingSnapshots`) is confined to `schedulingQueue`; everything else is
+/// immutable after init.
 final class AlarmScheduler: NSObject, @unchecked Sendable {
     static let shared = AlarmScheduler()
 
@@ -17,6 +18,11 @@ final class AlarmScheduler: NSObject, @unchecked Sendable {
     // Synchronization queue to prevent race conditions
     private let schedulingQueue = DispatchQueue(label: "com.zeez.alarmscheduler", qos: .userInitiated)
     private var isSchedulingInProgress = false
+
+    /// Snapshots from a full reschedule that arrived while another was in flight.
+    /// Drained when the in-flight run finishes; last writer wins, because each run
+    /// rewrites every alarm-owned notification from scratch.
+    private var pendingSnapshots: [AlarmSnapshot]?
 
     /// Tests inject an in-memory fake center; production uses the real one.
     init(notificationCenter: AlarmNotificationScheduling = UNUserNotificationCenter.current()) {
@@ -50,9 +56,13 @@ final class AlarmScheduler: NSObject, @unchecked Sendable {
         schedulingQueue.async { [weak self] in
             guard let self = self else { return }
 
-            // Prevent multiple simultaneous scheduling operations
+            // Prevent multiple simultaneous scheduling operations. A request that
+            // arrives mid-flight is coalesced into a trailing rerun rather than
+            // dropped: dropping it leaves the just-edited alarm unscheduled until
+            // something else triggers a reschedule (C3).
             guard !self.isSchedulingInProgress else {
-                ZeezLogger.debug(ZeezLogger.alarm, "Scheduling already in progress, skipping duplicate request")
+                self.pendingSnapshots = snapshots
+                ZeezLogger.debug(ZeezLogger.alarm, "Scheduling already in progress, queueing a trailing rerun")
                 return
             }
             self.isSchedulingInProgress = true
@@ -85,7 +95,17 @@ final class AlarmScheduler: NSObject, @unchecked Sendable {
                 }
 
                 ZeezLogger.info(ZeezLogger.alarm, "Completed scheduling all alarms")
-                self.schedulingQueue.async { self.isSchedulingInProgress = false }
+                self.schedulingQueue.async {
+                    self.isSchedulingInProgress = false
+
+                    // Drain a request that arrived mid-flight. `scheduleAllSnapshots`
+                    // re-dispatches onto this queue, so re-entering here cannot deadlock.
+                    if let queued = self.pendingSnapshots {
+                        self.pendingSnapshots = nil
+                        ZeezLogger.debug(ZeezLogger.alarm, "Running queued reschedule for \(queued.count) alarms")
+                        self.scheduleAllSnapshots(queued)
+                    }
+                }
 
                 // Budget audit (1.4) — deferred so the async adds above have
                 // landed; logging only, the gate lives in scheduleFollowUpChain.
