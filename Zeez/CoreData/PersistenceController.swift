@@ -10,6 +10,10 @@ final class PersistenceController {
     /// a one-time "your history could not be migrated, a backup was kept" notice.
     static let migrationDataLossNoticeKey = "coreDataMigrationFallbackNotice"
 
+    /// Set once the store is opened from the App Group container. Read only to detect an
+    /// install that adopted the group and then lost access to it (see `adoptAppGroupStore`).
+    static let appGroupAdoptedKey = "coreDataStoreAdoptedAppGroupContainer"
+
     /// One model instance shared by every container. `NSPersistentContainer(name:)`
     /// loads a fresh NSManagedObjectModel per container; duplicate models
     /// re-register the NSManagedObject subclasses, making `+entity` lookup
@@ -35,10 +39,14 @@ final class PersistenceController {
             ZeezLogger.debug(ZeezLogger.coreData, "Main view context initialized")
         }
         #endif
-        
+
+        // Must precede configureStoreForMigration(), which reads description.url and asks
+        // CoreDataMigrationManager about that store — it has to see the final location.
+        Self.adoptAppGroupStore(for: container)
+
         // Configure store options with migration support
         self.configureStoreForMigration()
-        
+
         container.loadPersistentStores { [weak self] description, error in
             if let error = error {
                 ZeezLogger.error(ZeezLogger.coreData, "Core Data failed to load", error: error)
@@ -120,8 +128,57 @@ final class PersistenceController {
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
     }
     
+    // MARK: - Store Location
+
+    /// Point `container` at the App Group store, relocating an existing app-container
+    /// store into it first.
+    ///
+    /// Widgets and other extensions can only reach the app's Core Data store through a
+    /// shared App Group container, so that is where the store lives. Every failure here
+    /// leaves the container on its default app-container URL: a store the user can still
+    /// read beats a store the widget could have read.
+    private static func adoptAppGroupStore(for container: NSPersistentContainer) {
+        guard let description = container.persistentStoreDescriptions.first,
+              let legacyURL = description.url else { return }
+
+        guard let groupURL = StoreLocation.groupStoreURL() else {
+            // Relocation destroys the app-container store, so an install that once reached
+            // the group container and no longer can is about to open an empty store where
+            // the user's history used to be. That means the app-groups entitlement was
+            // dropped from the signature — a build configuration problem, not a data problem.
+            if UserDefaults.standard.bool(forKey: Self.appGroupAdoptedKey) {
+                ZeezLogger.fault(
+                    ZeezLogger.coreData,
+                    "App Group container is unreachable but this install previously adopted it. Opening the app-container store, which no longer holds the user's history. Verify the app-groups entitlement is still provisioned."
+                )
+            } else {
+                ZeezLogger.error(
+                    ZeezLogger.coreData,
+                    "App Group container unavailable — keeping the app-container store. A widget extension will not be able to read it."
+                )
+            }
+            return
+        }
+
+        do {
+            if try StoreLocation.relocateStore(from: legacyURL, to: groupURL) {
+                ZeezLogger.info(ZeezLogger.coreData, "Relocated the Core Data store into the App Group container")
+            }
+        } catch {
+            ZeezLogger.error(
+                ZeezLogger.coreData,
+                "Store relocation into the App Group container failed — keeping the app-container store",
+                error: error
+            )
+            return
+        }
+
+        description.url = groupURL
+        UserDefaults.standard.set(true, forKey: Self.appGroupAdoptedKey)
+    }
+
     // MARK: - Migration Support
-    
+
     private func configureStoreForMigration() {
         guard let description = container.persistentStoreDescriptions.first else { return }
         

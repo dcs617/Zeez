@@ -230,10 +230,107 @@ Surfaced while scoping C2. `FUTURE_IMPROVEMENTS.md` (the live tracker) never rec
 
 ### Phase D — architecture / longer term
 
-**D1.** NavigationView → NavigationStack (start `MainView.swift:6`; ~40 files use NavigationView).
-**D2.** Singleton graph → protocol injection (continue the `SleepAnalyzer` container-param pattern; next best target: `WatchConnectivityHandler`).
-**D3.** Real WidgetKit extension (after B1 deletion), critical-alerts entitlement application, dormant sleep-product Phases 3–6 (claims contract stays binding).
-**D4.** CI: add a watch-app build job and a `-only-testing` UI smoke job on a schedule (UI tests exist but never run in CI); keep the `#if compiler(>=6.2)` SDK-drift gate discipline.
+**Scoped and resequenced 2026-07-09.** Nothing in Phase D is a bug fix and nothing in it unblocks
+§5. The app has never run on a device, so the only work that belongs *before* the device pass is work
+that touches no app behavior (D4) or that becomes materially more expensive afterward (D3a). Everything
+else is post-TestFlight. D3 was three unrelated things and is split below.
+
+Two audit findings drove the order:
+
+- **The store location is a one-way door.** `PersistenceController` opened the store at the default
+  app-container URL and the project had no App Group. A WidgetKit extension can only reach Core Data
+  through a group container. Relocating is nearly free while no user has data and becomes a migration
+  against real history afterward — so D3a is the *most* urgent item in the phase, not the least.
+- **There are no deep links in this app.** No `onOpenURL`, no universal links, no `widgetURL`. The alarm
+  "deep link" is `AlarmNotificationHandler` posting to `NotificationCenter`, which `RootView` turns into
+  a `fullScreenCover` outside the nav stack. `ModalCoordinator`'s only sheet does not wrap itself in
+  `NavigationView`. Zero of ~56 `NavigationLink`s use the `isActive:`/`tag:selection:` initializers that
+  break under `NavigationStack`. The watch app has no navigation containers at all. D1 is therefore much
+  safer than assumed — and worth less: `NavigationView` is deprecated but works on iOS 18.1, so D1
+  changes nothing a user or App Review sees.
+
+**Order:** D3b (paperwork, async) → **D3a** → **D4** → D3d → *stop for the §5 device + paired-watch pass
+and TestFlight* → D2a → D2b → D1a → D1b → D1c → D3c.
+
+**D1. NavigationView → NavigationStack.** 88 occurrences in 67 files. Split by behavior, not file count.
+- **D1a** (~4 files, the only part with observable behavior): `MainView.swift:6` wraps a `NavigationView`
+  around the whole `TabView`, with `.navigationViewStyle(.stack)` as the escape hatch, and `LearnView`
+  nests its *own* `NavigationView` inside it. `DashboardView` and `AlarmSettingsView` have no container
+  and resolve their titles and `NavigationLink`s against MainView's ambient one. Remove the outer
+  container; give each tab its own `NavigationStack`. Also delete `LearnHomeView` (unreachable, and it
+  nests a `NavigationView` inside its own `NavigationStack`, so it is not a model to copy) and register
+  it in `PARKED_CAPABILITIES.md`. Risk is confined here: get it wrong and the Dashboard/Alarm navigation
+  bars vanish, or double-nesting reintroduces the ambiguous-element failure `SceneDelegate` documents.
+- **D1b** (~40 sites): mechanical swap in `.sheet`/`.fullScreenCover` wrappers, one commit per tree
+  (Learn alone is ~45 of the 88).
+- **D1c** (~30 sites): `#Preview` / `PreviewProvider` bodies. One commit, zero risk.
+
+**D2. Singleton graph → protocol injection.** Extend the existing convention — a product-side protocol
+plus a `= .shared` / `= .current()` default parameter, faked by a lock-guarded `@unchecked Sendable` test
+double — as established by `AlarmNotificationScheduling` + `FakeNotificationCenter`.
+- **D2a** `WatchConnectivityHandler`: `WatchSessionProtocol` covering exactly the members used
+  (`isSupported`, `delegate`, `activate`, `isReachable`, `isPaired`, `isWatchAppInstalled`, `sendMessage`,
+  `updateApplicationContext` — **not** `transferUserInfo`, which A5 deleted), plus an injected
+  `PersistenceController`. A2 and A5 rewrote `fetchWatchPayloads`' Core Data path and **nothing tests it**;
+  `WatchWireContractTests` covers the envelope shape, not the fetch. Note while there: the type is an
+  `ObservableObject` with four `@Published` properties and no SwiftUI observer anywhere.
+- **D2b** `AlarmAudioController`: 18 call sites, zero tests, and it is the alarm's last mile. Seam: an
+  audio-session protocol (`setCategory`/`setActive`) and a player factory. Do not fake `Timer` — call the
+  health-check directly. The device pass covers the happy path; it can never cover the watchdog restart,
+  the five-retry cap, the system-sound fallback, or `.notifyOthersOnDeactivation` on stop.
+- **Then stop. The stopping rule: inject a singleton only when doing so unlocks a test you cannot write
+  today — never for purity.** Explicit non-targets: `ErrorManager` (13 sites) and `AnalyticsManager` (3)
+  are sinks whose behavior nobody asserts; `ModalCoordinator`, `OnboardingManager`, and `StoreKitManager`
+  are `@MainActor ObservableObject`s already observable by construction; `PersistenceController`'s
+  remaining ~20 sites are app-lifecycle or already carry the default-parameter idiom; the ~30 Learn and
+  Environment singletons are out of scope. **No repo-wide `.shared` sweep.**
+
+**D3a. App Group + group-container Core Data store.** *Before the first TestFlight build.*
+- 🟡 **Code landed 2026-07-09; verification blocked on a manual step.** New `CoreData/StoreLocation.swift`
+  owns the group identifier, the store URL, and `relocateStore(from:to:)`, which uses
+  `replacePersistentStore` + `destroyPersistentStore` (the only APIs that carry the `-wal`/`-shm` sidecars;
+  WAL is on per 2.6 and history tracking is force-enabled). `PersistenceController.adoptAppGroupStore`
+  runs **before** `configureStoreForMigration()`, which reads `description.url` and asks
+  `CoreDataMigrationManager` about that store, so it must see the final location. Every failure path keeps
+  the app-container store: a store the user can still read beats one the widget could have read.
+  A relocated install records `appGroupAdoptedKey`; if the group later becomes unreachable the app now
+  logs a **fault** instead of silently opening an empty store where the history used to be (relocation
+  destroys the source, so a dropped entitlement would otherwise look like total data loss).
+  New `StoreRelocationTests` (7 tests). `relocationCarriesAnUncheckpointedWAL` was **verified to fail**
+  against a naive `moveItem` implementation — all four sessions were lost — which is what an unclean
+  shutdown leaves behind; note the plain "sessions survive" assertion passes against the naive version
+  too, because closing a store checkpoints its WAL. ZeezTests 225/225 green.
+- ⚠️ **Blocked:** `xcodebuild` from the CLI signs simulator builds ad-hoc and strips every profile-backed
+  entitlement — the built app embeds *no* entitlements at all, not even the pre-existing HealthKit and
+  time-sensitive ones. So `containerURL(forSecurityApplicationGroupIdentifier:)` returns `nil` and the
+  code degrades to the app-container store. **Daniel must toggle App Groups once in Xcode's Signing &
+  Capabilities pane for the `Zeez` target** so automatic signing registers `group.com.danielsparano.zeez`
+  with the team. Until then D3a is inert. Do not mark complete before confirming, on device, that the
+  store opens from the group container.
+
+**D3b. Critical-alerts entitlement application.** Paperwork only, no code: `AlarmPermissionManager` already
+requests `.criticalAlert` and `AlarmNotificationUtils` already degrades to `.timeSensitive` + `.default`.
+File it early — Apple takes weeks — it blocks nothing.
+
+**D3c. Real WidgetKit extension target.** *After TestFlight.* Needs genuine pbxproj surgery (the one place
+filesystem-synchronized groups do not help). Bound by the claims contract: any score needs the
+"Experimental Zeez Estimate" label in visible text **and** in `accessibilityValue` (rule 10), must honor the
+`qualityScore <= 1.0` no-score sentinel rather than render a number, and must read environmental values
+through the `measured*` accessors. Read `PARKED_CAPABILITIES.md` §4 and §6 first.
+
+**D3d. Dormant sleep-product Phases 3–6.** *Not an implementation item.* Against
+`Archive/SLEEP_REFACTORING_PLAN.md`: Phase 5 (experimental score) was substantially delivered by B8 plus
+A1/A7; Phase 3 (import integrity) partly by B9/B10/C6, leaving durable HealthKit sample identity; Phase 4
+partly by B4/B6; Phase 6 (owned-sensor staging) is a research project whose deliverable is a go/no-go
+report. Doc-only: reconcile the archive and re-file the residue into `PARKED_CAPABILITIES.md`.
+
+**D4. CI.** Add a watch-app build job and a scheduled UI smoke job. The watch scheme **is not shared** —
+only `Zeez.xcscheme` lives in `xcshareddata` — so CI cannot build the watch app until it is. Use
+`-destination 'generic/platform=watchOS Simulator'` for a build-only job rather than naming a simulator
+whose name drifts between runner images. The UI smoke job must run a **Debug** build:
+`OnboardingManager` reads `-uiTestCompletedOnboarding` inside `#if DEBUG`, so a Release run hangs on
+onboarding. Restrict it to `MainViewUITests` and `OnboardingUITests`; the other three UI tests are Xcode
+template boilerplate. Keep the `#if compiler(>=6.2)` SDK-drift gate discipline.
 
 ## 5. Release-gating checklist
 
@@ -241,6 +338,14 @@ Surfaced while scoping C2. `FUTURE_IMPROVEMENTS.md` (the live tracker) never rec
 **First run (simulator is enough):** with an empty store, the dashboard shows `DashboardEmptyStateCard` and its button opens the importer (B11); after importing, the metric cards return. Also confirm the importer's completion message names heart-rate and respiratory outcomes (B10).
 **Paired Apple Watch:** summary push after a new session (**blocked by A5**), requestData refresh, wake-pattern haptics, snooze/stop from watch, offline cache behavior.
 **App Store Connect:** create/confirm the 4 product IDs char-for-char; sandbox purchase + restore; airplane-mode launch keeps premium; privacy-policy URL live; App Privacy questionnaire = "no data collected" consistent with manifests. The HealthKit read scope is now exactly `sleepAnalysis`, `heartRate`, `respiratoryRate` (B13) — answer the questionnaire against that set, not the old four.
+**App Group / store location (D3a):** toggle **App Groups** once in Xcode's Signing & Capabilities pane
+for the `Zeez` target so `group.com.danielsparano.zeez` is registered with the team — CLI `xcodebuild`
+strips profile-backed entitlements, so this cannot be done or verified from the command line. Then, on
+device: confirm the log line "Relocated the Core Data store into the App Group container" appears once on
+the first launch after upgrading, that sleep history survives it, and that it does **not** appear on the
+second launch. A **fault**-level log ("previously adopted it") means the entitlement was dropped and the
+app is about to open an empty store — treat it as a release blocker, not a warning.
+
 **Organizer/archive:** validate archive; confirm no `NSCameraUsageDescription` needed (AVCaptureDevice fully removed); background modes = `processing` only.
 **TestFlight:** several nights of real alarm/sleep usage; battery observation (watch heartbeat machinery until A5 cleanup).
 **Accessibility:** VoiceOver pass over Dashboard, session details, Trends charts, watch app; confirm every score utterance carries "Experimental Zeez estimate"; Dynamic Type on dashboard cards. Phase B reworded several VoiceOver strings (Trends duration chart B4, noise index B5, stage composition B6, sleep-goal card B12) — re-listen to those.
