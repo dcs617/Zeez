@@ -12,7 +12,6 @@ class RealDataManager {
     static let shared = RealDataManager()
     
     private let persistenceController = PersistenceController.shared
-    private let healthKitImporter = HealthKitDataImporter.shared
 
     private init() {}
     
@@ -79,43 +78,6 @@ class RealDataManager {
         } catch {
             ZeezLogger.error(ZeezLogger.error, "Failed to fetch mock sessions: \(error.localizedDescription)")
             return []
-        }
-    }
-    
-    // MARK: - Data Import Coordination
-    
-    func importAllAvailableData(completion: @escaping (Result<ImportSummary, Error>) -> Void) {
-        var summary = ImportSummary()
-        let dispatchGroup = DispatchGroup()
-        var errors: [Error] = []
-        
-        // Import HealthKit data (last 90 days)
-        dispatchGroup.enter()
-        let startDate = Calendar.current.date(byAdding: .day, value: -90, to: Date()) ?? Date()
-        
-        healthKitImporter.importSleepData(from: startDate, to: Date()) { result in
-            defer { dispatchGroup.leave() }
-            
-            switch result {
-            case .success(let importResult):
-                summary.healthKitSessions = importResult.sessionCount
-                ZeezLogger.info(ZeezLogger.coreData, "Imported \(importResult.sessionCount) HealthKit sessions")
-                if importResult.hasPartialFailure {
-                    ZeezLogger.error(ZeezLogger.error, "Sessions imported but related data was incomplete")
-                }
-            case .failure(let error):
-                errors.append(error)
-                ZeezLogger.error(ZeezLogger.error, "HealthKit import failed: \(error.localizedDescription)")
-            }
-        }
-        
-        dispatchGroup.notify(queue: .main) {
-            if !errors.isEmpty {
-                completion(.failure(errors.first!))
-            } else {
-                summary.totalImported = summary.healthKitSessions + summary.manualSessions
-                completion(.success(summary))
-            }
         }
     }
     
@@ -189,129 +151,4 @@ class RealDataManager {
         }
     }
     
-    func shouldUseMockData() -> Bool {
-        // Check user preference first
-        let userPrefs = getUserPreferences()
-        if let useMock = userPrefs?.useMockData {
-            return useMock
-        }
-        
-        // If no preference set, use mock data only if no real data exists
-        return !hasRealData()
-    }
-    
-    private func getUserPreferences() -> UserPreferences? {
-        let context = persistenceController.container.viewContext
-        let request: NSFetchRequest<UserPreferences> = UserPreferences.fetchRequest()
-        request.fetchLimit = 1
-        
-        do {
-            return try context.fetch(request).first
-        } catch {
-            ZeezLogger.error(ZeezLogger.error, "Failed to fetch user preferences: \(error.localizedDescription)")
-            return nil
-        }
-    }
-    
-    // MARK: - Data Quality Analysis
-    
-    func analyzeDataQuality() -> DataQualityReport {
-        let context = persistenceController.container.viewContext
-        let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        
-        do {
-            let allSessions = try context.fetch(request)
-            return DataQualityReport(sessions: allSessions)
-        } catch {
-            ZeezLogger.error(ZeezLogger.error, "Failed to analyze data quality: \(error.localizedDescription)")
-            return DataQualityReport(sessions: [])
-        }
-    }
-}
-
-// MARK: - Supporting Types
-
-struct ImportSummary {
-    var healthKitSessions: Int = 0
-    var manualSessions: Int = 0
-    var totalImported: Int = 0
-    
-    var hasData: Bool {
-        return totalImported > 0
-    }
-}
-
-struct DataQualityReport {
-    let totalSessions: Int
-    let sessionsWithHeartRate: Int
-    let sessionsWithMovement: Int
-    let sessionsWithStages: Int
-    let averageQualityScore: Double
-    let dateRange: DateInterval?
-    let dataGaps: [DateInterval]
-    
-    init(sessions: [SleepSession]) {
-        totalSessions = sessions.count
-        
-        sessionsWithHeartRate = sessions.filter { 
-            ($0.heartRateData?.count ?? 0) > 0 
-        }.count
-        
-        sessionsWithMovement = sessions.filter { 
-            ($0.movementData?.count ?? 0) > 0 
-        }.count
-        
-        sessionsWithStages = sessions.filter { 
-            ($0.sleepStages?.count ?? 0) > 0 
-        }.count
-        
-        averageQualityScore = sessions.isEmpty ? 0.0 : 
-            sessions.map { $0.qualityScore }.reduce(0, +) / Double(sessions.count)
-        
-        // Calculate date range
-        let sortedSessions = sessions.sorted { ($0.startTime ?? Date.distantPast) < ($1.startTime ?? Date.distantPast) }
-        if let firstSession = sortedSessions.first?.startTime,
-           let lastSession = sortedSessions.last?.endTime {
-            dateRange = DateInterval(start: firstSession, end: lastSession)
-        } else {
-            dateRange = nil
-        }
-        
-        // Identify data gaps (more than 2 days between sessions)
-        var gaps: [DateInterval] = []
-        for i in 0..<(sortedSessions.count - 1) {
-            guard let currentEnd = sortedSessions[i].endTime,
-                  let nextStart = sortedSessions[i + 1].startTime else { continue }
-            
-            let gap = nextStart.timeIntervalSince(currentEnd)
-            if gap > 2 * 24 * 3600 { // More than 2 days
-                gaps.append(DateInterval(start: currentEnd, end: nextStart))
-            }
-        }
-        dataGaps = gaps
-    }
-    
-    var completenessPercentage: Double {
-        guard totalSessions > 0 else { return 0.0 }
-        
-        let completenessScore = Double(sessionsWithHeartRate + sessionsWithMovement + sessionsWithStages)
-        let maxPossibleScore = Double(totalSessions * 3) // 3 types of data per session
-        
-        return (completenessScore / maxPossibleScore) * 100.0
-    }
-}
-
-// MARK: - UserPreferences Extension
-
-extension UserPreferences {
-    var useMockData: Bool? {
-        get {
-            // This would need to be added to the Core Data model
-            // For now, return nil to indicate no preference set
-            return nil
-        }
-        set {
-            // This would need to be implemented when the Core Data model is updated
-        }
-    }
 }

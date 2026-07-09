@@ -88,4 +88,18 @@ struct ClinicalVocabularyGuardTests {
             #expect(!contents.contains("SleepDebtMetrics"), "\(path) reintroduces SleepDebtMetrics")
         }
     }
+
+    /// C2 deleted `SleepRecommendationSystem` for claims reasons, not merely because it was
+    /// unreachable. `AgeGroup.recommendedSleepRange` returned a physiological sleep-need range
+    /// and `ActivityLevel.sleepAdjustment` added up to 1.5 h for "athletic" — determining how
+    /// much sleep a person *needs* is a Tier-4 clinical conclusion, and the inputs it required
+    /// (age, activity level) are data Zeez has never collected. See `PARKED_CAPABILITIES.md` §5.
+    @Test("The sleep-need recommendation engine stays deleted")
+    func recommendationEngineStaysDeleted() throws {
+        for (path, contents) in try scannableSources() {
+            #expect(!contents.contains("SleepRecommendationSystem"), "\(path) reintroduces SleepRecommendationSystem; prescribing a sleep-need range from age and activity is a Tier-4 conclusion, and the app collects neither input")
+            #expect(!contents.contains("recommendedSleepRange"), "\(path) reintroduces recommendedSleepRange; a user-selected goal is not a determination of physiological need")
+            #expect(!contents.contains("sleepAdjustment"), "\(path) reintroduces sleepAdjustment, which added sleep-need hours from activity level")
+        }
+    }
 }

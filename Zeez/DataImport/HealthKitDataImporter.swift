@@ -506,20 +506,4 @@ class HealthKitDataImporter {
         }
         healthStore.execute(query)
     }
-
-    // MARK: - Import Status
-
-    func checkImportStatus() -> (hasHealthKitData: Bool, sessionCount: Int, lastImport: Date?) {
-        let context = persistenceController.container.viewContext
-        let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        request.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", AppConstants.DataProvenance.healthKitMarker)
-        do {
-            let sessions = try context.fetch(request)
-            let lastImport = sessions.compactMap { $0.createdAt }.max()
-            return (hasHealthKitData: !sessions.isEmpty, sessionCount: sessions.count, lastImport: lastImport)
-        } catch {
-            ZeezLogger.error(ZeezLogger.error, "Failed to check import status: \(error.localizedDescription)")
-            return (hasHealthKitData: false, sessionCount: 0, lastImport: nil)
-        }
-    }
 }
