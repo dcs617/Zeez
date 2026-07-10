@@ -361,6 +361,16 @@ through the `measured*` accessors. Read `PARKED_CAPABILITIES.md` §4 and §6 fir
   `OnboardingManager`'s existing ones; it calls `clearAllData()` from `init()`, before `WindowGroup` builds
   `RootView` and any `@FetchRequest` observes the old store. UI: 6/6 green. ZeezTests 225/225 green;
   watch target builds via the new shared scheme.
+- **Pre-existing flake found while verifying, not fixed.** `StoreKitTests`' four `SKTestSession`-backed
+  tests (`purchaseGrantsEntitledTier`, `entitlementResolvesWithoutLoadedProducts`,
+  `upgradeResolvesToHighestTier`, `expiryDowngrades`) failed twice in a row after a UI-test run had left
+  the app installed and running on the simulator; the run took 20.6 s instead of the usual 0.7 s, which is
+  timeouts expiring. A controlled A/B — `ade6f20` versus HEAD, alternating, uninstalling the app before
+  each run — passed **6/6 on both sides**, and D3a's only addition to that path is a `containerURL` call
+  that returns `nil` in ~1 ms for an un-entitled process. So the trigger is simulator state (a live app
+  instance contending for the StoreKit test session), not the Phase D diff. It matters anyway: CI's
+  `unit-tests` job runs this bundle, and the suite is already marginal (`purchaseGrantsEntitledTier` takes
+  ~12 s of a ~17 s suite). Worth hardening on its own — it is not a Phase D item.
 
 ## 5. Release-gating checklist
 
