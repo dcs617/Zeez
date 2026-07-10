@@ -23,9 +23,8 @@ Tests marked **[SIM OK]** don't need the phone. Do those while waiting for hardw
 For each failure, paste:
 
 1. The test ID (`T5.3`) and what you actually saw versus what the file said to expect.
-2. **Log lines.** This matters more than a description. Console.app → select your iPhone in the sidebar
-   → filter `Subsystem: com.danielsparano.zeez`. Start the capture *before* the step. Copy the 20 lines
-   around the moment it went wrong, not just the error.
+2. **Log lines** — see [Appendix A: reading the logs](#appendix-a--reading-the-logs). This matters more
+   than a description. Copy the 20 lines around the moment it went wrong, not just the error.
 3. Whether it reproduces on a second attempt, and whether it reproduces in the simulator.
 
 If something crashes: Xcode → Window → Devices and Simulators → your phone → View Device Logs. Find the
@@ -118,7 +117,10 @@ git checkout feature/sleep-simplification
 **Run from Xcode again** (do *not* delete the app first — deleting destroys the data container and the
 whole point of this test).
 
-Have **Console.app open and filtering on `com.danielsparano.zeez` before you launch.**
+Watch **Xcode's own console pane** for this one — the app isn't force-quit, so the debug session stays
+attached and Xcode shows every level without configuration. If you'd rather use Console.app, you *must*
+first tick **Action → Include Info Messages**, or the success line is invisible (see
+[Appendix A](#appendix-a--reading-the-logs)).
 
 **Expected — pass:**
 - Exactly one log line, category `CoreData`: `Relocated the Core Data store into the App Group container`
@@ -541,3 +543,115 @@ points at the placeholder `https://dcs617.github.io/zeez-privacy/`.
 
 
 ```
+
+---
+
+# Appendix A — Reading the logs
+
+Yes: phone connected to the laptop by cable (iPhone 13 Pro Max is Lightning), app running **on the phone**.
+You have three ways to see its output, and you need two of them because they fail in different places.
+
+## ⚠️ Read this first: the app's key lines are `info`-level
+
+Almost everything this guide asks you to look for — `Relocated the Core Data store…`,
+`Notification budget: … total N/64`, `📅 Pre-armed 6 follow-ups…` — is logged at **info** level.
+
+**Console.app hides info and debug messages by default.** If you don't turn them on, you will see nothing
+and wrongly conclude the code never ran. This is the single easiest way to get a false negative out of
+this whole document.
+
+Only `error` and `fault` lines show up without changing anything. Those are the App Group failure paths
+(T1) — so the *bad* news is visible by default and the *good* news isn't.
+
+`ZeezLogger.debug` is compiled out of Release builds entirely. Running from Xcode gives you a Debug build,
+so you're fine.
+
+---
+
+## Method 1 — Xcode's console (easiest; use for T1, T2, T3, T4, T9, T10, T11)
+
+Run the app from Xcode onto the phone (Product → Run). The pane at the bottom of Xcode streams everything,
+all levels, no configuration. Filter with the search box at its bottom-right.
+
+**Where it breaks:** the moment you force-quit the app, the debug session dies and the stream ends. It also
+ends if you unplug. So it is useless for T5.3, T5.5, T5.6, T6, and T8, which are all about what happens
+when the app *isn't* being debugged.
+
+## Method 2 — Console.app (use for T5, T6, T8, and anything after a force-quit)
+
+1. Connect the phone by cable. Unlock it. Tap **Trust** if asked.
+2. Open **Console.app** (`/Applications/Utilities/`). Your iPhone appears in the left sidebar under
+   *Devices*. Select it.
+3. **Action menu → tick "Include Info Messages" and "Include Debug Messages".** ← the step everyone skips
+4. In the search field, type `com.danielsparano.zeez`, then click the search token that appears and choose
+   **Subsystem**. (Typing it as free text also works but matches noisily.)
+5. Click **Start** *before* you perform the step you're testing. The stream is live-only; it does not
+   backfill.
+
+To narrow further, add a second token for **Category**: `CoreData`, `Alarm`, `Environment`, `Background`,
+`SleepTracking`, `UI`. These are the `ZeezLogger` categories.
+
+The app keeps logging while it's force-quit-and-relaunched, locked, or backgrounded — Console doesn't care.
+That's why it's the right tool for the alarm tests.
+
+## Method 3 — Terminal, *after the fact* (best for pasting to me)
+
+Two things to know before you type anything:
+
+- **`log` is a zsh builtin.** Plain `log show …` fails with `too many arguments`. Always write
+  **`/usr/bin/log`**.
+- **There is no terminal live-stream for a connected device.** `log stream --device` was removed from
+  macOS; on this machine `log stream` doesn't accept `--device` at all, and `devicectl` has no console
+  subcommand. For *live* device logs, use Console.app (Method 2). The terminal is for pulling logs back
+  **after** something happened.
+
+That "after" case is the one you actually need — the alarm tests happen while you're asleep or the app is
+force-quit, and you won't have a stream running.
+
+```bash
+# 1. Pull the last 30 minutes off the connected phone.
+sudo /usr/bin/log collect --device --last 30m --output ~/Desktop/zeez.logarchive
+
+# 2. Replay just Zeez's lines, including info and debug.
+/usr/bin/log show ~/Desktop/zeez.logarchive \
+  --predicate 'subsystem == "com.danielsparano.zeez"' \
+  --info --debug --style compact > ~/Desktop/zeez.txt
+```
+Paste the relevant chunk of `zeez.txt`. `--last` takes `30m`, `2h`, `1d`.
+
+The `--info --debug` on step 2 is the same trap as Console's Action menu: without them you get only
+`error` and `fault`, and every line in the table below marked ❌ vanishes.
+
+> If `--device` errors: the phone isn't connected, unlocked, or trusted. Check with
+> `xcrun devicectl list devices` — it should show `iPhone 13 Pro Max` as `available`, not `unavailable`.
+
+## Watch logs (T8)
+
+Same as Method 2, but select the **Apple Watch** in Console's sidebar. The watch must be paired to the
+phone and the phone connected to the Mac. Watch-side categories come from `WatchLogger`: `Connectivity`
+and `Haptics`.
+
+If the watch doesn't appear in the sidebar, open the Watch app on the phone → General → and make sure
+it's not in a low-power state. Wireless-only watch logging is unreliable; give it a minute.
+
+## Crashes
+
+Xcode → Window → **Devices and Simulators** → your phone → **View Device Logs**. Sort by date, find yours,
+right-click → **Export Log**. Send me the top ~10 frames of the crashing thread and the exception type.
+
+A Core Data threading violation (T10) shows up as a frame named
+`__Multithreading_Violation_AllThatIsLeftToUsIsHonor__`. If you see that, the test found exactly what it
+was looking for.
+
+## Quick reference — what to expect at which level
+
+| Line | Level | Visible in Console by default? |
+|---|---|---|
+| `Relocated the Core Data store into the App Group container` | info | ❌ turn on Info |
+| `App Group container unavailable — keeping the app-container store` | error | ✅ |
+| `App Group container is unreachable but this install previously adopted it` | **fault** | ✅ |
+| `Notification budget: … total N/64` | info | ❌ |
+| `🔁 Removing N stale chain entries for alarm …` | info | ❌ |
+| `📅 Pre-armed 6 follow-ups for alarm … at next fire …` | info | ❌ |
+| `Core Data store loaded successfully` | info | ❌ |
+| Anything from `ZeezLogger.debug` | debug | ❌, and Release-stripped |
