@@ -402,9 +402,21 @@ app is about to open an empty store — treat it as a release blocker, not a war
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF' build
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS Simulator,id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF' -only-testing:ZeezTests
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)' build
+
+# D4: exactly what CI runs
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild build -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'generic/platform=watchOS Simulator'
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -project Zeez.xcodeproj -scheme Zeez -configuration Debug -destination 'platform=iOS Simulator,id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF' -only-testing:ZeezUITests/MainViewUITests -only-testing:ZeezUITests/OnboardingUITests
+
 # Threading verification for A2/A3/A4: add to the scheme's launch arguments
 #   -com.apple.CoreData.ConcurrencyDebug 1
 ```
+
+Recovering failures after the fact (xcodebuild's console output loses them):
+```bash
+xcrun xcresulttool get test-results tests --path ~/Library/Developer/Xcode/DerivedData/Zeez-*/Logs/Test/<run>.xcresult
+```
+If `StoreKitTests` fails, uninstall the app from the simulator and re-run before investigating — its four
+`SKTestSession` tests flake when a live app instance contends for the StoreKit test session.
 
 ## 7. Prompt for the next implementation chat
 

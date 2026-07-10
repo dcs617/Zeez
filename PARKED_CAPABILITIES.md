@@ -149,10 +149,20 @@ enforced.
 
 **Why removed.** Dead code carrying three separate claims violations.
 
-**Definition of done.** A real WidgetKit extension target (not in-app cards). Tracked as Phase D3
+**Definition of done.** A real WidgetKit extension target (not in-app cards). Tracked as Phase **D3c**
 in `SECOND_AUDIT_IMPROVEMENTS.md`. Every value it surfaces is bound by the same claims rules as
-the in-app equivalent, including the "Experimental Zeez Estimate" label on any score and the
-`measured*` accessors for environmental readings (never the raw sentinel attributes).
+the in-app equivalent, including the "Experimental Zeez Estimate" label on any score — in visible text
+*and* in `accessibilityValue` (rule 10) — the `qualityScore <= 1.0` no-score sentinel rendered as "no
+estimate" rather than a number, and the `measured*` accessors for environmental readings (never the raw
+sentinel attributes).
+
+**Data prerequisite: done (D3a, 2026-07-09).** An extension can only reach the app's Core Data store
+through a shared App Group container, and the store used to open at the default app-container URL.
+`CoreData/StoreLocation.swift` now puts it in `group.com.danielsparano.zeez` and relocates any legacy
+store on first launch. This had to land before any user had data — afterward it would have been a
+migration against real sleep history. ⚠️ It stays inert until the **App Groups capability is toggled once
+in Xcode**; CLI `xcodebuild` strips profile-backed entitlements, so the group path cannot be exercised
+from the command line.
 
 ---
 

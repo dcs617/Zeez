@@ -23,9 +23,20 @@ xcodebuild test -project Zeez.xcodeproj -scheme Zeez -destination 'platform=iOS 
 
 # Build watch app
 xcodebuild -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)' build
+
+# Build watch app the way CI does (no simulator model name to drift)
+xcodebuild -project Zeez.xcodeproj -scheme "ZeezWatch Watch App" -destination 'generic/platform=watchOS Simulator' build
+
+# UI smoke tests (Debug only — the launch-argument overrides are #if DEBUG)
+xcodebuild test -project Zeez.xcodeproj -scheme Zeez -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:ZeezUITests/MainViewUITests -only-testing:ZeezUITests/OnboardingUITests
 ```
 
-The `Zeez` scheme is a shared scheme (`Zeez.xcodeproj/xcshareddata/xcschemes/Zeez.xcscheme`). Its launch action is wired to the local StoreKit configuration `ZeezTests/Zeez.storekit` (product IDs must match App Store Connect exactly), and its test action includes both ZeezTests and ZeezUITests — CI (`.github/workflows/tests.yml`) runs `-only-testing:ZeezTests`.
+Never run two `xcodebuild` invocations concurrently. To recover which tests failed from a finished run:
+`xcrun xcresulttool get test-results tests --path <…/Logs/Test/*.xcresult>` — grepping xcodebuild output loses them.
+
+Both the `Zeez` and `ZeezWatch Watch App` schemes are shared (`Zeez.xcodeproj/xcshareddata/xcschemes/`) — CI cannot build a scheme that is not. The `Zeez` scheme's launch action is wired to the local StoreKit configuration `ZeezTests/Zeez.storekit` (product IDs must match App Store Connect exactly), and its test action includes both ZeezTests and ZeezUITests.
+
+CI (`.github/workflows/tests.yml`) has three jobs: `unit-tests` (`-only-testing:ZeezTests`) and `watch-build` on every push/PR, and `ui-smoke` on a nightly schedule plus `workflow_dispatch` only. UI tests never gate a merge — they need a warm booted simulator and fail noisily.
 
 ## Core Architecture
 
@@ -38,6 +49,7 @@ At startup, `ZeezApp.setupApp()` runs `AlarmDataMigrationHelper` and starts `Ala
 
 ### Data Layer
 - **Core Data stack**: `PersistenceController.shared` — use `.container.viewContext` for UI, `newBackgroundContext()` for heavy work. Migration is automatic via `CoreDataMigrationManager`.
+- **Store location**: the store lives in the **App Group** container (`group.com.danielsparano.zeez`), not the app container, so a future WidgetKit extension can read it. `CoreData/StoreLocation.swift` owns the identifier, the URL, and the one-time relocation of a legacy app-container store; `PersistenceController.adoptAppGroupStore` runs it *before* `configureStoreForMigration()`, which reads `description.url`. Relocation uses `replacePersistentStore` — never `moveItem`, which drops uncheckpointed WAL frames. Every failure path keeps the app-container store. Note that CLI `xcodebuild` signs simulator builds ad-hoc and strips all profile-backed entitlements, so `containerURL(...)` returns `nil` and the group path is only exercised in Xcode/device builds.
 - **Model versioning**: the model is versioned; `Zeez 2.xcdatamodel` is current (check `Zeez.xcdatamodeld/.xccurrentversion`). Structural changes require a new model version — default-value-only changes don't alter version hashes, so old stores stay compatible.
 - **Primary entity**: `SleepSession` — links to `SleepStage`, `HeartRateData`, `MovementData`, `EnvironmentalReading`, `SleepQualityScore`.
 - **Generated classes**: All Core Data entity classes live in `CoreData/` (paired `+CoreDataClass.swift` / `+CoreDataProperties.swift`).
@@ -113,7 +125,16 @@ Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImp
 - **Threading**: never touch a managed object or context off its queue. The alarm stack uses the snapshot pattern — `AlarmSnapshot` (`Zeez/Alarm/AlarmSnapshot.swift`) is built inside `context.perform` and only plain values cross onto dispatch queues or `UNUserNotificationCenter` callbacks. Verify threading changes by launching with `-com.apple.CoreData.ConcurrencyDebug 1`.
 
 ### Testing
-Uses Swift Testing framework (`import Testing`, `@testable import Zeez`). Test suites: `AlarmEndToEndTests`, `AlarmRaceConditionTests`, `AlarmReliabilityTests`, `AlarmPredicateSQLiteTests`, `AlarmFollowUpChainTests`, `NotificationBudgetTests`, `CoreDataMigrationTests`, `CoreDataModelV2MigrationTests`, `CoreDataModelTests`, `MockDataTests`. Alarm-scheduler tests inject a fake center via the `AlarmNotificationScheduling` protocol instead of using the real `UNUserNotificationCenter` (see `AlarmFollowUpChainTests` for the pattern).
+Uses Swift Testing (`import Testing`, `@testable import Zeez`); `ZeezUITests` is XCTest. ~36 suites live in `ZeezTests/` — read the directory rather than trusting a list here. Established patterns:
+
+- **Fakes**: a product-side protocol with a `= .shared` / `= .current()` default parameter, faked by a lock-guarded `@unchecked Sendable` double. `AlarmNotificationScheduling` + `FakeNotificationCenter` (`ZeezTests/AlarmTestSupport.swift`) is the reference; see `AlarmFollowUpChainTests`. Never use the real `UNUserNotificationCenter`.
+- **Polling**: `AlarmTestSupport.waitUntil` — never fixed sleeps.
+- **Core Data**: in-memory `PersistenceController(inMemory:)`, backed by SQLite at `/dev/null`, so SQL semantics apply (NULLs sort last in a descending order).
+- **Fixtures**: `SleepSessionValidator` needs `EnvironmentalReading` timestamps covering ≥80% of a session, so any test that ends a session must seed readings or it throws `.incompleteSensorData`.
+- **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests`) locate sources via `#filePath` so they work in CI. Use them to pin an invariant a refactor establishes.
+- **A regression test that passes against the unfixed code pins nothing** — temporarily revert the fix and confirm the test fails before trusting it.
+- **UI tests** read `#if DEBUG` launch arguments: `-uiTestCompletedOnboarding` / `-uiTestResetOnboarding` (`OnboardingManager`) and `-uiTestResetStore` (`ZeezApp.init`, clears the store before `RootView` exists). A Release UI-test run hangs on onboarding.
+- `StoreKitTests`' four `SKTestSession` tests flake under simulator contention when a live app instance is present. If they fail, uninstall the app from the simulator and re-run before investigating.
 
 ### Logging
 Use `ZeezLogger` (`Infrastructure/ZeezLogger.swift`) — never `print`. Import `os.log`. Categories: `ZeezLogger.coreData`, `.sleepTracking`, `.alarm`, `.learning`, `.ui`, `.environment`, `.background`, `.analytics`, `.network`, `.mockData`, `.error`, `.app`. Debug logs are stripped from release builds.
