@@ -568,6 +568,21 @@ so you're fine.
 
 ---
 
+## First: "Xcode's console" and "Console.app" are two different things
+
+This trips everyone up. **Console.app is not part of Xcode.** It is a separate macOS application.
+
+| | What it is | How to open it |
+|---|---|---|
+| **Xcode's console** | A pane at the bottom of the Xcode window showing output from the app Xcode is currently running | It's already there. `⇧⌘C` focuses it; `⇧⌘Y` toggles the whole debug area |
+| **Console.app** | A standalone macOS app that reads the system log from your Mac *or* from an attached iPhone/Watch | `⌘Space`, type `Console`, Return. (Or `open -a Console` in Terminal. It lives at `/System/Applications/Utilities/Console.app`, which Finder shows as Applications → Utilities) |
+
+You need both. Xcode's pane only works while Xcode is attached to a running process — the moment you
+force-quit Zeez, Xcode detaches and the pane goes dead, even though the alarm keeps firing (iOS owns the
+scheduled notification, not your app). Console.app doesn't care whether anything is being debugged.
+
+---
+
 ## Method 1 — Xcode's console (easiest; use for T1, T2, T3, T4, T9, T10, T11)
 
 Run the app from Xcode onto the phone (Product → Run). The pane at the bottom of Xcode streams everything,
@@ -579,14 +594,18 @@ when the app *isn't* being debugged.
 
 ## Method 2 — Console.app (use for T5, T6, T8, and anything after a force-quit)
 
-1. Connect the phone by cable. Unlock it. Tap **Trust** if asked.
-2. Open **Console.app** (`/Applications/Utilities/`). Your iPhone appears in the left sidebar under
-   *Devices*. Select it.
-3. **Action menu → tick "Include Info Messages" and "Include Debug Messages".** ← the step everyone skips
-4. In the search field, type `com.danielsparano.zeez`, then click the search token that appears and choose
-   **Subsystem**. (Typing it as free text also works but matches noisily.)
-5. Click **Start** *before* you perform the step you're testing. The stream is live-only; it does not
-   backfill.
+1. Connect the phone by cable. **Unlock it.** Tap **Trust This Computer** if asked. (A locked phone will
+   not appear, and that is the usual reason it's missing.)
+2. Open Console.app — it's a **separate app, not part of Xcode**: press `⌘Space`, type `Console`, hit
+   Return. You can also launch it from Terminal: `open -a Console`.
+3. In the **left sidebar**, under **Devices**, click your iPhone. (If the sidebar is hidden:
+   View → Show Sidebar.) Your Mac is listed there too — make sure you pick the phone.
+4. **Action menu → tick "Include Info Messages" and "Include Debug Messages".** ← the step everyone skips.
+   Without it you will see nothing and wrongly conclude the code never ran.
+5. In the search field (top right), type `com.danielsparano.zeez`, press Return, then **click the token
+   that appears and choose "Subsystem"** from its dropdown. Free text also works but matches noisily.
+6. Click **Start** *before* you perform the step you're testing. The stream is live-only; it does not
+   backfill. If you forgot, use Method 3 to pull the log back after the fact.
 
 To narrow further, add a second token for **Category**: `CoreData`, `Alarm`, `Environment`, `Background`,
 `SleepTracking`, `UI`. These are the `ZeezLogger` categories.
