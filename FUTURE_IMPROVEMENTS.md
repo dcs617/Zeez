@@ -57,8 +57,9 @@ Carried over from the archived roadmap's Phase 3.
 - Apply for the critical-alerts entitlement (defensible for an alarm app); until granted,
   keep the graceful `checkCriticalAlertsEnabled` degradation. Phase **D3b** — paperwork only, no code
   to write; file it early, Apple takes weeks.
-- Alarm health indicator in `AlarmSettingsView` ("N notifications scheduled; next fires
-  at…"). Second audit **C5**; explicitly deferred past Phase C.
+- ~~Alarm health indicator in `AlarmSettingsView`.~~ Done 2026-10-20 — second audit **C5**
+  (`Zeez/Alarm/AlarmHealth.swift`). Also flags an enabled alarm with no pending main notification,
+  and missing notification permission, with a one-tap fix for each.
 - `NavigationView` → `NavigationStack` migration (start with `MainView` — remove the
   NavigationView wrapping the TabView; give each tab its own NavigationStack). Phase D1.
 - Singleton graph → protocol injection, incrementally, following the

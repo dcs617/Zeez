@@ -302,6 +302,14 @@ foreground.
 Fire an alarm, tap **Snooze**.
 **Expected:** re-fires after **9 minutes** (default). Snoozed state survives a force-quit.
 
+### T5.8 — Alarm health card
+On the Alarm tab with at least one alarm on: a green card reads "N alarm notifications scheduled · Next
+rings <day time>", and the day/time matches the alarm you expect next (during a snooze, the snooze).
+Then turn notifications off for Zeez in iOS Settings and return: the card turns red, "Notifications are
+off", and **Open Settings** goes to Zeez's page. Turn them back on.
+**Silent variant:** an orange "isn't scheduled" card on an alarm you just created that doesn't clear
+within a few seconds — report it with the alarm's settings. Tap **Reschedule Alarms** and note whether it clears.
+
 **Result:** ☐ Pass ☐ Fail ☐ Blocked
 **Notes:**
 ```
