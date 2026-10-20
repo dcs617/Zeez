@@ -131,11 +131,9 @@ class AlarmObserver: NSObject {
             }
         }
         
-        // Update watch app for any alarm changes
-        if !insertedAlarms.isEmpty || !updatedAlarms.isEmpty {
-            (insertedAlarms.union(updatedAlarms)).forEach { alarm in
-                watchHandler.updateAlarmContext(alarm)
-            }
+        // Any change, deletions included, can move which alarm rings next on the watch
+        if !insertedAlarms.isEmpty || !updatedAlarms.isEmpty || !deletedAlarms.isEmpty {
+            watchHandler.updateAlarmContext()
         }
     }
     

@@ -368,6 +368,10 @@ unit tests cover the envelope shape, not the transport.
 2. **Watch-initiated:** pull to refresh / open the summary. Expect current sleep + next alarm.
 3. **Phone-initiated (the one that was broken):** on the phone, record and end a session, or edit an alarm.
    **Expected:** the watch's summary updates without you asking it to.
+   - **Next alarm (fixed after the audit):** with two alarms on, the watch shows the one that rings
+     *next*, with an "in Xh Ym" countdown under it. Turn that alarm off on the phone: the watch moves to the
+     other one. Turn both off: the watch shows no next alarm. A missing countdown, or the watch showing an
+     alarm you just disabled, is a failure.
 4. Wake-pattern haptics fire when an alarm rings.
 5. Snooze and Stop from the watch both control the phone's alarm.
 6. **Offline cache:** put the phone in airplane mode. The watch should show the last known summary, not

@@ -275,6 +275,16 @@ double — as established by `AlarmNotificationScheduling` + `FakeNotificationCe
   `PersistenceController`. A2 and A5 rewrote `fetchWatchPayloads`' Core Data path and **nothing tests it**;
   `WatchWireContractTests` covers the envelope shape, not the fetch. Note while there: the type is an
   `ObservableObject` with four `@Published` properties and no SwiftUI observer anywhere.
+  - ✅ **Data half done 2026-10-20** — `fetchWatchPayloads` moved to `Zeez/Watch/WatchPayloadBuilder.swift`
+    with an injected `NSPersistentContainer` (the `SleepAnalyzer.analyzeSleepSession(objectID:container:)`
+    pattern); `WatchPayloadBuilderTests` (6) run it on an in-memory store. Testing it found a real bug: the
+    "next alarm" was chosen by sorting `AlarmConfiguration.time`, whose date part is whenever the alarm was
+    created or edited — so the oldest-dated alarm won, weekdays were ignored, and the past date on the wire
+    hid the watch's countdown. It now sends the earliest `AlarmSnapshot.nextFireDate()`, and an explicit
+    disabled status when nothing can ring. `updateAlarmContext` also used to forward whichever alarm was
+    just saved (even a disabled one); it now re-reads the next alarm, deletions included.
+  - **Still open:** the `WatchSessionProtocol` seam. It would unlock tests of `handleDataRequest`'s reply
+    path and `sendMessage`'s priority→transport mapping, which still have none.
 - **D2b** `AlarmAudioController`: 18 call sites, zero tests, and it is the alarm's last mile. Seam: an
   audio-session protocol (`setCategory`/`setActive`) and a player factory. Do not fake `Timer` — call the
   health-check directly. The device pass covers the happy path; it can never cover the watchdog restart,
