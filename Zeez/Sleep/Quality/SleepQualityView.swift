@@ -9,6 +9,7 @@ struct SleepQualityView: View {
                 LazyVStack(spacing: 20) {
                     overallScoreSection(session)
                     if session.hasDisplayableScore {
+                        ZeezScoreBreakdownView(session: session)
                         metricsSection(session)
                     }
                 }

@@ -225,6 +225,15 @@ score.
 - Persisted `calculationVersion` = `ZeezScore-3.0`, and `confidenceScore` is **not** 85 for every session —
   it must vary with how many sensors contributed. (Ask me for a query if you want to check the DB directly.)
 
+**Expected — the breakdown (score breakdown, added after the audit):** below the score, a card titled
+**How This Estimate Was Calculated** lists five rows with a weight each (25 / 30 / 25 / 15 / 5%) and a
+score out of 100 or "Not available". The session details screen has a "How this estimate was calculated"
+link to the same place. VoiceOver on a row reads its name, its weight, and "Experimental Zeez estimate
+component: N out of 100".
+- **Silent variant:** the card says "The breakdown for this estimate isn't available" on a session you
+  just recorded. That means recomputing from its stored stages didn't reproduce the stored score — report it.
+  "Produced by an earlier version" is expected only for sessions scored before `ZeezScore-3.0`.
+
 **Expected — a session with sensor data but no inferrable stages:** shows **no score at all**, not a
 neutral or middling one. Internally `qualityScore <= 1.0` is the "no estimate" sentinel.
 

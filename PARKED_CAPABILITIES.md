@@ -289,8 +289,9 @@ discards; deterministic regression tests plus one documented device check.
 night with no recording is absent, never zero; trends must never average unavailable scores or
 fabricate missing nights.
 
-**c. A component score the user can see (Phase 5).** The score's exit criterion "can explain itself
-from components" is **not met**. `QualityMetrics.components` holds a per-component
+**c. A component score the user can see (Phase 5).** ✅ **Delivered 2026-10-20** — see
+`ZEEZ_SCORE_SPECIFICATION.md` §8 and `ZeezScoreBreakdown`. Kept below for provenance. The score's exit
+criterion "can explain itself from components" was **not met**: `QualityMetrics.components` holds a per-component
 `ComponentResult` and `ZeezScoreComponent` carries the weights, but the values never leave
 `SleepQualityCalculator` — no view renders the breakdown, so the score is still an opaque number to
 the user. *Definition of done:* a breakdown surface that names each component, its weight, and

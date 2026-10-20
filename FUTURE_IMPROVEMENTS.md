@@ -77,8 +77,8 @@ status line. In summary:
   coverage reporting ("5 of 7 nights recorded").
 - **Phase 5 (experimental score)** — substantially delivered (B8, plus A1/A7). It **diverges** from
   the plan on purpose: the score is computed only from Zeez-inferred stages and never grades
-  Apple-reported ones. Outstanding: a component breakdown the user can actually see, without which
-  the score cannot "explain itself" as the phase required.
+  Apple-reported ones. The user-visible component breakdown landed 2026-10-20
+  (`ZEEZ_SCORE_SPECIFICATION.md` §8), so the score now "explains itself" as the phase required.
 - **Phase 6 (owned-sensor staging)** — not started, and it is a research project whose deliverable is
   a go/no-go report. Note that production **already** infers stages (`SleepStageAnalyzer`) and the
   score depends on them, with an "Experimental" label standing in for an evaluation that has never

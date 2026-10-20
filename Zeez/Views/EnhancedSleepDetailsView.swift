@@ -85,6 +85,14 @@ struct EnhancedSleepDetailsView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Experimental Zeez estimated sleep score \(Int(session.qualityScore)) out of 100")
                 .accessibilityIdentifier("sleepQualityScore")
+
+                NavigationLink(destination: SleepQualityView(session: session)) {
+                    Label("How this estimate was calculated", systemImage: "list.bullet.rectangle")
+                        .font(.subheadline)
+                }
+                .accessibilityLabel("How this estimate was calculated")
+                .accessibilityHint("Shows the inputs and weights behind the experimental Zeez estimate")
+                .accessibilityIdentifier("scoreBreakdownLink")
             }
         }
         .padding()

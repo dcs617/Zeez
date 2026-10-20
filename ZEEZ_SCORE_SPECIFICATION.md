@@ -155,3 +155,28 @@ disclosure.
 The score has not been compared against polysomnography or any reference dataset. Per the
 claims contract, engineering tests cannot establish that it measures sleep quality; only
 an appropriately matched study could support stronger wording, and none has been run.
+
+## 8. Breakdown presentation
+
+The claims matrix requires the score to carry a "component explanation". The breakdown is
+`Zeez/Sleep/Quality/ZeezScoreBreakdown.swift`, rendered by `ZeezScoreBreakdownView` on the
+estimate screen and reachable from session details.
+
+1. **Components are recomputed, not stored.** `SleepQualityScore` persists only the composite, so
+   the breakdown re-runs `SleepQualityCalculator` over the session's stored stages.
+2. **It must reproduce the number it explains.** A breakdown is shown only when the latest
+   `SleepQualityScore.calculationVersion` equals `ZeezScore.version` *and* the recomputed composite
+   is within `ZeezScoreBreakdown.reproductionTolerance` (0.01) of the stored `qualityScore`.
+   Otherwise the screen says the breakdown is unavailable. It never re-explains an earlier-version
+   score under the current rules.
+3. **Every component is listed**, in §3 order, with its §3 weight and either its sub-score or the
+   reason it was unavailable. When any component is unavailable, the screen states that the
+   remaining weights are scaled up to fill its share (§4.5) and shows `inputCoverage`.
+4. **Names describe calculations.** `sleepOpportunity` is presented as "Estimated asleep share of
+   recording" and explicitly not sleep efficiency (§3.1); `latency` is "Recording start to first
+   estimated sleep", never time taken to fall asleep.
+5. **The experimental label survives accessibility.** Each available component's
+   `accessibilityValue` reads "Experimental Zeez estimate component: N out of 100" (claims rule 10).
+
+This section governs presentation only. Changing it does not require a `ZeezScore.version` bump;
+changing what §3 or §4 compute still does. Regression tests: `ZeezTests/ZeezScoreBreakdownTests.swift`.
