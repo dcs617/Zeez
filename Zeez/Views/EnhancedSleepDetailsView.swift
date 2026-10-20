@@ -42,6 +42,10 @@ struct EnhancedSleepDetailsView: View {
                 biometricData
                     .padding(.horizontal)
                     .accessibilityIdentifier("biometricData")
+
+                // What this session has, and what it is missing
+                recordedInputs
+                    .padding(.horizontal)
             }
             .padding(.vertical)
         }
@@ -224,6 +228,47 @@ struct EnhancedSleepDetailsView: View {
         .accessibilityIdentifier("biometricDataContainer")
     }
     
+    private var recordedInputs: some View {
+        let coverage = session.inputCoverage
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Recorded Inputs")
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                Text(coverage.summary)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            VStack(spacing: 10) {
+                ForEach(coverage.entries) { entry in
+                    HStack(alignment: .firstTextBaseline) {
+                        Image(systemName: entry.status.isRecorded ? "checkmark.circle.fill" : "minus.circle")
+                            .foregroundColor(entry.status.isRecorded ? .green : .secondary)
+                            .accessibilityHidden(true)
+                        Text(entry.input.displayName)
+                        Spacer()
+                        Text(entry.status.detail)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(entry.input.displayName)
+                    .accessibilityValue("\(entry.status.isRecorded ? "Recorded" : "Missing"): \(entry.status.detail)")
+                    .accessibilityIdentifier("recordedInput_\(entry.input.rawValue)")
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(radius: 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("recordedInputsContainer")
+    }
+
     private func aggregateEnvironmentalData(_ readings: [EnvironmentalReading]) -> [(label: String, value: String)] {
         // Only genuinely measured values; unmeasured metrics are omitted entirely
         func average(_ values: [Double]) -> Double? {

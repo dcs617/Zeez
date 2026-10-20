@@ -282,7 +282,10 @@ dropped legitimate sessions. *Inputs required:* stable sample identity persisted
 which is a Core Data model version bump. *Definition of done:* re-import neither duplicates nor
 discards; deterministic regression tests plus one documented device check.
 
-**b. Coverage reporting (Phases 3 and 4).** "5 of 7 nights recorded", and per-session input coverage
+**b. Coverage reporting (Phases 3 and 4).** ✅ **Delivered 2026-10-20** — `Zeez/Sleep/SleepCoverage.swift`:
+`NightCoverage` on Trends ("Recorded on 5 of the last 7 nights", plus how many carry an estimate) and
+`SessionInputCoverage` as the "Recorded Inputs" card in session details. The same change stopped Trends
+showing "0%" / "0h 0m" for an empty period. Kept below for provenance. "5 of 7 nights recorded", and per-session input coverage
 (stages, asleep time, in-bed context, HR, respiratory, and what is missing) surfaced to the user.
 `QualityMetrics.inputCoverage` already computes this per session (B8) but nothing renders it.
 *Claims tier:* Tier 1 — it reports what was recorded, not what it means. *Missing-input policy:* a

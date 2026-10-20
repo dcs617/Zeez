@@ -66,30 +66,40 @@ struct TrendsView: View {
         // Sleep goal shortfall is presented in its dedicated destination where source and
         // data coverage can be explained clearly.
         
-        // Experimental score trends
+        // Coverage first: every average below covers only the nights counted here.
+        coverageCard
+            .padding(.horizontal)
+
+        // Experimental score trends. Nights without an estimate are absent, never zero.
         TrendMetricCard(
-            title: "Estimated Score",
-            subtitle: "Last \(selectedRange.rawValue)",
-            value: "\(Int(averageQualityScore))%",
+            title: "Experimental Zeez Estimate",
+            subtitle: averageQualityScore == nil
+                ? "No estimates in this period"
+                : "Average of estimated nights in this period",
+            value: averageQualityScore.map { "\(Int($0))" },
             valueColor: .blue
         ) {
             TrendChartComponents.QualityChart(
                 data: fetchSleepQualities(),
                 height: 150
             )
-            .accessibilityLabel("Estimated sleep score trend chart showing \(fetchSleepQualities().count) data points")
-            .accessibilityValue("Average estimated score \(Int(averageQualityScore)) percent")
+            .accessibilityLabel("Experimental Zeez estimate trend chart showing \(fetchSleepQualities().count) data points")
+            .accessibilityValue(averageQualityScore.map { "Average experimental Zeez estimate \(Int($0)) out of 100" }
+                                ?? "No experimental Zeez estimates in this period")
             .accessibilityIdentifier("qualityChart")
         }
         .padding(.horizontal)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Estimated sleep score trends: Average \(Int(averageQualityScore)) percent over last \(selectedRange.rawValue)")
+        .accessibilityLabel(averageQualityScore.map { "Experimental Zeez estimate trends: average \(Int($0)) out of 100 for this period" }
+                            ?? "Experimental Zeez estimate trends: no estimates in this period")
         .accessibilityIdentifier("qualityTrendCard")
         
         // Duration Trends
         TrendMetricCard(
             title: "Sleep Duration",
-            subtitle: "Average recorded session duration",
+            subtitle: averageDurationFormatted == nil
+                ? "No recorded sessions in this period"
+                : "Average recorded session duration",
             value: averageDurationFormatted
         ) {
             TrendChartComponents.DurationChart(
@@ -97,12 +107,14 @@ struct TrendsView: View {
                 height: 150
             )
             .accessibilityLabel("Recorded session duration trend chart showing \(fetchSleepDurations().count) data points")
-            .accessibilityValue("Average recorded session duration \(averageDurationFormatted)")
+            .accessibilityValue(averageDurationFormatted.map { "Average recorded session duration \($0)" }
+                                ?? "No recorded sessions in this period")
             .accessibilityIdentifier("durationChart")
         }
         .padding(.horizontal)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Sleep duration trends: Average \(averageDurationFormatted)")
+        .accessibilityLabel(averageDurationFormatted.map { "Sleep duration trends: average \($0)" }
+                            ?? "Sleep duration trends: no recorded sessions in this period")
         .accessibilityIdentifier("durationTrendCard")
         
         // Sleep Schedule Consistency
@@ -183,15 +195,47 @@ struct TrendsView: View {
         }
     }
     
-    private var averageQualityScore: Double {
+    private var coverageCard: some View {
+        let coverage = nightCoverage
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(coverage.summary)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            Text(coverage.estimateSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(coverage.summary). \(coverage.estimateSummary).")
+        .accessibilityHint("Averages below include only the recorded nights")
+        .accessibilityIdentifier("nightCoverageCard")
+    }
+
+    private var nightCoverage: NightCoverage {
+        let range = selectedRange.dateRange
+        return NightCoverage.calculate(
+            sessions: fetchSessions().compactMap { session in
+                session.startTime.map { NightCoverage.Session(startTime: $0, hasEstimate: session.hasDisplayableScore) }
+            },
+            nightCount: NightCoverage.nightCount(from: range.start, to: range.end),
+            now: range.end
+        )
+    }
+
+    /// `nil` when the period has no estimate: an empty period is not a score of zero.
+    private var averageQualityScore: Double? {
         let qualities = fetchSleepQualities()
-        guard !qualities.isEmpty else { return 0 }
+        guard !qualities.isEmpty else { return nil }
         return qualities.reduce(0.0) { $0 + $1.value } / Double(qualities.count)
     }
     
-    private var averageDurationFormatted: String {
+    private var averageDurationFormatted: String? {
         let durations = fetchSleepDurations()
-        guard !durations.isEmpty else { return "0h 0m" }
+        guard !durations.isEmpty else { return nil }
         let avgHours = durations.reduce(0.0) { $0 + $1.value } / Double(durations.count)
         let hours = Int(avgHours)
         let minutes = Int((avgHours - Double(hours)) * 60)

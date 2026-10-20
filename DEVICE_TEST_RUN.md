@@ -197,6 +197,11 @@ rate and respiratory *either* a reading count, *or* "none recorded", *or* "not a
    - If your watch reported `asleepUnspecified`, it appears as its own row — not silently folded into Light.
    - **No Zeez score is shown.** Apple-reported sessions are deliberately never scored (spec §2). A score
      here is a claims violation, not a feature.
+   - The **Recorded Inputs** card at the bottom lists all seven inputs. Sleep stages, time asleep and
+     in-bed say "Reported by Apple Health"; heart rate and respiratory give a sample count or "Not
+     recorded", and must agree with the import's completion message.
+5. Open **Trends**. The top card reads "Recorded on N of the last 7 nights" and N matches the nights you
+   actually have. With no estimates in the period, the score card shows **no number** — not 0.
 
 **Silent failures:** the import reports success while heart rate silently failed (that's exactly what B10
 was meant to end — if the message doesn't name HR, the reporting broke); or an Apple session shows a

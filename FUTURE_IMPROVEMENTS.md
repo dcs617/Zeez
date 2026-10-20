@@ -73,8 +73,9 @@ status line. In summary:
 
 - **Phase 3 (import integrity)** — mostly delivered (B9, B10, C6). Outstanding: durable HealthKit
   sample identity and an overlapping-source merge policy.
-- **Phase 4 (longitudinal review)** — mostly delivered (B4, B6, B7). Outstanding: date-range and
-  coverage reporting ("5 of 7 nights recorded").
+- **Phase 4 (longitudinal review)** — mostly delivered (B4, B6, B7). Night and per-session input
+  coverage landed 2026-10-20 (`SleepCoverage.swift`). Outstanding: an explicit date-range picker beyond
+  the fixed Days/Week/Month ranges (Days and Week are currently the same 7-day window).
 - **Phase 5 (experimental score)** — substantially delivered (B8, plus A1/A7). It **diverges** from
   the plan on purpose: the score is computed only from Zeez-inferred stages and never grades
   Apple-reported ones. The user-visible component breakdown landed 2026-10-20
