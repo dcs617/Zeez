@@ -348,38 +348,54 @@ final class PersistenceController {
     }
     
     func clearAllData() {
-        guard let url = container.persistentStoreDescriptions.first?.url else { return }
-        
-        let coordinator = container.persistentStoreCoordinator
-        
-        // Remove the store first
-        if let store = coordinator.persistentStore(for: url) {
-            do {
-                try coordinator.remove(store)
-            } catch {
-                ZeezLogger.error(ZeezLogger.coreData, "Failed to remove store", error: error)
-                return
-            }
-        }
-        
-        // Delete the files
-        let fileManager = FileManager.default
-        try? fileManager.removeItem(at: url)
-        try? fileManager.removeItem(at: url.appendingPathExtension("shm"))
-        try? fileManager.removeItem(at: url.appendingPathExtension("wal"))
-        try? fileManager.removeItem(at: url.appendingPathExtension("sqlite-journal"))
-        
-        // Add a new store
+        guard let description = container.persistentStoreDescriptions.first,
+              let url = description.url else { return }
+
         do {
-            try coordinator.addPersistentStore(
-                ofType: NSSQLiteStoreType,
-                configurationName: nil,
-                at: url,
-                options: container.persistentStoreDescriptions.first?.options
-            )
+            try Self.recreateStore(at: url, options: description.options, in: container.persistentStoreCoordinator)
             ZeezLogger.info(ZeezLogger.coreData, "Successfully cleared and recreated store")
         } catch {
-            ZeezLogger.error(ZeezLogger.coreData, "Failed to add new store", error: error)
+            ZeezLogger.error(ZeezLogger.coreData, "Failed to clear and recreate store", error: error)
         }
+    }
+
+    /// Empty the SQLite store at `url` and reopen it, empty, on `coordinator`.
+    ///
+    /// `destroyPersistentStore` truncates the database and its `-wal`/`-shm` sidecars in
+    /// place. This used to unlink `Zeez.sqlite` and then `Zeez.sqlite.wal`/`.shm` — names
+    /// SQLite never writes — so the real sidecars survived beside the new database. With
+    /// one connection that was harmless, because closing it had already emptied the WAL.
+    /// With a second connection on the store (another coordinator, or a widget extension
+    /// on the App Group store), the recreated store failed every read and save until that
+    /// connection closed.
+    ///
+    /// The sidecars are left in place afterwards, unlike `StoreLocation.relocateStore`: the
+    /// recreated store reuses them, and unlinking files another connection has open is the
+    /// hazard itself.
+    static func recreateStore(
+        at url: URL,
+        options: [AnyHashable: Any]?,
+        in coordinator: NSPersistentStoreCoordinator
+    ) throws {
+        if let store = coordinator.persistentStore(for: url) {
+            try coordinator.remove(store)
+        }
+
+        // Reopen even if the destroy failed: a store still holding the old data beats no
+        // store at all, which would fail every save for the rest of the session.
+        var destroyError: Error?
+        do {
+            try coordinator.destroyPersistentStore(at: url, type: .sqlite, options: options)
+        } catch {
+            destroyError = error
+        }
+
+        try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType,
+            configurationName: nil,
+            at: url,
+            options: options
+        )
+        if let destroyError { throw destroyError }
     }
 }
