@@ -46,6 +46,21 @@ struct CoreDataModelV2MigrationTests {
         try #require(Self.neutralizedV1Model)
     }
 
+    /// The compiled v2 model ("Zeez 2.mom"), neutralized the same way. These tests pin the
+    /// v1 ↔ v2 relationship specifically; since v3 the *current* model is no longer v2.
+    private static let neutralizedV2Model: NSManagedObjectModel? = {
+        guard let momd = Bundle.main.url(forResource: "Zeez", withExtension: "momd"),
+              let model = NSManagedObjectModel(contentsOf: momd.appendingPathComponent("Zeez 2.mom")) else {
+            return nil
+        }
+        model.entities.forEach { $0.managedObjectClassName = "NSManagedObject" }
+        return model
+    }()
+
+    private func v2Model() throws -> NSManagedObjectModel {
+        try #require(Self.neutralizedV2Model)
+    }
+
     // MARK: - Store helpers
 
     private func temporaryStoreURL() -> URL {
@@ -97,12 +112,16 @@ struct CoreDataModelV2MigrationTests {
     // MARK: - Tests
 
     @Test func v1StoreIsDirectlyCompatibleWithV2Model() throws {
-        // Default-value changes are not part of the version hash, so no
-        // migration is needed — requiresMigration must agree.
+        // Default-value changes are not part of the version hash, so a v1 store is
+        // directly compatible with v2. (Since v3 it does need migrating to the current
+        // model — see CoreDataModelV3MigrationTests.)
         let storeURL = try makeV1Store(alarmID: UUID())
         defer { destroyStore(at: storeURL, model: (try? currentModel()) ?? NSManagedObjectModel()) }
 
-        #expect(!CoreDataMigrationManager.shared.requiresMigration(from: storeURL))
+        let metadata = try NSPersistentStoreCoordinator.metadataForPersistentStore(
+            ofType: NSSQLiteStoreType, at: storeURL, options: nil
+        )
+        #expect(try v2Model().isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata))
     }
 
     @Test func v1StoreOpensUnderV2ModelWithDataIntact() throws {
@@ -111,7 +130,7 @@ struct CoreDataModelV2MigrationTests {
         // explicitly stored (pre-fix) smart-wake values.
         let alarmID = UUID()
         let storeURL = try makeV1Store(alarmID: alarmID)
-        let model = try currentModel()
+        let model = try v2Model()
         defer { destroyStore(at: storeURL, model: model) }
 
         let coordinator = NSPersistentStoreCoordinator(managedObjectModel: model)
@@ -126,14 +145,15 @@ struct CoreDataModelV2MigrationTests {
         context.persistentStoreCoordinator = coordinator
 
         try context.performAndWait {
-            let request = NSFetchRequest<AlarmConfiguration>(entityName: "AlarmConfiguration")
+            // KVC, not AlarmConfiguration: the neutralized v2 model hands back NSManagedObject.
+            let request = NSFetchRequest<NSManagedObject>(entityName: "AlarmConfiguration")
             request.predicate = NSPredicate(format: "id == %@", alarmID as CVarArg)
             let alarm = try #require(try context.fetch(request).first,
                                      "Alarm created under v1 must be readable under v2")
-            #expect(alarm.name == "Migration fixture")
-            #expect(alarm.enabled == true)
-            #expect(alarm.smartWakeEnabled == true)
-            #expect(alarm.smartWakeWindow == 15)
+            #expect(alarm.value(forKey: "name") as? String == "Migration fixture")
+            #expect(alarm.value(forKey: "enabled") as? Bool == true)
+            #expect(alarm.value(forKey: "smartWakeEnabled") as? Bool == true)
+            #expect(alarm.value(forKey: "smartWakeWindow") as? Int16 == 15)
         }
     }
 

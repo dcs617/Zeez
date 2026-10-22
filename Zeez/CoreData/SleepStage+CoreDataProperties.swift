@@ -22,6 +22,11 @@ extension SleepStage {
     @NSManaged public var stageType: String?
     @NSManaged public var confidence: Double
     @NSManaged public var duration: Double
+    /// `HKObject.uuid` of the Apple Health sample this stage copies; nil for stages Zeez
+    /// inferred itself and for HealthKit stages imported before model v3.
+    @NSManaged public var healthKitSampleUUID: UUID?
+    /// `HKSource.bundleIdentifier` of whatever wrote that sample (model v3).
+    @NSManaged public var sourceBundleIdentifier: String?
     @NSManaged public var session: SleepSession?
     @NSManaged public var featureAccess: FeatureAccessRecord?
 
