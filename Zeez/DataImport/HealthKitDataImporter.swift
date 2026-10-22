@@ -86,7 +86,7 @@ extension ImportedSleepSample {
 /// 11 pm to 7 am is one session rather than split at midnight.
 func groupIntervalsIntoSessions<Interval: SleepTimedInterval>(
     _ intervals: [Interval],
-    gapThreshold: TimeInterval = 4 * 3600
+    gapThreshold: TimeInterval = sleepSessionGapThreshold
 ) -> [[Interval]] {
     let sorted = intervals.sorted { $0.start < $1.start }
     var groups: [[Interval]] = []
@@ -104,67 +104,6 @@ func groupIntervalsIntoSessions<Interval: SleepTimedInterval>(
     }
     if !currentGroup.isEmpty { groups.append(currentGroup) }
     return groups
-}
-
-/// Saves a newly imported parent before related-data callbacks try to resolve it in another
-/// context. A permanent ID alone is not visible through the persistent store until save.
-func saveImportedSessionForRelatedData(
-    _ session: SleepSession,
-    in context: NSManagedObjectContext
-) throws -> NSManagedObjectID {
-    if session.objectID.isTemporaryID {
-        try context.obtainPermanentIDs(for: [session])
-    }
-    try context.save()
-    return session.objectID
-}
-
-/// Groups fetched sleep samples into nights and writes one `SleepSession` per night that
-/// is not already stored. Must run on `context`'s queue. Returns the saved sessions whose
-/// heart-rate and respiratory samples still need importing.
-///
-/// A free function, like `saveImportedSessionForRelatedData`, so tests can drive the real
-/// session-writing path against an in-memory store without a HealthKit store.
-func persistImportedSleepSessions(
-    from sleepSamples: [ImportedSleepSample],
-    in context: NSManagedObjectContext
-) throws -> [(sessionID: NSManagedObjectID, start: Date, end: Date)] {
-    var pendingRelatedImports: [(sessionID: NSManagedObjectID, start: Date, end: Date)] = []
-
-    let sampleGroups = groupIntervalsIntoSessions(sleepSamples)
-
-    ZeezLogger.info(ZeezLogger.coreData, "Grouped \(sleepSamples.count) samples into \(sampleGroups.count) sessions")
-
-    for group in sampleGroups {
-        guard let groupStart = group.map(\.start).min(),
-              let groupEnd = group.map(\.end).max() else { continue }
-
-        // Idempotency: skip if a HealthKit session with a matching start already exists
-        if HealthKitDataImporter.sessionExists(start: groupStart, in: context) {
-            ZeezLogger.debug(ZeezLogger.coreData, "Skipping duplicate session starting at \(groupStart)")
-            continue
-        }
-
-        guard let session = HealthKitDataImporter.createSleepSession(from: group, start: groupStart, end: groupEnd, context: context) else {
-            continue
-        }
-
-        // Related-data callbacks use separate contexts; save the parent before
-        // starting either query so the object ID is resolvable in those contexts.
-        let sessionID = try saveImportedSessionForRelatedData(session, in: context)
-
-        // Related data is fetched after the parent sessions are saved.
-        // Only the saved objectID crosses context-queue boundaries.
-        pendingRelatedImports.append((sessionID, groupStart, groupEnd))
-
-        ZeezLogger.debug(ZeezLogger.coreData, "Imported session \(pendingRelatedImports.count) (\(groupStart) – \(groupEnd))")
-    }
-
-    if context.hasChanges {
-        try context.save()
-        ZeezLogger.info(ZeezLogger.coreData, "Saved \(pendingRelatedImports.count) imported session(s)")
-    }
-    return pendingRelatedImports
 }
 
 /// Maps a HealthKit sleep value to the source-reported representation stored by Zeez.
@@ -271,10 +210,10 @@ class HealthKitDataImporter {
 
         context.perform {
             do {
-                let pendingRelatedImports = try persistImportedSleepSessions(from: sleepSamples, in: context)
+                let reconciliation = try reconcileImportedSleepSessions(sleepSamples, in: context)
 
-                let sessionCount = pendingRelatedImports.count
-                self.importRelatedData(for: pendingRelatedImports) { heartRate, respiratory in
+                let sessionCount = reconciliation.inserted.count
+                self.importRelatedData(for: reconciliation.inserted) { heartRate, respiratory in
                     let result = HealthKitImportResult(sessionCount: sessionCount,
                                                        heartRate: heartRate,
                                                        respiratory: respiratory)
@@ -293,7 +232,7 @@ class HealthKitDataImporter {
     /// Sessions are already saved by the time this runs, so a sub-import failure degrades
     /// the report rather than the import.
     private func importRelatedData(
-        for sessions: [(sessionID: NSManagedObjectID, start: Date, end: Date)],
+        for sessions: [ImportedSessionRange],
         completion: @escaping (RelatedDataOutcome, RelatedDataOutcome) -> Void
     ) {
         guard !sessions.isEmpty else {
@@ -347,67 +286,6 @@ class HealthKitDataImporter {
             return .failed(firstFailure.localizedDescription)
         }
         return .imported(readingCount: total)
-    }
-
-    // MARK: - Session Creation
-
-    fileprivate static func createSleepSession(from samples: [ImportedSleepSample], start: Date, end: Date,
-                                               context: NSManagedObjectContext) -> SleepSession? {
-        guard !samples.isEmpty else { return nil }
-
-        guard let coordinator = context.persistentStoreCoordinator, !coordinator.persistentStores.isEmpty else {
-            ZeezLogger.error(ZeezLogger.error, "Core Data context has no persistent stores")
-            return nil
-        }
-
-        let session = SleepSession(context: context)
-        session.id = UUID()
-        session.startTime = start
-        session.endTime = end
-        session.isActive = false
-        session.createdAt = Date()
-        session.modifiedAt = Date()
-        session.deviceIdentifier = AppConstants.DataProvenance.healthKitImport
-
-        for sample in samples {
-            let sleepStage = SleepStage(context: context)
-            sleepStage.id = UUID()
-            sleepStage.startTime = sample.start
-            sleepStage.endTime = sample.end
-            sleepStage.duration = sample.end.timeIntervalSince(sample.start)
-            sleepStage.confidence = 85.0
-            sleepStage.healthKitSampleUUID = sample.uuid
-            sleepStage.sourceBundleIdentifier = sample.sourceBundleIdentifier
-
-            sleepStage.stageType = healthKitSleepStageType(for: sample.value)
-            if sleepStage.stageType == "unknown" {
-                ZeezLogger.debug(ZeezLogger.coreData, "Unknown HealthKit sleep value: \(sample.value)")
-            }
-
-            sleepStage.session = session
-        }
-
-        // Record source-reported stages; qualityScore remains unavailable until an
-        // independent scoring source writes a displayable score.
-        ZeezLogger.debug(ZeezLogger.coreData, "Created HealthKit session \(start) – \(end), \(samples.count) stages")
-        return session
-    }
-
-    // MARK: - Idempotency
-
-    /// Returns `true` if a HealthKit-imported session with a start time within 15 minutes
-    /// of `start` already exists, preventing duplicates on re-import.
-    fileprivate static func sessionExists(start: Date, in context: NSManagedObjectContext) -> Bool {
-        let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-        let margin: TimeInterval = 15 * 60
-        request.predicate = NSPredicate(
-            format: "deviceIdentifier == %@ AND startTime >= %@ AND startTime <= %@",
-            AppConstants.DataProvenance.healthKitImport,
-            Date(timeInterval: -margin, since: start) as NSDate,
-            Date(timeInterval: margin, since: start) as NSDate
-        )
-        request.fetchLimit = 1
-        return ((try? context.count(for: request)) ?? 0) > 0
     }
 
     // MARK: - Related Data Import (concurrency-safe)

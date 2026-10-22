@@ -133,33 +133,7 @@ struct SleepImportGroupingTests {
         }
     }
 
-    @Test("Importer parent-save step makes session resolvable before child attachment")
-    func savedParentIsResolvableBeforeRelatedDataAttachment() async throws {
-        let controller = PersistenceController(inMemory: true)
-        let context = controller.container.viewContext
-
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        let objectID = try context.performAndWait {
-            let session = SleepSession(context: context)
-            session.id = UUID()
-            session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
-            session.endTime = Date()
-            session.deviceIdentifier = "HealthKit Import"
-            session.qualityScore = 0
-
-            return try saveImportedSessionForRelatedData(session, in: context)
-        }
-
-        let bgContext = controller.container.newBackgroundContext()
-        let identifier = try await bgContext.perform {
-            let resolved = try bgContext.existingObject(with: objectID) as? SleepSession
-            return resolved?.deviceIdentifier
-        }
-        #expect(identifier != nil, "Saved parent must be resolvable before related-data callbacks attach rows")
-        #expect(identifier == "HealthKit Import")
-    }
-
-    // Re-import idempotency is covered against the real importer path in
-    // HealthKitReimportTests; the copy of the dedup predicate that used to live here
-    // tested itself rather than the importer.
+    // Re-import idempotency, and the saved parent being resolvable before related-data
+    // callbacks attach rows, are covered against the real importer path in
+    // HealthKitReimportTests.
 }
