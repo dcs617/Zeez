@@ -27,9 +27,17 @@ enum RelatedDataOutcome: Equatable {
 /// What `importSleepData` accomplished. Sessions are saved before related data is fetched,
 /// so a related-data failure never discards imported sessions — it is reported alongside.
 struct HealthKitImportResult: Equatable {
+    /// Nights that were not stored before.
     let sessionCount: Int
     let heartRate: RelatedDataOutcome
     let respiratory: RelatedDataOutcome
+    /// Stored nights Apple Health changed (§8a).
+    var updatedSessionCount = 0
+    /// Stored nights removed because Apple Health deleted them.
+    var removedSessionCount = 0
+    /// Nights found in the import window, changed or not — tells "already up to date" apart
+    /// from "Apple Health has no sleep data".
+    var fetchedNightCount = 0
 
     var hasPartialFailure: Bool {
         heartRate.didFail || respiratory.didFail
@@ -268,11 +276,14 @@ class HealthKitDataImporter {
                 // Only now that the deletions it covers are saved (see HealthKitSleepAnchorStore).
                 if let anchorToSave { self.anchorStore.save(anchorToSave) }
 
-                let sessionCount = reconciliation.inserted.count
-                self.importRelatedData(for: reconciliation.inserted) { heartRate, respiratory in
-                    let result = HealthKitImportResult(sessionCount: sessionCount,
+                // A changed night's range moved, so its readings are fetched afresh too.
+                self.importRelatedData(for: reconciliation.inserted + reconciliation.updated) { heartRate, respiratory in
+                    let result = HealthKitImportResult(sessionCount: reconciliation.inserted.count,
                                                        heartRate: heartRate,
-                                                       respiratory: respiratory)
+                                                       respiratory: respiratory,
+                                                       updatedSessionCount: reconciliation.updated.count,
+                                                       removedSessionCount: reconciliation.removedCount,
+                                                       fetchedNightCount: reconciliation.fetchedNightCount)
                     DispatchQueue.main.async { completion(.success(result)) }
                 }
 
@@ -385,22 +396,8 @@ class HealthKitDataImporter {
 
             let bgContext = self.persistenceController.container.newBackgroundContext()
             bgContext.perform {
-                guard let session = try? bgContext.existingObject(with: sessionID) as? SleepSession else {
-                    completion(.failure(AppError.dataProcessingFailed))
-                    return
-                }
-                for reading in readings {
-                    let heartRate = HeartRateData(context: bgContext)
-                    heartRate.id = UUID()
-                    heartRate.timestamp = reading.timestamp
-                    heartRate.value = reading.value
-                    heartRate.deviceType = reading.deviceType ?? "Apple Watch"
-                    heartRate.confidence = 90.0
-                    heartRate.session = session
-                }
                 do {
-                    try bgContext.save()
-                    completion(.success(readings.count))
+                    completion(.success(try storeHeartRateReadings(readings, forSessionID: sessionID, in: bgContext)))
                 } catch {
                     ZeezLogger.error(ZeezLogger.error, "Failed to save heart rate data: \(error.localizedDescription)")
                     completion(.failure(error))
@@ -431,25 +428,16 @@ class HealthKitDataImporter {
                 return
             }
 
-            let quantitySamples = (samples ?? []).compactMap { $0 as? HKQuantitySample }
+            let unit = HKUnit(from: "count/min")
+            let readings = (samples ?? []).compactMap { $0 as? HKQuantitySample }.map {
+                ImportedRespiratoryReading(timestamp: $0.startDate,
+                                           rate: $0.quantity.doubleValue(for: unit),
+                                           deviceType: $0.device?.name)
+            }
             let bgContext = self.persistenceController.container.newBackgroundContext()
             bgContext.perform {
-                guard let session = try? bgContext.existingObject(with: sessionID) as? SleepSession else {
-                    completion(.failure(AppError.dataProcessingFailed))
-                    return
-                }
-                quantitySamples.forEach { sample in
-                    let respiratoryData = RespiratoryData(context: bgContext)
-                    respiratoryData.id = UUID()
-                    respiratoryData.timestamp = sample.startDate
-                    respiratoryData.respiratoryRate = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
-                    respiratoryData.deviceType = sample.device?.name ?? "Apple Watch"
-                    respiratoryData.confidence = 85.0
-                    respiratoryData.session = session
-                }
                 do {
-                    try bgContext.save()
-                    completion(.success(quantitySamples.count))
+                    completion(.success(try storeRespiratoryReadings(readings, forSessionID: sessionID, in: bgContext)))
                 } catch {
                     ZeezLogger.error(ZeezLogger.error, "Failed to save respiratory data: \(error.localizedDescription)")
                     completion(.failure(error))

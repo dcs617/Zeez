@@ -145,7 +145,9 @@ struct HealthKitReimportTests {
         let sessions = try storedSessions(in: controller)
         #expect(sessions.count == 1)
         #expect(sessions.first?.stages.count == 4)
-        #expect(second == SleepImportReconciliation(), "An unchanged night is neither new nor updated")
+        #expect(second.inserted.isEmpty && second.updated.isEmpty && second.removedCount == 0,
+                "An unchanged night is neither new nor updated")
+        #expect(second.fetchedNightCount == 1, "It was still found, so the import can say it is up to date")
     }
 
     // MARK: - Re-import of a night Apple Health changed
@@ -211,7 +213,7 @@ struct HealthKitReimportTests {
         let sessions = try storedSessions(in: controller)
         #expect(sessions.first?.stages.count == 4)
         #expect(sessions.first?.start == time(0))
-        #expect(second == SleepImportReconciliation())
+        #expect(second.inserted.isEmpty && second.updated.isEmpty)
     }
 
     @Test("A night a re-import does not return at all is kept")
@@ -311,7 +313,7 @@ struct HealthKitReimportTests {
 
         let result = try runImport(samples, deleted: [UUID()], into: controller)
 
-        #expect(result == SleepImportReconciliation())
+        #expect(result.inserted.isEmpty && result.updated.isEmpty && result.removedCount == 0)
         #expect(try storedSessions(in: controller).first?.stages.count == 4)
     }
 

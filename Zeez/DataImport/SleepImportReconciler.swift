@@ -18,6 +18,8 @@ struct SleepImportReconciliation: Equatable {
     var updated: [ImportedSessionRange] = []
     /// Stored nights removed because HealthKit reported every one of their samples deleted.
     var removedCount = 0
+    /// Nights in the fetched samples, whether or not anything about them changed.
+    var fetchedNightCount = 0
 }
 
 /// Reconciles fetched Apple Health sleep samples with the HealthKit nights already stored
@@ -190,7 +192,8 @@ func reconcileImportedSleepSessions(
     return SleepImportReconciliation(
         inserted: created.compactMap(ImportedSessionRange.init),
         updated: changed.compactMap(ImportedSessionRange.init),
-        removedCount: removedCount
+        removedCount: removedCount,
+        fetchedNightCount: groups.count
     )
 }
 

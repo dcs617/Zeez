@@ -103,4 +103,46 @@ struct ImportResultReportingTests {
         )
         #expect(message.contains("1 sleep session from"))
     }
+
+    // MARK: - Re-import (§8a)
+
+    @Test("A re-import that changed nothing says the data is up to date, not that there is none")
+    func unchangedReimportIsUpToDate() {
+        var r = result(sessions: 0, heartRate: .imported(readingCount: 0), respiratory: .imported(readingCount: 0))
+        r.fetchedNightCount = 12
+        let message = SimpleDataImportView.statusMessage(for: r)
+        #expect(message.contains("Already up to date"))
+        #expect(!message.contains("No sleep data found"))
+        #expect(!message.contains("Heart rate"))
+    }
+
+    @Test("Updated sessions are reported, with the readings refreshed for them")
+    func updatedSessionsAreReported() {
+        var r = result(sessions: 0, heartRate: .imported(readingCount: 90), respiratory: .imported(readingCount: 4))
+        r.updatedSessionCount = 2
+        r.fetchedNightCount = 12
+        let message = SimpleDataImportView.statusMessage(for: r)
+        #expect(message.contains("Updated 2 sleep sessions that changed in Apple Health"))
+        #expect(message.contains("Heart rate: 90 readings"))
+        #expect(!message.contains("Imported 0"))
+    }
+
+    @Test("Removed sessions are reported, without a readings breakdown")
+    func removedSessionsAreReported() {
+        var r = result(sessions: 0, heartRate: .imported(readingCount: 0), respiratory: .imported(readingCount: 0))
+        r.removedSessionCount = 1
+        let message = SimpleDataImportView.statusMessage(for: r)
+        #expect(message.contains("Removed 1 sleep session deleted in Apple Health"))
+        #expect(!message.contains("Heart rate"))
+        #expect(!message.contains("No sleep data found"))
+    }
+
+    @Test("New and updated sessions are reported together")
+    func newAndUpdatedAreReportedTogether() {
+        var r = result(sessions: 3, heartRate: .imported(readingCount: 200), respiratory: .unavailable)
+        r.updatedSessionCount = 1
+        let message = SimpleDataImportView.statusMessage(for: r)
+        #expect(message.contains("Imported 3 sleep sessions from Apple Health"))
+        #expect(message.contains("Updated 1 sleep session that changed"))
+    }
 }

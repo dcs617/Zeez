@@ -114,12 +114,32 @@ struct SimpleDataImportView: View {
     ///
     /// The importer used to fire heart-rate and respiratory sub-imports and forget them, so
     /// a user could be told "imported 30 sessions" while both were empty (second-audit B10).
+    ///
+    /// A re-import reports what changed (§8a): sessions Apple Health extended or corrected are
+    /// updated, and ones deleted there are removed. When nothing changed it says so — it used
+    /// to fall through to "No sleep data found", which a user with data already imported
+    /// would read as their data having vanished.
     static func statusMessage(for result: HealthKitImportResult) -> String {
-        guard result.sessionCount > 0 else {
+        let changedSessions = result.sessionCount + result.updatedSessionCount
+        guard changedSessions + result.removedSessionCount > 0 else {
+            if result.fetchedNightCount > 0 {
+                return "✅ Already up to date. Apple Health has no new or changed sleep sessions since your last import."
+            }
             return "ℹ️ No sleep data found in Apple Health. Make sure you're using the Sleep app or another sleep tracker that writes to HealthKit."
         }
 
-        var message = "✅ Imported \(result.sessionCount) sleep \(result.sessionCount == 1 ? "session" : "sessions") from Apple Health."
+        var message = result.sessionCount > 0
+            ? "✅ Imported \(sessions(result.sessionCount)) from Apple Health."
+            : "✅ Updated from Apple Health."
+        if result.updatedSessionCount > 0 {
+            message += "\n• Updated \(sessions(result.updatedSessionCount)) that changed in Apple Health"
+        }
+        if result.removedSessionCount > 0 {
+            message += "\n• Removed \(sessions(result.removedSessionCount)) deleted in Apple Health"
+        }
+
+        // Heart rate and respiratory are fetched only for new and changed sessions.
+        guard changedSessions > 0 else { return message }
 
         message += "\n" + line(for: result.heartRate, type: "Heart rate")
         message += "\n" + line(for: result.respiratory, type: "Respiratory rate")
@@ -128,6 +148,10 @@ struct SimpleDataImportView: View {
             message += "\n\nYour sessions were saved. You can import again to retry the missing data."
         }
         return message
+    }
+
+    private static func sessions(_ count: Int) -> String {
+        "\(count) sleep \(count == 1 ? "session" : "sessions")"
     }
 
     private static func line(for outcome: RelatedDataOutcome, type: String) -> String {
@@ -177,7 +201,7 @@ struct SimpleDataImportView: View {
                             case .success(let importResult):
                                 self.importStatus = Self.statusMessage(for: importResult)
                                 self.importDidPartiallyFail = importResult.hasPartialFailure
-                                ZeezLogger.info(ZeezLogger.coreData, "Imported \(importResult.sessionCount) sessions; HR \(String(describing: importResult.heartRate)), respiratory \(String(describing: importResult.respiratory))")
+                                ZeezLogger.info(ZeezLogger.coreData, "Imported \(importResult.sessionCount) new, \(importResult.updatedSessionCount) updated, \(importResult.removedSessionCount) removed sessions; HR \(String(describing: importResult.heartRate)), respiratory \(String(describing: importResult.respiratory))")
                             case .failure(let error):
                                 self.importStatus = "❌ Error importing: \(error.localizedDescription)"
                                 self.importDidPartiallyFail = false
