@@ -431,52 +431,58 @@ If `StoreKitTests` fails, uninstall the app from the simulator and re-run before
 
 ## 7. Prompt for the next implementation chat
 
-Replaced 2026-10-20. The Phase A prompt that stood here is in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`).
+Replaced 2026-10-22. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`): Phase A
+(replaced 2026-10-20), then §8a durable HealthKit import identity — delivered in code 2026-10-22
+(`2244e20`…`6b15519`), device check `DEVICE_TEST_RUN.md` T3.1 pending.
 
-**Done 2026-10-22** — §8a delivered in code (`2244e20`…`47b040d`), device check `DEVICE_TEST_RUN.md` T3.1 pending. Pick the next task from the list below the prompt.
+**When the developer account is renewed, the device pass comes first** — T1 now relocates the store *and* runs
+its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file.
+Until then:
 
 ```
-Read CLAUDE.md, then PARKED_CAPABILITIES.md §8a, SLEEP_METRICS_CLAIMS_AND_VALIDATION.md (Tier 1
-rows and §4 rules), and FUTURE_IMPROVEMENTS.md. Context: the device pass (DEVICE_TEST_RUN.md) is
-blocked until my Apple Developer Program membership is renewed, so we are doing code work that
-needs no hardware.
+Read CLAUDE.md, then FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md §7 ("Other open
+items"), SLEEP_METRICS_CLAIMS_AND_VALIDATION.md §4 (rules 4 and 10), and
+ZEEZ_SCORE_SPECIFICATION.md. Context: the device pass is still blocked on my Apple Developer
+Program renewal, so this is code work that needs no hardware.
 
-Task: durable HealthKit import identity (PARKED_CAPABILITIES §8a). Today
-HealthKitDataImporter.sessionExists skips any night whose start is within 15 minutes of an
-existing import, so a night Apple Health later extends or corrects is never picked up, and
-re-import cannot update anything. This needs a Core Data model version, which, like the D3a
-store move, is far cheaper before any user has data.
+Task: a small data-safety + claims batch, one commit per item, in this order:
+1. PersistenceController.clearAllData (Delete All Data) removes "Zeez.sqlite.wal"/".shm" —
+   names SQLite never writes — so the real -wal/-shm survive beside the recreated store.
+   Fix it the way the §8a migration fix did (replacePersistentStore / destroyPersistentStore,
+   "-wal"/"-shm" suffixes; see StoreLocation and CoreDataMigrationManager). Add a test that
+   seeds a store with an uncheckpointed WAL, clears it, and proves no old row survives.
+2. MonthlyChartSection's "Estimated Score" picker segment and chart lack the Experimental Zeez
+   Estimate label (claims rule 10) — check visible text and accessibilityValue.
+3. WatchSleepSummary.init(from:) (Zeez/Watch/WatchSleepSummary+CoreData.swift) has no callers
+   as of 2026-10-22 and passes the raw qualityScore. Delete it unless something reaches it;
+   if something does, make it honour the qualityScore <= 1.0 sentinel and pin that with a test.
+4. Trends' Days and Week ranges (TimeRangeSelectionView) are the same 7-day window — make them
+   differ or remove one.
+5. Debug mock sessions get no SleepQualityScore record, so their score breakdown always reads
+   unavailable — DEBUG-only fix in MockDataGenerator.
 
 Work in this order and stop at each checkpoint:
-1. Investigate first. Write failing Swift Testing tests (in-memory PersistenceController,
-   existing importer test patterns, e.g. SleepImportGroupingTests) that demonstrate the
-   real failure modes: re-import duplicates, re-import silently drops a changed night,
-   overlapping sources. Report which ones actually fail today. CHECKPOINT: show me the
-   findings before designing anything.
-2. Propose the design: what identity is persisted (HKObject.uuid of samples and/or a
-   stable per-night key), the merge policy for a night that changed, and the new model
-   version (Zeez 3.xcdatamodel; lightweight migration; CoreDataMigrationManager). Include
-   how it interacts with D3a's App Group relocation on first launch (DEVICE_TEST_RUN.md T1).
-   CHECKPOINT: wait for my approval before adding the model version.
-3. Implement in small commits, one concern each. Add a CoreDataModelV2→V3 migration test
-   alongside CoreDataModelV2MigrationTests. Confirm each regression test fails against the
-   unfixed code by temporarily reverting the fix.
-4. After each commit: run -only-testing:ZeezTests; build the watch target before the last
-   commit (commands in CLAUDE.md; use the simulator id, the name is ambiguous across runtimes).
-5. Update PARKED_CAPABILITIES.md §8a, FUTURE_IMPROVEMENTS.md, and add a step to
-   DEVICE_TEST_RUN.md T3 for the on-device re-import check.
+1. Investigate first: confirm each item still exists as described and whether it is
+   reachable in the shipping UI. Write failing Swift Testing tests where the behaviour is
+   testable. CHECKPOINT: report findings (and any item that turned out wrong or bigger)
+   before changing code.
+2. Implement one item per commit. Confirm each regression test fails against the unfixed
+   code by temporarily reverting the fix.
+3. After each commit run -only-testing:ZeezTests on
+   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF'; before the last commit, build
+   "ZeezWatch Watch App" on -destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976'.
+4. Update FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md §7, and DEVICE_TEST_RUN.md
+   T11 (Delete All Data now checks the side files are gone).
 
-Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start other
-tracker items without asking.
+Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start D1/D2
+or other tracker items without asking.
 ```
 
-**Other open items, if §8a is not wanted next** (none needs hardware):
-- **Claims/polish batch (small):** `MonthlyChartSection`'s "Estimated Score" segment lacks the experimental
-  label; Trends' Days and Week ranges are the same 7-day window; the dead `WatchSleepSummary(from:)` bridge
-  still sends a raw quality value; debug mock sessions get no `SleepQualityScore` record, so their score
-  breakdown always reads unavailable.
+**Other open items, if that batch is not wanted next** (none needs hardware):
 - **D1a** NavigationView → NavigationStack in `MainView`/`LearnView`, and delete `LearnHomeView`. D1b/D1c are mechanical.
 - **D2b** `AlarmAudioController` seam + tests, and the **D2a** `WatchSessionProtocol` seam (test-unlocking work).
-- **Blocked on the renewed account:** D3c WidgetKit extension (needs the App Group), D3b critical-alerts
-  application, App Store Connect products, StoreKit sandbox, TestFlight.
+- **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
+  which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
+- **Blocked on the renewed account:** the device pass (T1 and T3.1 first), D3c WidgetKit extension (needs the App
+  Group), D3b critical-alerts application, App Store Connect products, StoreKit sandbox, TestFlight.
 - **Not code, not blocked:** the privacy policy at `AppConstants.Legal` is still a placeholder URL and needs real content published.
