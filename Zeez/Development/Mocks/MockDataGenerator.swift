@@ -144,7 +144,7 @@ class MockDataGenerator {
         // NSBatchDeleteRequest bypasses Core Data cascade rules, so we handle
         // child cleanup explicitly before removing the parent sessions.
         let childEntityNames = ["SleepStage", "EnvironmentalReading", "HeartRateData",
-                                "MovementData", "RespiratoryData"]
+                                "MovementData", "RespiratoryData", "SleepQualityScore"]
         for entityName in childEntityNames {
             let childRequest: NSFetchRequest<NSFetchRequestResult> = NSFetchRequest(entityName: entityName)
             childRequest.predicate = NSPredicate(format: "session IN %@", mockSessions)
@@ -232,8 +232,7 @@ class MockDataGenerator {
         generateMockMovementData(for: session, stages: stages)
         generateMockRespiratoryData(for: session, stages: stages)
         
-        // Calculate and set quality score
-        session.qualityScore = MockSleepPatternGenerator.calculateQualityScore(stages: stages)
+        recordEstimate(for: session)
         
         // Create daily metrics
         createMockDailyMetrics(for: session, date: date)
@@ -250,6 +249,27 @@ class MockDataGenerator {
         return session
     }
     
+    /// Score the session with the specified calculator and persist the record the way
+    /// `SleepAnalyzer` does. Mock scores used to come from a separate formula with no
+    /// record, so the breakdown could never reproduce them.
+    private func recordEstimate(for session: SleepSession) {
+        guard let metrics = SleepQualityCalculator(session: session, context: context).calculateMetrics() else {
+            // SleepAnalyzer's sentinel: no displayable score.
+            session.qualityScore = 1.0
+            return
+        }
+        session.qualityScore = metrics.overallScore
+
+        let record = SleepQualityScore(context: context)
+        record.id = UUID()
+        record.timestamp = session.endTime
+        record.overallScore = metrics.overallScore
+        record.calculationVersion = metrics.version
+        record.isPersonalized = false
+        record.confidenceScore = metrics.confidence
+        record.session = session
+    }
+
     private func generateMockSleepStages(for session: SleepSession, stages: [(type: SleepStageType, start: Date, end: Date)]) {
         for stageInfo in stages {
             let stage = SleepStage(context: context)

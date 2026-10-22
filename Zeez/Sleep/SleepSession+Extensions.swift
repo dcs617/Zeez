@@ -26,17 +26,10 @@ extension SleepSession {
     /// - `qualityScore == 0`: awaiting analysis or source-only data with no score.
     /// - `qualityScore == 1.0`: sentinel set by `SleepAnalyzer` for sessions with no sensor
     ///   data; treated as unavailable by all UI consumers.
-    /// - `qualityScore > 1.0`: displayable only with a persisted Zeez estimate record.
-    /// - Debug mock sessions remain displayable in debug builds for intentional test-data review.
+    /// - `qualityScore > 1.0`: displayable only with a persisted Zeez estimate record. Debug
+    ///   mock sessions get one from `MockDataGenerator`, so they need no exception here.
     var hasDisplayableScore: Bool {
         guard qualityScore > 1.0 else { return false }
-
-        #if DEBUG
-        if deviceIdentifier?.localizedCaseInsensitiveContains(AppConstants.DataProvenance.mockMarker) == true {
-            return true
-        }
-        #endif
-
         return hasZeezEstimatedScore
     }
 

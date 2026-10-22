@@ -136,6 +136,52 @@ struct ZeezScoreBreakdownTests {
         #expect(hasBreakdown, "The analyzer's own output must reproduce under the current version")
     }
 
+    // @MainActor: from the main thread, viewContext.performAndWait runs inline. Called off
+    // main, it hops to the main queue, where Swift Testing cannot attribute an issue to
+    // this test — the issue is logged, the test passes, and xcodebuild exits 0.
+    @MainActor
+    @Test("A debug mock session carries a current estimate its breakdown reproduces")
+    func mockSessionHasBreakdown() throws {
+        // Keep the controller alive, and generate on the viewContext's own queue (2.4).
+        let controller = PersistenceController(inMemory: true)
+        let context = controller.container.viewContext
+        try context.performAndWait {
+            MockDataGenerator(context: context).generateMockData(for: 3)
+
+            let sessions = try context.fetch(SleepSession.fetchRequest())
+            try #require(!sessions.isEmpty)
+            for session in sessions {
+                let versions = ((session.qualityScores?.allObjects as? [SleepQualityScore]) ?? [])
+                    .map(\.calculationVersion)
+                #expect(versions == [ZeezScore.version],
+                        "A mock score must be persisted the way SleepAnalyzer persists one")
+                guard case .available = ZeezScoreBreakdown.make(for: session) else {
+                    Issue.record("A mock session's score must be one the breakdown can reproduce")
+                    continue
+                }
+            }
+        }
+    }
+
+    @MainActor
+    @Test("Clearing mock data removes the mock estimates with their sessions")
+    func clearingMockDataRemovesEstimates() throws {
+        let controller = PersistenceController(inMemory: true)
+        let context = controller.container.viewContext
+        try context.performAndWait {
+            let generator = MockDataGenerator(context: context)
+            generator.generateMockData(for: 2)
+            try #require(try context.count(for: SleepQualityScore.fetchRequest()) > 0)
+
+            // Pins the outcome, not the mechanism: clearMockData deletes children explicitly,
+            // and on the current SDK the batch delete also applies the Cascade rule.
+            generator.clearMockData()
+            context.reset()
+            #expect(try context.count(for: SleepSession.fetchRequest()) == 0)
+            #expect(try context.count(for: SleepQualityScore.fetchRequest()) == 0)
+        }
+    }
+
     // MARK: - Unavailable
 
     @Test("The sentinel score has nothing to explain")

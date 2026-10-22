@@ -132,49 +132,4 @@ struct MockSleepPatternGenerator {
         case .rem:     return (safeBaseRate + 1)...(safeBaseRate + 3)
         }
     }
-    
-    /// Calculate quality score based on stage distribution and duration
-    static func calculateQualityScore(stages: [(type: SleepStageType, start: Date, end: Date)]) -> Double {
-        guard !stages.isEmpty else { return 0 }
-        
-        let totalDuration = stages.reduce(0.0) { sum, stage in
-            sum + stage.end.timeIntervalSince(stage.start)
-        }
-        
-        // Return early if duration is unreasonable
-        guard totalDuration >= 1800 else { return 0 } // Minimum 30 minutes
-        
-        var score = 100.0
-        
-        // Penalize if total duration is outside optimal range (7-9 hours)
-        let hoursSlept = totalDuration / 3600
-        if hoursSlept < 7 {
-            score -= (7 - hoursSlept) * 10
-        } else if hoursSlept > 9 {
-            score -= (hoursSlept - 9) * 5
-        }
-        
-        // Calculate stage percentages
-        let stageDurations = Dictionary(grouping: stages) { $0.type }
-            .mapValues { stages in
-                stages.reduce(0.0) { sum, stage in
-                    sum + stage.end.timeIntervalSince(stage.start)
-                }
-            }
-        
-        // Penalize if stage distributions are off target
-        for (type, portion) in stageDistribution {
-            let actualPortion = (stageDurations[type] ?? 0) / totalDuration
-            let difference = abs(actualPortion - portion)
-            score -= difference * 20
-        }
-        
-        // Penalize for awake periods
-        if let awakeTime = stageDurations[.awake] {
-            let awakePortion = awakeTime / totalDuration
-            score -= awakePortion * 30
-        }
-        
-        return max(0, min(100, score))
-    }
 }
