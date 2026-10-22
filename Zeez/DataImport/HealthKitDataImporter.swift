@@ -38,24 +38,59 @@ struct HealthKitImportResult: Equatable {
 
 // MARK: - Testable grouping helper (no HealthKit dependency)
 
+/// Anything with a start and an end that can be clustered into nights.
+protocol SleepTimedInterval {
+    var start: Date { get }
+    var end: Date { get }
+}
+
 /// A minimal interval representation used to cluster sleep samples without coupling tests to HealthKit types.
-struct SleepSampleInterval {
+struct SleepSampleInterval: SleepTimedInterval {
     let start: Date
     let end: Date
+}
+
+/// One HealthKit sleep sample, reduced to the values Zeez stores.
+///
+/// The importer converts `HKCategorySample`s to this at the HealthKit boundary, so the
+/// session-writing path runs — and is tested — without a health store. Tests can also set
+/// `uuid` and `sourceBundleIdentifier`, which HealthKit fixes on a real sample.
+struct ImportedSleepSample: SleepTimedInterval, Equatable {
+    /// `HKObject.uuid` — stable for as long as the sample exists in HealthKit. An edit in
+    /// the Health app is a delete plus a new sample with a new uuid.
+    let uuid: UUID
+    /// An `HKCategoryValueSleepAnalysis` raw value.
+    let value: Int
+    let start: Date
+    let end: Date
+    /// `HKSource.bundleIdentifier` of the app or device that wrote the sample.
+    let sourceBundleIdentifier: String?
+}
+
+extension ImportedSleepSample {
+    init(_ sample: HKCategorySample) {
+        self.init(uuid: sample.uuid,
+                  value: sample.value,
+                  start: sample.startDate,
+                  end: sample.endDate,
+                  sourceBundleIdentifier: sample.sourceRevision.source.bundleIdentifier)
+    }
 }
 
 /// Groups intervals into contiguous sessions, starting a new group whenever consecutive
 /// intervals are separated by more than `gapThreshold`.
 ///
-/// This pure function is extracted so unit tests can exercise overnight-crossing and
-/// same-day separation logic without importing HealthKit.
-func groupIntervalsIntoSessions(
-    _ intervals: [SleepSampleInterval],
+/// Works directly on the intervals rather than a date-keyed lookup, which would trap when
+/// several samples share a start date (overlapping in-bed and asleep intervals, or data
+/// from multiple sources). Calendar-day grouping is intentionally avoided so a session from
+/// 11 pm to 7 am is one session rather than split at midnight.
+func groupIntervalsIntoSessions<Interval: SleepTimedInterval>(
+    _ intervals: [Interval],
     gapThreshold: TimeInterval = 4 * 3600
-) -> [[SleepSampleInterval]] {
+) -> [[Interval]] {
     let sorted = intervals.sorted { $0.start < $1.start }
-    var groups: [[SleepSampleInterval]] = []
-    var currentGroup: [SleepSampleInterval] = []
+    var groups: [[Interval]] = []
+    var currentGroup: [Interval] = []
     var currentEnd: Date?
 
     for interval in sorted {
@@ -66,34 +101,6 @@ func groupIntervalsIntoSessions(
             currentGroup.append(interval)
         }
         currentEnd = max(currentEnd ?? interval.end, interval.end)
-    }
-    if !currentGroup.isEmpty { groups.append(currentGroup) }
-    return groups
-}
-
-/// Groups `HKCategorySample` objects into overnight sessions without converting them to
-/// date-keyed structures, avoiding a crash when multiple samples share the same start date
-/// (overlapping in-bed and asleep intervals, or data from multiple sources).
-///
-/// The algorithm is equivalent to `groupIntervalsIntoSessions` but operates directly on
-/// samples so no additional lookup is required.
-func groupSamplesIntoSessions(
-    _ samples: [HKCategorySample],
-    gapThreshold: TimeInterval = 4 * 3600
-) -> [[HKCategorySample]] {
-    let sorted = samples.sorted { $0.startDate < $1.startDate }
-    var groups: [[HKCategorySample]] = []
-    var currentGroup: [HKCategorySample] = []
-    var currentEnd: Date?
-
-    for sample in sorted {
-        if let end = currentEnd, sample.startDate.timeIntervalSince(end) > gapThreshold {
-            if !currentGroup.isEmpty { groups.append(currentGroup) }
-            currentGroup = [sample]
-        } else {
-            currentGroup.append(sample)
-        }
-        currentEnd = max(currentEnd ?? sample.endDate, sample.endDate)
     }
     if !currentGroup.isEmpty { groups.append(currentGroup) }
     return groups
@@ -110,6 +117,54 @@ func saveImportedSessionForRelatedData(
     }
     try context.save()
     return session.objectID
+}
+
+/// Groups fetched sleep samples into nights and writes one `SleepSession` per night that
+/// is not already stored. Must run on `context`'s queue. Returns the saved sessions whose
+/// heart-rate and respiratory samples still need importing.
+///
+/// A free function, like `saveImportedSessionForRelatedData`, so tests can drive the real
+/// session-writing path against an in-memory store without a HealthKit store.
+func persistImportedSleepSessions(
+    from sleepSamples: [ImportedSleepSample],
+    in context: NSManagedObjectContext
+) throws -> [(sessionID: NSManagedObjectID, start: Date, end: Date)] {
+    var pendingRelatedImports: [(sessionID: NSManagedObjectID, start: Date, end: Date)] = []
+
+    let sampleGroups = groupIntervalsIntoSessions(sleepSamples)
+
+    ZeezLogger.info(ZeezLogger.coreData, "Grouped \(sleepSamples.count) samples into \(sampleGroups.count) sessions")
+
+    for group in sampleGroups {
+        guard let groupStart = group.map(\.start).min(),
+              let groupEnd = group.map(\.end).max() else { continue }
+
+        // Idempotency: skip if a HealthKit session with a matching start already exists
+        if HealthKitDataImporter.sessionExists(start: groupStart, in: context) {
+            ZeezLogger.debug(ZeezLogger.coreData, "Skipping duplicate session starting at \(groupStart)")
+            continue
+        }
+
+        guard let session = HealthKitDataImporter.createSleepSession(from: group, start: groupStart, end: groupEnd, context: context) else {
+            continue
+        }
+
+        // Related-data callbacks use separate contexts; save the parent before
+        // starting either query so the object ID is resolvable in those contexts.
+        let sessionID = try saveImportedSessionForRelatedData(session, in: context)
+
+        // Related data is fetched after the parent sessions are saved.
+        // Only the saved objectID crosses context-queue boundaries.
+        pendingRelatedImports.append((sessionID, groupStart, groupEnd))
+
+        ZeezLogger.debug(ZeezLogger.coreData, "Imported session \(pendingRelatedImports.count) (\(groupStart) – \(groupEnd))")
+    }
+
+    if context.hasChanges {
+        try context.save()
+        ZeezLogger.info(ZeezLogger.coreData, "Saved \(pendingRelatedImports.count) imported session(s)")
+    }
+    return pendingRelatedImports
 }
 
 /// Maps a HealthKit sleep value to the source-reported representation stored by Zeez.
@@ -187,7 +242,7 @@ class HealthKitDataImporter {
     }
 
     private func fetchSleepAnalysisData(from startDate: Date, to endDate: Date,
-                                        completion: @escaping (Result<[HKCategorySample], Error>) -> Void) {
+                                        completion: @escaping (Result<[ImportedSleepSample], Error>) -> Void) {
         guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
             completion(.failure(AppError.healthKitNotAvailable))
             return
@@ -203,61 +258,22 @@ class HealthKitDataImporter {
             sortDescriptors: [sortDescriptor]
         ) { _, samples, error in
             if let error = error { completion(.failure(error)); return }
-            let sleepSamples = samples?.compactMap { $0 as? HKCategorySample } ?? []
+            let sleepSamples = (samples ?? []).compactMap { $0 as? HKCategorySample }.map(ImportedSleepSample.init)
             ZeezLogger.info(ZeezLogger.coreData, "Found \(sleepSamples.count) HealthKit sleep samples")
             completion(.success(sleepSamples))
         }
         healthStore.execute(query)
     }
 
-    private func processSleepData(_ sleepSamples: [HKCategorySample],
+    private func processSleepData(_ sleepSamples: [ImportedSleepSample],
                                   completion: @escaping (Result<HealthKitImportResult, Error>) -> Void) {
         let context = persistenceController.container.newBackgroundContext()
-        var importedCount = 0
-        var pendingRelatedImports: [(sessionID: NSManagedObjectID, start: Date, end: Date)] = []
 
         context.perform {
             do {
-                // Group samples directly into overnight sessions, avoiding any date→sample
-                // dictionary lookup that would trap on duplicate start dates.
-                // Calendar-day grouping is intentionally avoided so a session from 11 pm to 7 am
-                // is treated as a single session rather than split at midnight.
-                let sampleGroups = groupSamplesIntoSessions(sleepSamples)
+                let pendingRelatedImports = try persistImportedSleepSessions(from: sleepSamples, in: context)
 
-                ZeezLogger.info(ZeezLogger.coreData, "Grouped \(sleepSamples.count) samples into \(sampleGroups.count) sessions")
-
-                for group in sampleGroups {
-                    guard let groupStart = group.map(\.startDate).min(),
-                          let groupEnd = group.map(\.endDate).max() else { continue }
-
-                    // Idempotency: skip if a HealthKit session with a matching start already exists
-                    if self.sessionExists(start: groupStart, in: context) {
-                        ZeezLogger.debug(ZeezLogger.coreData, "Skipping duplicate session starting at \(groupStart)")
-                        continue
-                    }
-
-                    guard let session = self.createSleepSession(from: group, start: groupStart, end: groupEnd, context: context) else {
-                        continue
-                    }
-
-                    // Related-data callbacks use separate contexts; save the parent before
-                    // starting either query so the object ID is resolvable in those contexts.
-                    let sessionID = try saveImportedSessionForRelatedData(session, in: context)
-                    importedCount += 1
-
-                    // Related data is fetched after the parent sessions are saved.
-                    // Only the saved objectID crosses context-queue boundaries.
-                    pendingRelatedImports.append((sessionID, groupStart, groupEnd))
-
-                    ZeezLogger.debug(ZeezLogger.coreData, "Imported session \(importedCount) (\(groupStart) – \(groupEnd))")
-                }
-
-                if context.hasChanges {
-                    try context.save()
-                    ZeezLogger.info(ZeezLogger.coreData, "Saved \(importedCount) imported session(s)")
-                }
-
-                let sessionCount = importedCount
+                let sessionCount = pendingRelatedImports.count
                 self.importRelatedData(for: pendingRelatedImports) { heartRate, respiratory in
                     let result = HealthKitImportResult(sessionCount: sessionCount,
                                                        heartRate: heartRate,
@@ -335,8 +351,8 @@ class HealthKitDataImporter {
 
     // MARK: - Session Creation
 
-    private func createSleepSession(from samples: [HKCategorySample], start: Date, end: Date,
-                                    context: NSManagedObjectContext) -> SleepSession? {
+    fileprivate static func createSleepSession(from samples: [ImportedSleepSample], start: Date, end: Date,
+                                               context: NSManagedObjectContext) -> SleepSession? {
         guard !samples.isEmpty else { return nil }
 
         guard let coordinator = context.persistentStoreCoordinator, !coordinator.persistentStores.isEmpty else {
@@ -356,9 +372,9 @@ class HealthKitDataImporter {
         for sample in samples {
             let sleepStage = SleepStage(context: context)
             sleepStage.id = UUID()
-            sleepStage.startTime = sample.startDate
-            sleepStage.endTime = sample.endDate
-            sleepStage.duration = sample.endDate.timeIntervalSince(sample.startDate)
+            sleepStage.startTime = sample.start
+            sleepStage.endTime = sample.end
+            sleepStage.duration = sample.end.timeIntervalSince(sample.start)
             sleepStage.confidence = 85.0
 
             sleepStage.stageType = healthKitSleepStageType(for: sample.value)
@@ -379,7 +395,7 @@ class HealthKitDataImporter {
 
     /// Returns `true` if a HealthKit-imported session with a start time within 15 minutes
     /// of `start` already exists, preventing duplicates on re-import.
-    private func sessionExists(start: Date, in context: NSManagedObjectContext) -> Bool {
+    fileprivate static func sessionExists(start: Date, in context: NSManagedObjectContext) -> Bool {
         let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
         let margin: TimeInterval = 15 * 60
         request.predicate = NSPredicate(

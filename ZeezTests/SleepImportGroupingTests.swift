@@ -4,7 +4,8 @@ import CoreData
 
 /// Tests for sleep-sample grouping and import idempotency.
 ///
-/// Uses the pure `groupIntervalsIntoSessions` helper so no HealthKit dependency is needed.
+/// Uses `groupIntervalsIntoSessions`, the same grouping the importer runs, so no HealthKit
+/// dependency is needed.
 struct SleepImportGroupingTests {
 
     // MARK: - Helpers
@@ -65,7 +66,7 @@ struct SleepImportGroupingTests {
 
     @Test("Empty input returns no groups")
     func emptyInputNoGroups() {
-        let groups = groupIntervalsIntoSessions([])
+        let groups = groupIntervalsIntoSessions([SleepSampleInterval]())
         #expect(groups.isEmpty)
     }
 
@@ -158,40 +159,7 @@ struct SleepImportGroupingTests {
         #expect(identifier == "HealthKit Import")
     }
 
-    // MARK: - Idempotency (Core Data)
-
-    @Test("Re-importing same intervals creates no duplicate sessions")
-    func reImportIsDuplicate() throws {
-        let controller = PersistenceController(inMemory: true)
-        let context = controller.container.viewContext
-
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        try context.performAndWait {
-            let base = Date(timeIntervalSinceNow: -10 * 3600)
-            let start = base
-            let end = base.addingTimeInterval(8 * 3600)
-
-            // Seed an existing HealthKit-imported session for this time range
-            let existingSession = SleepSession(context: context)
-            existingSession.id = UUID()
-            existingSession.startTime = start
-            existingSession.endTime = end
-            existingSession.deviceIdentifier = "HealthKit Import"
-            existingSession.qualityScore = 0
-            try context.save()
-
-            // Check using the same deduplication logic as the importer
-            let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-            let margin: TimeInterval = 15 * 60
-            request.predicate = NSPredicate(
-                format: "deviceIdentifier == %@ AND startTime >= %@ AND startTime <= %@",
-                "HealthKit Import",
-                Date(timeInterval: -margin, since: start) as NSDate,
-                Date(timeInterval: margin, since: start) as NSDate
-            )
-            request.fetchLimit = 1
-            let count = try context.count(for: request)
-            #expect(count > 0, "Deduplication check should detect existing session and skip re-import")
-        }
-    }
+    // Re-import idempotency is covered against the real importer path in
+    // HealthKitReimportTests; the copy of the dedup predicate that used to live here
+    // tested itself rather than the importer.
 }
