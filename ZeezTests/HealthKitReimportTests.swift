@@ -50,11 +50,11 @@ struct HealthKitReimportTests {
     }
 
     @discardableResult
-    private func runImport(_ samples: [ImportedSleepSample],
+    private func runImport(_ samples: [ImportedSleepSample], deleted: Set<UUID> = [],
                            into controller: PersistenceController) throws -> SleepImportReconciliation {
         let context = controller.newBackgroundContext()
         return try context.performAndWait {
-            try reconcileImportedSleepSessions(samples, in: context)
+            try reconcileImportedSleepSessions(samples, deletedSampleUUIDs: deleted, in: context)
         }
     }
 
@@ -223,6 +223,96 @@ struct HealthKitReimportTests {
         try runImport([], into: controller)
 
         #expect(try storedSessions(in: controller).count == 1)
+    }
+
+    // MARK: - Deletions HealthKit reports
+
+    @Test("A sample Apple Health corrects is replaced on re-import, not kept alongside or kept stale")
+    func correctedSampleIsReplaced() throws {
+        let controller = PersistenceController(inMemory: true)
+        let original = watchNight()
+        try runImport(original, into: controller)
+        let id = try storedSessionIDs(in: controller)
+
+        // An edit in the Health app: the deep sample (01:00–02:00) is deleted and re-written
+        // as REM, a new sample with a new uuid.
+        var corrected = original
+        corrected[1] = sample(.asleepREM, 120, 180)
+        try runImport(corrected, deleted: [original[1].uuid], into: controller)
+
+        let sessions = try storedSessions(in: controller)
+        #expect(sessions.count == 1)
+        let atOneAM = sessions.first?.stages.filter { $0.start == time(120) }.map(\.type)
+        #expect(atOneAM == ["rem"], "Expected only the corrected REM interval at 01:00, found \(atOneAM ?? [])")
+        #expect(try storedSessionIDs(in: controller) == id)
+    }
+
+    @Test("Editing a night's only sample keeps the night, and its id")
+    func editingOnlySampleKeepsNight() throws {
+        let controller = PersistenceController(inMemory: true)
+        let original = sample(.asleepUnspecified, 0, 420)
+        try runImport([original], into: controller)
+        let id = try storedSessionIDs(in: controller)
+
+        let result = try runImport([sample(.asleepCore, 0, 420)], deleted: [original.uuid], into: controller)
+
+        #expect(try storedSessionIDs(in: controller) == id)
+        #expect(try storedSessions(in: controller).first?.stages.map(\.type) == ["light"])
+        #expect(result.removedCount == 0)
+        #expect(result.inserted.isEmpty)
+    }
+
+    @Test("A night deleted in Apple Health is removed")
+    func deletedNightIsRemoved() throws {
+        let controller = PersistenceController(inMemory: true)
+        let samples = watchNight()
+        try runImport(samples, into: controller)
+
+        let result = try runImport([], deleted: Set(samples.map(\.uuid)), into: controller)
+
+        #expect(try storedSessions(in: controller).isEmpty)
+        #expect(result.removedCount == 1)
+        #expect(result.updated.isEmpty)
+    }
+
+    @Test("Deleting part of a night shrinks it")
+    func partialDeletionShrinksNight() throws {
+        let controller = PersistenceController(inMemory: true)
+        let samples = watchNight()
+        try runImport(samples, into: controller)
+
+        let result = try runImport(Array(samples.dropLast()), deleted: [samples[3].uuid], into: controller)
+
+        let session = try #require(try storedSessions(in: controller).first)
+        #expect(session.end == time(300))
+        #expect(session.stages.count == 3)
+        #expect(result.updated.map(\.end) == [time(300)])
+    }
+
+    @Test("Deletions apply to nights outside the import window")
+    func deletionsReachNightsOutsideWindow() throws {
+        let controller = PersistenceController(inMemory: true)
+        let lastWeek = watchNight()
+        try runImport(lastWeek, into: controller)
+
+        // This import's window holds only a later night; the deletion is of last week's REM.
+        try runImport([sample(.asleepCore, 7 * 1440, 7 * 1440 + 420)], deleted: [lastWeek[3].uuid], into: controller)
+
+        let sessions = try storedSessions(in: controller)
+        #expect(sessions.count == 2)
+        #expect(sessions.first?.stages.count == 3)
+    }
+
+    @Test("A deletion of a sample Zeez never stored changes nothing")
+    func unknownDeletionIsIgnored() throws {
+        let controller = PersistenceController(inMemory: true)
+        let samples = watchNight()
+        try runImport(samples, into: controller)
+
+        let result = try runImport(samples, deleted: [UUID()], into: controller)
+
+        #expect(result == SleepImportReconciliation())
+        #expect(try storedSessions(in: controller).first?.stages.count == 4)
     }
 
     // MARK: - Overlapping sources

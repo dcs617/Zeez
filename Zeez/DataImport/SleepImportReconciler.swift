@@ -14,8 +14,10 @@ struct ImportedSessionRange: Equatable {
 struct SleepImportReconciliation: Equatable {
     /// Nights that were not stored before.
     var inserted: [ImportedSessionRange] = []
-    /// Stored nights that gained samples, changed range, or absorbed a duplicate.
+    /// Stored nights that gained or lost samples, changed range, or absorbed a duplicate.
     var updated: [ImportedSessionRange] = []
+    /// Stored nights removed because HealthKit reported every one of their samples deleted.
+    var removedCount = 0
 }
 
 /// Reconciles fetched Apple Health sleep samples with the HealthKit nights already stored
@@ -32,6 +34,10 @@ struct SleepImportReconciliation: Equatable {
 /// - **Absence is not deletion.** A stored sample HealthKit did not return is kept: HealthKit
 ///   returns an empty result, not an error, when read access is revoked, and an import window
 ///   can cut a night short.
+/// - **Deletion is explicit.** A stage is removed when HealthKit reports its sample deleted
+///   (`deletedSampleUUIDs`, from an anchored query), wherever the night falls; a night left
+///   with no stages is removed. An edit in the Health app arrives as a deletion plus a new
+///   sample, so it replaces the stage.
 /// - **Pre-v3 stages** have no uuid. One is replaced by the identified copy of the same sample
 ///   (same stage type, start and end) when HealthKit returns it, and kept otherwise.
 /// - **Duplicates fold into the oldest session.** When several stored sessions belong to one
@@ -43,31 +49,58 @@ struct SleepImportReconciliation: Equatable {
 ///
 /// Must run on `context`'s queue. Saves once, so a failure leaves the store as it was.
 func reconcileImportedSleepSessions(
-    _ samples: [ImportedSleepSample],
+    _ fetchedSamples: [ImportedSleepSample],
+    deletedSampleUUIDs: Set<UUID> = [],
     in context: NSManagedObjectContext
 ) throws -> SleepImportReconciliation {
-    guard let earliest = samples.map(\.start).min(),
-          let latest = samples.map(\.end).max() else {
-        return SleepImportReconciliation()
-    }
     guard let coordinator = context.persistentStoreCoordinator, !coordinator.persistentStores.isEmpty else {
         ZeezLogger.error(ZeezLogger.error, "Core Data context has no persistent stores")
         return SleepImportReconciliation()
     }
 
+    var changed: [SleepSession] = []
+    var touched: [SleepSession] = []
+
+    if !deletedSampleUUIDs.isEmpty {
+        let request: NSFetchRequest<SleepStage> = SleepStage.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "healthKitSampleUUID IN %@ AND session.deviceIdentifier == %@",
+            Array(deletedSampleUUIDs), AppConstants.DataProvenance.healthKitImport
+        )
+        for stage in try context.fetch(request) {
+            if let session = stage.session, !touched.contains(where: { $0 === session }) {
+                touched.append(session)
+            }
+            remove(stage, in: context)
+        }
+        // A session emptied here keeps its old range for now, so a replacement sample fetched
+        // in this same import (an edit in the Health app) refills it instead of starting a
+        // new session with a new id. Only sessions still empty after merging are removed.
+        for session in touched {
+            updateBounds(of: session)
+            session.modifiedAt = Date()
+            changed.append(session)
+        }
+    }
+
+    // HealthKit should never return a sample it also reports deleted; if a race makes it, the
+    // deletion is the newer fact.
+    let samples = fetchedSamples.filter { !deletedSampleUUIDs.contains($0.uuid) }
     let gap = sleepSessionGapThreshold
     let groups = groupIntervalsIntoSessions(samples, gapThreshold: gap)
 
-    let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-    request.predicate = NSPredicate(
-        format: "deviceIdentifier == %@ AND startTime <= %@ AND endTime >= %@",
-        AppConstants.DataProvenance.healthKitImport,
-        latest.addingTimeInterval(gap) as NSDate,
-        earliest.addingTimeInterval(-gap) as NSDate
-    )
-    var stored = try context.fetch(request)
+    var stored: [SleepSession] = []
+    if let earliest = samples.map(\.start).min(), let latest = samples.map(\.end).max() {
+        let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "deviceIdentifier == %@ AND startTime <= %@ AND endTime >= %@",
+            AppConstants.DataProvenance.healthKitImport,
+            latest.addingTimeInterval(gap) as NSDate,
+            earliest.addingTimeInterval(-gap) as NSDate
+        )
+        stored = try context.fetch(request)
+    }
     var created: [SleepSession] = []
-    var changed: [SleepSession] = []
 
     for group in groups {
         guard let groupStart = group.map(\.start).min(),
@@ -141,15 +174,23 @@ func reconcileImportedSleepSessions(
         }
     }
 
+    var removedCount = 0
+    for session in touched where !session.isDeleted && stages(of: session).isEmpty {
+        changed.removeAll { $0 === session }
+        context.delete(session)
+        removedCount += 1
+    }
+
     if context.hasChanges {
         try context.save()
     }
-    ZeezLogger.info(ZeezLogger.coreData, "HealthKit import: \(groups.count) night(s) fetched, \(created.count) new, \(changed.count) updated")
+    ZeezLogger.info(ZeezLogger.coreData, "HealthKit import: \(groups.count) night(s) fetched, \(created.count) new, \(changed.count) updated, \(removedCount) removed")
 
     // Object IDs are permanent once saved, so they can be resolved by related-data contexts.
     return SleepImportReconciliation(
         inserted: created.compactMap(ImportedSessionRange.init),
-        updated: changed.compactMap(ImportedSessionRange.init)
+        updated: changed.compactMap(ImportedSessionRange.init),
+        removedCount: removedCount
     )
 }
 

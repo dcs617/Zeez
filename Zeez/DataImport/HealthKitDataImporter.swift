@@ -134,6 +134,7 @@ class HealthKitDataImporter {
     private let healthStore = HKHealthStore()
     private let persistenceController = PersistenceController.shared
     private let errorManager = ErrorManager.shared
+    private let anchorStore = HealthKitSleepAnchorStore()
 
     private init() {}
 
@@ -160,7 +161,8 @@ class HealthKitDataImporter {
 
     // MARK: - Import Sleep Data
 
-    /// Imports sleep sessions and their related physiological data.
+    /// Imports sleep sessions and their related physiological data, and applies sleep samples
+    /// deleted in Apple Health since the last import.
     ///
     /// Completion fires only once every sub-import has finished, so callers can report
     /// per-type outcomes rather than assuming success (second-audit B10).
@@ -168,49 +170,103 @@ class HealthKitDataImporter {
                          completion: @escaping (Result<HealthKitImportResult, Error>) -> Void) {
         ZeezLogger.info(ZeezLogger.coreData, "Starting HealthKit sleep data import from \(startDate) to \(endDate)")
 
-        fetchSleepAnalysisData(from: startDate, to: endDate) { [weak self] result in
+        let storedAnchor = anchorStore.load()
+        fetchDeletedSleepSamples(since: storedAnchor) { [weak self] deletions in
             guard let self else { return }
-            switch result {
-            case .success(let sleepData):
-                self.processSleepData(sleepData, completion: completion)
-            case .failure(let error):
-                ZeezLogger.error(ZeezLogger.error, "Failed to fetch sleep data from HealthKit: \(error.localizedDescription)")
-                completion(.failure(error))
+            self.fetchSleepAnalysisData(from: startDate, to: endDate) { result in
+                switch result {
+                case .success(let window):
+                    let deleted: Set<UUID>
+                    if case .success(let feed)? = deletions {
+                        deleted = feed.deleted
+                    } else {
+                        // Not applying deletions is safe: the anchor stays put, so they are
+                        // reported again by the next import.
+                        deleted = []
+                    }
+                    let anchor = nextSleepAnchor(stored: storedAnchor,
+                                                 deletionQuery: deletions?.map { $0.anchor },
+                                                 windowAnchor: window.anchor)
+                    self.processSleepData(window.samples, deletedSampleUUIDs: deleted,
+                                          anchorToSave: anchor, completion: completion)
+                case .failure(let error):
+                    ZeezLogger.error(ZeezLogger.error, "Failed to fetch sleep data from HealthKit: \(error.localizedDescription)")
+                    completion(.failure(error))
+                }
             }
         }
     }
 
-    private func fetchSleepAnalysisData(from startDate: Date, to endDate: Date,
-                                        completion: @escaping (Result<[ImportedSleepSample], Error>) -> Void) {
+    /// Sleep samples deleted from HealthKit since `anchor`, wherever they fall in time.
+    ///
+    /// No predicate: HealthKit does not document whether a date predicate filters deleted
+    /// objects, and they carry no dates of their own. Deletions of samples Zeez never stored
+    /// are ignored by the reconciler. Completes with nil when there is no anchor yet — nothing
+    /// identified has been stored, so there is nothing to have missed.
+    private func fetchDeletedSleepSamples(
+        since anchor: HKQueryAnchor?,
+        completion: @escaping (Result<(deleted: Set<UUID>, anchor: HKQueryAnchor?), Error>?) -> Void
+    ) {
+        guard let anchor else {
+            completion(nil)
+            return
+        }
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+            completion(.failure(AppError.healthKitNotAvailable))
+            return
+        }
+
+        let query = HKAnchoredObjectQuery(type: sleepType, predicate: nil, anchor: anchor,
+                                          limit: HKObjectQueryNoLimit) { _, _, deletedObjects, newAnchor, error in
+            if let error {
+                ZeezLogger.error(ZeezLogger.error, "Failed to fetch deleted sleep samples: \(error.localizedDescription)")
+                completion(.failure(error))
+                return
+            }
+            let deleted = Set((deletedObjects ?? []).map(\.uuid))
+            ZeezLogger.info(ZeezLogger.coreData, "HealthKit reports \(deleted.count) sleep sample(s) deleted since the last import")
+            completion(.success((deleted, newAnchor)))
+        }
+        healthStore.execute(query)
+    }
+
+    /// The import window's sleep samples, and the anchor HealthKit returned with them.
+    ///
+    /// An anchored query rather than a plain sample query only so that a first import comes
+    /// back with an anchor to start the deletions feed from.
+    private func fetchSleepAnalysisData(
+        from startDate: Date, to endDate: Date,
+        completion: @escaping (Result<(samples: [ImportedSleepSample], anchor: HKQueryAnchor?), Error>) -> Void
+    ) {
         guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
             completion(.failure(AppError.healthKitNotAvailable))
             return
         }
 
         let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
-
-        let query = HKSampleQuery(
-            sampleType: sleepType,
-            predicate: predicate,
-            limit: HKObjectQueryNoLimit,
-            sortDescriptors: [sortDescriptor]
-        ) { _, samples, error in
-            if let error = error { completion(.failure(error)); return }
+        let query = HKAnchoredObjectQuery(type: sleepType, predicate: predicate, anchor: nil,
+                                          limit: HKObjectQueryNoLimit) { _, samples, _, newAnchor, error in
+            if let error { completion(.failure(error)); return }
             let sleepSamples = (samples ?? []).compactMap { $0 as? HKCategorySample }.map(ImportedSleepSample.init)
             ZeezLogger.info(ZeezLogger.coreData, "Found \(sleepSamples.count) HealthKit sleep samples")
-            completion(.success(sleepSamples))
+            completion(.success((sleepSamples, newAnchor)))
         }
         healthStore.execute(query)
     }
 
     private func processSleepData(_ sleepSamples: [ImportedSleepSample],
+                                  deletedSampleUUIDs: Set<UUID>,
+                                  anchorToSave: HKQueryAnchor?,
                                   completion: @escaping (Result<HealthKitImportResult, Error>) -> Void) {
         let context = persistenceController.container.newBackgroundContext()
 
         context.perform {
             do {
-                let reconciliation = try reconcileImportedSleepSessions(sleepSamples, in: context)
+                let reconciliation = try reconcileImportedSleepSessions(
+                    sleepSamples, deletedSampleUUIDs: deletedSampleUUIDs, in: context
+                )
+                // Only now that the deletions it covers are saved (see HealthKitSleepAnchorStore).
+                if let anchorToSave { self.anchorStore.save(anchorToSave) }
 
                 let sessionCount = reconciliation.inserted.count
                 self.importRelatedData(for: reconciliation.inserted) { heartRate, respiratory in
