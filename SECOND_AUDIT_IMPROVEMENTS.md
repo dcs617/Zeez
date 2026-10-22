@@ -433,6 +433,8 @@ If `StoreKitTests` fails, uninstall the app from the simulator and re-run before
 
 Replaced 2026-10-20. The Phase A prompt that stood here is in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`).
 
+**Done 2026-10-22** — §8a delivered in code (`2244e20`…`47b040d`), device check `DEVICE_TEST_RUN.md` T3.1 pending. Pick the next task from the list below the prompt.
+
 ```
 Read CLAUDE.md, then PARKED_CAPABILITIES.md §8a, SLEEP_METRICS_CLAIMS_AND_VALIDATION.md (Tier 1
 rows and §4 rules), and FUTURE_IMPROVEMENTS.md. Context: the device pass (DEVICE_TEST_RUN.md) is

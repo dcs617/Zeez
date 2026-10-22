@@ -83,10 +83,16 @@ was stripped and every result in T1 is meaningless.
 
 ---
 
-## T1 — Core Data store relocation into the App Group (D3a)
+## T1 — Core Data store relocation into the App Group (D3a) and model v3 migration (§8a)
 
-**Goal:** prove that an existing install's sleep history survives the move to the group container.
-This is a **one-time migration**. Once it runs, it never runs again on that install.
+**Goal:** prove that an existing install's sleep history survives the move to the group container
+**and** the upgrade to Core Data model v3, which both happen on the same first launch.
+Each is **one-time**. Once they run, they never run again on that install.
+
+`ade6f20` predates both D3a and model v3, so T1.2's launch first relocates the v2 store, then migrates
+it to v3 in place. Relocation copies the store as-is, so the migration happens in the group container.
+This is the store's first ever structural migration (v1→v2 only changed defaults), so it is the first
+time that path runs on a device.
 
 **This is the single most destructive thing in the codebase right now.** If it's wrong, users lose
 everything, and the failure is silent — the app opens to an empty dashboard that looks like a fresh install.
@@ -124,7 +130,18 @@ first tick **Action → Include Info Messages**, or the success line is invisibl
 
 **Expected — pass:**
 - Exactly one log line, category `CoreData`: `Relocated the Core Data store into the App Group container`
+- Then, in this order, still `CoreData`:
+  `Migration compatibility check - compatible: false, …`,
+  `Migration backup created at Zeez.sqlite.migration-backup-<timestamp>`,
+  `Migration required - backed up the store to …, migrating automatically`,
+  `Core Data store loaded successfully`
 - The dashboard shows the same data as in T1.1.
+
+**Expected — the migration fell back:** `Core Data failed to load` followed by
+`Attempting migration recovery` means automatic migration failed and the manual path ran. If the data
+is still there it worked, but tell me — that path should not be needed for this change. If you instead
+see the one-time "your history could not be migrated" notice, the fallback moved the store aside as
+`Zeez.sqlite.corrupted-<timestamp>` and the pre-migration backup is next to it. **Don't delete the app.**
 
 **Expected — the silent failure:** the dashboard is empty and shows `DashboardEmptyStateCard`
 ("No Sleep Data Yet"). That means the store didn't come across. **Do not tap anything, do not delete the
@@ -142,8 +159,8 @@ signing bug.
 
 Force-quit and relaunch.
 
-**Expected:** the `Relocated…` line does **not** appear again. Data still present.
-If it appears twice, the legacy store wasn't cleaned up — tell me.
+**Expected:** neither the `Relocated…` line nor any `Migration required…` line appears again. Data still present.
+If either appears twice, the first run didn't finish its job — tell me.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked
 **Notes:**
@@ -206,6 +223,35 @@ rate and respiratory *either* a reading count, *or* "none recorded", *or* "not a
 **Silent failures:** the import reports success while heart rate silently failed (that's exactly what B10
 was meant to end — if the message doesn't name HR, the reporting broke); or an Apple session shows a
 score.
+
+### T3.1 — Re-import picks up changes, and duplicates nothing (§8a)
+
+Re-import used to skip any night whose start was within 15 minutes of an earlier import, so a night Apple
+Health changed was never updated, and one that moved further was stored twice. It now reconciles nights by
+HealthKit sample id. Do these in order, after T3 — **only data imported by this build carries sample ids**,
+so a night imported by an older build can be updated but not have its deletions applied.
+
+Note the number of nights on Trends and the session list before you start.
+
+1. **Unchanged.** Import again straight away. **Expected:** "✅ Already up to date…". Same nights, none
+   doubled. (The old build said "No sleep data found" here.)
+2. **Extended earlier.** Health app → Browse → Sleep → **Add Data** → an "In Bed" entry that starts
+   **30 minutes before** one of your imported nights and ends inside it. Import. **Expected:** "Updated 1
+   sleep session that changed in Apple Health". That night now starts 30 minutes earlier and is still
+   **one** session — not two overlapping ones.
+3. **Deleted.** Health app → Sleep → **Show All Data** → delete the entry you added in step 2. Import.
+   **Expected:** "Updated 1 sleep session…", and the night's start goes back to where it was.
+4. **Whole night deleted** (optional — it removes real data from Health). Delete every sample of one
+   night in Show All Data, then import. **Expected:** "Removed 1 sleep session deleted in Apple Health",
+   and that night is gone from Zeez.
+5. **Access revoked.** Settings → Health → Data Access & Devices → Zeez → turn **Sleep** off. Import.
+   **Expected:** nothing is removed or changed in Zeez. Turn Sleep back on afterwards.
+
+**Logs** (`CoreData`, info): `HealthKit reports N sleep sample(s) deleted since the last import` (absent on the
+very first import), then `HealthKit import: N night(s) fetched, a new, b updated, c removed`.
+
+**Silent failures:** a night appearing twice after step 2; a night shrinking or vanishing after step 5 (absence
+must never be treated as deletion); "No sleep data found" in step 1.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked
 **Notes:**
@@ -543,9 +589,10 @@ points at the placeholder `https://dcs617.github.io/zeez-privacy/`.
 | Test | Pass | Fail | Blocked | One-line note |
 |---|---|---|---|---|
 | T0 signing / App Group | | | | |
-| T1 store relocation | | | | |
+| T1 store relocation + v3 migration | | | | |
 | T2 first-run empty state | | | | |
 | T3 HealthKit import | | | | |
+| T3.1 re-import (§8a) | | | | |
 | T4 score behaviour | | | | |
 | T5 alarm E2E | | | | |
 | T6 notification budget | | | | |

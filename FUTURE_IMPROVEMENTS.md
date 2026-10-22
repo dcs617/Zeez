@@ -60,6 +60,15 @@ Carried over from the archived roadmap's Phase 3.
 - ~~Alarm health indicator in `AlarmSettingsView`.~~ Done 2026-10-20 — second audit **C5**
   (`Zeez/Alarm/AlarmHealth.swift`). Also flags an enabled alarm with no pending main notification,
   and missing notification permission, with a one-tap fix for each.
+- ~~Durable HealthKit import identity.~~ Done in code 2026-10-22 — `PARKED_CAPABILITIES.md` §8a, Core Data
+  model **v3**. Re-import updates changed nights, applies deletions HealthKit reports, and duplicates nothing.
+  The v2→v3 hop is the store's first structural migration; on a pre-D3a install it runs on the same first launch
+  as the App Group relocation (`DEVICE_TEST_RUN.md` T1). Device check T3.1 pending.
+- `PersistenceController.clearAllData` (Delete All Data) removes `Zeez.sqlite.wal`/`.shm` — names SQLite never
+  writes — so the real `-wal`/`-shm` survive beside the recreated store. Same bug class the §8a migration fix
+  removed from `performManualMigration`; found 2026-10-22, not yet fixed. Check during T11.
+- Per-night preferred source for overlapping sleep sources — needs an amendment to
+  `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first, which defines time asleep as the union across sources.
 - `NavigationView` → `NavigationStack` migration (start with `MainView` — remove the
   NavigationView wrapping the TabView; give each tab its own NavigationStack). Phase D1.
 - Singleton graph → protocol injection, incrementally, following the
@@ -72,8 +81,9 @@ Phases 3–6". That was wrong in both directions: phases A–C delivered most of
 names, and one phase diverged from the plan on purpose. Each phase in the archive now carries a
 status line. In summary:
 
-- **Phase 3 (import integrity)** — mostly delivered (B9, B10, C6). Outstanding: durable HealthKit
-  sample identity and an overlapping-source merge policy.
+- **Phase 3 (import integrity)** — delivered in code (B9, B10, C6; durable HealthKit sample identity,
+  re-import reconciliation, explicit deletion and the source policy 2026-10-22, `PARKED_CAPABILITIES.md`
+  §8a). Outstanding: the on-device re-import check, `DEVICE_TEST_RUN.md` T3.1.
 - **Phase 4 (longitudinal review)** — mostly delivered (B4, B6, B7). Night and per-session input
   coverage landed 2026-10-20 (`SleepCoverage.swift`). Outstanding: an explicit date-range picker beyond
   the fixed Days/Week/Month ranges (Days and Week are currently the same 7-day window).

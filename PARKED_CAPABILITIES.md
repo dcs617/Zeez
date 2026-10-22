@@ -274,7 +274,37 @@ with test vectors; Tier-3 labeling throughout; a route into the app from `Trends
 here (second-audit D3d) because that plan is archived and phases A–C delivered most of it under
 different names. Nothing here is scheduled.
 
-**a. Durable HealthKit import identity (Phase 3).** Import currently deduplicates on start-time
+**a. Durable HealthKit import identity (Phase 3).** ✅ **Delivered in code 2026-10-22** (`2244e20`…`47b040d`);
+the documented device check is `DEVICE_TEST_RUN.md` **T3.1**, pending the device pass.
+
+- *Identity:* model **v3** (`Zeez 3.xcdatamodel`) adds `SleepStage.healthKitSampleUUID` (`HKObject.uuid`) and
+  `sourceBundleIdentifier`. It sits on the stage, not the session as first sketched below: a night's start
+  moves when Apple Health extends it, a sample's uuid does not, and HealthKit reports deletions only by uuid.
+- *Merge policy* (`Zeez/DataImport/SleepImportReconciler.swift`): a night is every stored HealthKit session and
+  fetched sample chained within the 4-hour grouping gap, so a re-import lands on the nights a fresh import
+  would. Samples are matched by uuid; sessions the old rule duplicated fold into the oldest, which keeps its
+  `id`; pre-v3 stages are replaced by the identified copy of the same sample. Zeez-recorded sessions are never
+  merged with imported ones.
+- *Overlapping sources:* not ranked (Daniel, 2026-10-22). A night holds every source's samples and each stage
+  records its source; time asleep follows the claims contract's union definition, and conflicting stage types
+  make composition unavailable. A per-night preferred source would need a contract amendment first.
+- *Deletion:* explicit only. Absence is never deletion — HealthKit returns an empty result, not an error, when
+  read access is revoked. Deletions come from an `HKAnchoredObjectQuery` (`HealthKitSleepAnchor.swift`) whose
+  anchor is kept in `UserDefaults` and advanced only after the deletions it covers are saved. A night whose
+  samples are all deleted is removed.
+- *Related data:* a changed night's heart-rate and respiratory readings are re-fetched and replaced; an empty
+  fetch keeps what is stored.
+- *Migration:* the v2→v3 hop is the store's first structural migration. It runs as Core Data automatic
+  lightweight migration after a WAL-safe backup; the manual path, whose sidecar handling was broken, is now
+  only the fallback and was fixed. On an install predating D3a, relocation and migration run on the same launch
+  (T1).
+
+*Known limits.* HealthKit may purge its record of a deletion at any time, so a deletion made long before the
+next import can go unreported and the sample stays — the same outcome as not propagating deletions, never a
+wrong one. Stages imported before v3 carry no uuid, so their deletions cannot be applied until the night is
+re-imported. A HealthKit night overlapping a Zeez-recorded session is kept as two sessions.
+
+*Original stub, kept for provenance:* Import currently deduplicates on start-time
 proximity. A correct implementation keys on HealthKit sample identity (`HKObject.uuid`) or stored
 import metadata, defines an overlapping-source merge policy, and makes re-import safe. B2's deleted
 Pillow importer failed exactly here — a ±1-hour tolerance matched across *any* source and silently
