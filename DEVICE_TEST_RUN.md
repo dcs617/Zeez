@@ -217,8 +217,10 @@ rate and respiratory *either* a reading count, *or* "none recorded", *or* "not a
    - The **Recorded Inputs** card at the bottom lists all seven inputs. Sleep stages, time asleep and
      in-bed say "Reported by Apple Health"; heart rate and respiratory give a sample count or "Not
      recorded", and must agree with the import's completion message.
-5. Open **Trends**. The top card reads "Recorded on N of the last 7 nights" and N matches the nights you
-   actually have. With no estimates in the period, the score card shows **no number** — not 0.
+5. ~~Open **Trends**.~~ Skip: Trends has no entry point in this build (found 2026-10-22; whether to reconnect
+   or park it is open in `FUTURE_IMPROVEMENTS.md`). If it is reconnected, check that the top card reads
+   "Recorded on N of the last 7 nights" with the N you actually have, and that the score card shows **no number**,
+   not 0, when the period has no estimates.
 
 **Silent failures:** the import reports success while heart rate silently failed (that's exactly what B10
 was meant to end — if the message doesn't name HR, the reporting broke); or an Apple session shows a
@@ -231,7 +233,7 @@ Health changed was never updated, and one that moved further was stored twice. I
 HealthKit sample id. Do these in order, after T3 — **only data imported by this build carries sample ids**,
 so a night imported by an older build can be updated but not have its deletions applied.
 
-Note the number of nights on Trends and the session list before you start.
+Note the number of nights in the session list before you start.
 
 1. **Unchanged.** Import again straight away. **Expected:** "✅ Already up to date…". Same nights, none
    doubled. (The old build said "No sleep data found" here.)
@@ -498,7 +500,22 @@ e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWith
 Settings → the delete-all-data control. Confirm.
 
 **Expected:** all sessions gone, dashboard returns to `DashboardEmptyStateCard`, app doesn't crash, and it
-still works after a relaunch (the store is removed and re-added — that's the risky bit).
+still works after a relaunch (the store is destroyed and re-added — that's the risky bit). Then import or record
+one session, relaunch, and confirm it is the only one: nothing from before the delete may come back.
+
+**Log** (`CoreData`, info): `Successfully cleared and recreated store`. The error `Failed to clear and recreate
+store` means the destroy or the reopen failed; paste the error that follows it.
+
+**Side files (simulator):** list the store's folder after the delete.
+```
+xcrun simctl get_app_container booted com.danielsparano.zeez groups   # Xcode build: the App Group container
+xcrun simctl get_app_container booted com.danielsparano.zeez data     # CLI build: Library/Application Support
+```
+Expect `Zeez.sqlite`, `Zeez.sqlite-wal` and `Zeez.sqlite-shm`, plus any `*.migration-backup-*` from T1, and nothing
+else. The `-wal`/`-shm` **should** still be there. Before 2026-10-22 the app deleted the store file but left the
+old sidecars behind, because it removed `Zeez.sqlite.wal`/`.shm` (names SQLite never uses). It now truncates all
+three in place and the recreated store reuses them (`PersistenceController.recreateStore`). Deleting them while
+another process had them open is what broke the old version.
 
 **Note:** after T1, this now deletes the store in the **group container**. Worth confirming it still finds it.
 
@@ -515,11 +532,13 @@ still works after a relaunch (the store is removed and re-added — that's the r
 
 **Goal:** the claims contract binds VoiceOver output, not just visible text (rules 4, 7, 10).
 
-VoiceOver on (triple-click side button). Sweep: Dashboard → session details → Trends charts → watch app.
+VoiceOver on (triple-click side button). Sweep: Dashboard → session details → watch app. (Trends has no entry
+point in this build, so its charts cannot be reached; skip them until it is reconnected or parked.)
 
 **Expected — every score utterance carries "Experimental Zeez estimate".** Specifically re-listen to the
 four surfaces Phase B reworded:
-- Trends **duration** chart → "average recorded session duration", never "time asleep" (B4)
+- Trends **duration** chart → "average recorded session duration", never "time asleep" (B4) — *only if Trends is
+  reconnected*
 - Noise → "relative noise index", never "decibels" (B5)
 - Stage composition rows announce their values (B6)
 - Sleep-goal card → real values, and **"Not set"** when no goal is saved (B12) — never a plausible default

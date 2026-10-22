@@ -218,8 +218,11 @@ review must re-read.
 Rebuild against `DerivedSleepMetrics`, `asleepStageComposition`, `NoiseIndex`, and the
 `measured*` environmental accessors rather than restoring the files — the deleted versions predate
 all four. `MonthlyTrendsDataProvider`, `TrendInsightsSection`, and `MonthlyChartSection` were
-**not** deleted; they remain live behind `TrendsView` and are the natural home for monthly
-presentation.
+**not** deleted, because C2 believed they were live behind `TrendsView`. They are not.
+`TrendsView` itself has had no entry point since `ac140c2` (2025-08-19); this was found 2026-10-22.
+They meet claims rules 4 and 10 as of `8280934` and remain the natural home for monthly
+presentation if Trends is reconnected. Whether to reconnect or park Trends is an open item in
+`FUTURE_IMPROVEMENTS.md`.
 
 **Claims tier and label.** Whatever they display. A rebuilt session-detail screen showing a Zeez
 score must carry the "Experimental Zeez Estimate" label in text *and* `accessibilityValue`

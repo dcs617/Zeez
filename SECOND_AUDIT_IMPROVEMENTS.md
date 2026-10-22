@@ -402,7 +402,7 @@ app is about to open an empty store — treat it as a release blocker, not a war
 
 **Organizer/archive:** validate archive; confirm no `NSCameraUsageDescription` needed (AVCaptureDevice fully removed); background modes = `processing` only.
 **TestFlight:** several nights of real alarm/sleep usage; battery observation (watch heartbeat machinery until A5 cleanup).
-**Accessibility:** VoiceOver pass over Dashboard, session details, Trends charts, watch app; confirm every score utterance carries "Experimental Zeez estimate"; Dynamic Type on dashboard cards. Phase B reworded several VoiceOver strings (Trends duration chart B4, noise index B5, stage composition B6, sleep-goal card B12) — re-listen to those.
+**Accessibility:** VoiceOver pass over Dashboard, session details, Trends charts (unreachable today — skip until Trends is reconnected or parked, see `FUTURE_IMPROVEMENTS.md`), watch app; confirm every score utterance carries "Experimental Zeez estimate"; Dynamic Type on dashboard cards. Phase B reworded several VoiceOver strings (Trends duration chart B4, noise index B5, stage composition B6, sleep-goal card B12) — re-listen to those.
 **Environmental units:** noise is now a relative index 0–100, not dB (B5). On device, confirm the Sleep Details environmental row reads "Relative Noise Index … of 100" and that a mic-denied session shows unavailable rather than 0.
 **Score behaviour:** a recorded session with sensor data but no inferrable stages must show **no** score (B8's `qualityScore = 1.0` sentinel), not a neutral one; a scored session's `SleepQualityScore.calculationVersion` must read `ZeezScore-3.0` and its `confidenceScore` must vary with sensor breadth rather than always being 85.
 **Privacy/claims review:** re-read active surfaces against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` now that B-phase has landed, and read `ZEEZ_SCORE_SPECIFICATION.md` alongside it (B8 — the spec is binding and must be re-checked whenever `ZeezScore.version` changes); review App Store description copy against both before submission. `PARKED_CAPABILITIES.md` (C0) records the claims bar each removed feature must clear before returning — check it before re-adding any surface, and never let App Store copy promise a capability listed there. `ClinicalVocabularyGuardTests` (B7) enforces the prohibited-vocabulary rules in CI, but it exempts `Zeez/Learn` — review Learn copy by hand.
@@ -431,54 +431,27 @@ If `StoreKitTests` fails, uninstall the app from the simulator and re-run before
 
 ## 7. Prompt for the next implementation chat
 
-Replaced 2026-10-22. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`): Phase A
-(replaced 2026-10-20), then §8a durable HealthKit import identity — delivered in code 2026-10-22
-(`2244e20`…`6b15519`), device check `DEVICE_TEST_RUN.md` T3.1 pending.
+Replaced 2026-10-22. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`):
+- Phase A, replaced 2026-10-20.
+- §8a durable HealthKit import identity, delivered in code 2026-10-22 (`2244e20`…`6b15519`).
+- The data-safety + claims batch, delivered 2026-10-22 (`9d5b3b7`…`77a11db`, docs in the commit after):
+  Delete All Data destroys the store in place, the monthly chart labels its estimate and leaves months without
+  data off, the unused `WatchSleepSummary.init(from:)` is gone, Trends lost its duplicate Days range, and debug
+  mock sessions are scored by `SleepQualityCalculator`.
 
-**When the developer account is renewed, the device pass comes first** — T1 now relocates the store *and* runs
-its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file.
-Until then:
+That batch found two problems beyond its own items, both now open below: Trends has no entry point, so items
+2 and 4 fixed a screen nobody can open; and Swift Testing can pass a test whose expectation failed.
 
-```
-Read CLAUDE.md, then FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md §7 ("Other open
-items"), SLEEP_METRICS_CLAIMS_AND_VALIDATION.md §4 (rules 4 and 10), and
-ZEEZ_SCORE_SPECIFICATION.md. Context: the device pass is still blocked on my Apple Developer
-Program renewal, so this is code work that needs no hardware.
+No prompt is queued. **When the developer account is renewed, the device pass comes first** — T1 relocates the
+store *and* runs its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in
+the file.
 
-Task: a small data-safety + claims batch, one commit per item, in this order:
-1. PersistenceController.clearAllData (Delete All Data) removes "Zeez.sqlite.wal"/".shm" —
-   names SQLite never writes — so the real -wal/-shm survive beside the recreated store.
-   Fix it the way the §8a migration fix did (replacePersistentStore / destroyPersistentStore,
-   "-wal"/"-shm" suffixes; see StoreLocation and CoreDataMigrationManager). Add a test that
-   seeds a store with an uncheckpointed WAL, clears it, and proves no old row survives.
-2. MonthlyChartSection's "Estimated Score" picker segment and chart lack the Experimental Zeez
-   Estimate label (claims rule 10) — check visible text and accessibilityValue.
-3. WatchSleepSummary.init(from:) (Zeez/Watch/WatchSleepSummary+CoreData.swift) has no callers
-   as of 2026-10-22 and passes the raw qualityScore. Delete it unless something reaches it;
-   if something does, make it honour the qualityScore <= 1.0 sentinel and pin that with a test.
-4. Trends' Days and Week ranges (TimeRangeSelectionView) are the same 7-day window — make them
-   differ or remove one.
-5. Debug mock sessions get no SleepQualityScore record, so their score breakdown always reads
-   unavailable — DEBUG-only fix in MockDataGenerator.
-
-Work in this order and stop at each checkpoint:
-1. Investigate first: confirm each item still exists as described and whether it is
-   reachable in the shipping UI. Write failing Swift Testing tests where the behaviour is
-   testable. CHECKPOINT: report findings (and any item that turned out wrong or bigger)
-   before changing code.
-2. Implement one item per commit. Confirm each regression test fails against the unfixed
-   code by temporarily reverting the fix.
-3. After each commit run -only-testing:ZeezTests on
-   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF'; before the last commit, build
-   "ZeezWatch Watch App" on -destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976'.
-4. Update FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md §7, and DEVICE_TEST_RUN.md
-   T11 (Delete All Data now checks the side files are gone).
-
-Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start D1/D2
-or other tracker items without asking.
-```
-
-**Other open items, if that batch is not wanted next** (none needs hardware):
+**Other open items** (none needs hardware):
+- **Trends: reconnect or park it** — a product decision first. `TrendsView` has had no entry point since
+  `ac140c2`; the details, and what still needs fixing before it could return, are in `FUTURE_IMPROVEMENTS.md`.
+- **Swift Testing can pass a test whose expectation failed** — an issue recorded inside `viewContext.performAndWait`
+  from a test not on the main actor is unattributed and xcodebuild exits 0. Mark the affected suites `@MainActor`,
+  or assert outside the closure (`FUTURE_IMPROVEMENTS.md`).
 - **D1a** NavigationView → NavigationStack in `MainView`/`LearnView`, and delete `LearnHomeView`. D1b/D1c are mechanical.
 - **D2b** `AlarmAudioController` seam + tests, and the **D2a** `WatchSessionProtocol` seam (test-unlocking work).
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,

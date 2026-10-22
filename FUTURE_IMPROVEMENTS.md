@@ -54,6 +54,8 @@ Carried over from the archived roadmap's Phase 3.
   **D3a** moved the store into an App Group container, which had to happen before any user had data.
   ⚠️ D3a is inert until the **App Groups capability is toggled once in Xcode** — CLI `xcodebuild`
   strips profile-backed entitlements, so it cannot be done from the command line.
+  Delete All Data no longer breaks the store while a second connection holds it (`9d5b3b7`). Re-run T11 with the
+  extension installed.
 - Apply for the critical-alerts entitlement (defensible for an alarm app); until granted,
   keep the graceful `checkCriticalAlertsEnabled` degradation. Phase **D3b** — paperwork only, no code
   to write; file it early, Apple takes weeks.
@@ -64,9 +66,32 @@ Carried over from the archived roadmap's Phase 3.
   model **v3**. Re-import updates changed nights, applies deletions HealthKit reports, and duplicates nothing.
   The v2→v3 hop is the store's first structural migration; on a pre-D3a install it runs on the same first launch
   as the App Group relocation (`DEVICE_TEST_RUN.md` T1). Device check T3.1 pending.
-- `PersistenceController.clearAllData` (Delete All Data) removes `Zeez.sqlite.wal`/`.shm` — names SQLite never
-  writes — so the real `-wal`/`-shm` survive beside the recreated store. Same bug class the §8a migration fix
-  removed from `performManualMigration`; found 2026-10-22, not yet fixed. Check during T11.
+- ~~`PersistenceController.clearAllData` (Delete All Data) removes `Zeez.sqlite.wal`/`.shm` — names SQLite never
+  writes — so the real `-wal`/`-shm` survive beside the recreated store.~~ Done 2026-10-22 (`9d5b3b7`):
+  `recreateStore(at:options:in:)` destroys the store in place with `destroyPersistentStore` and reopens it. A probe
+  showed the old code lost nothing with today's single connection (closing it had already emptied the WAL), but
+  with a second connection on the store — the future widget extension — the recreated store failed every read and
+  save. The `-wal`/`-shm` now stay on purpose: the recreated store reuses them. Device check T11.
+- **Trends has no entry point — reconnect it or park it.** `TrendsView` lost its tab in `ac140c2` (2025-08-19).
+  Its only remaining link is in `WeeklyTrendCard`, which nothing creates. So nothing on it has reached a user:
+  not B4's duration relabel, not the 2026-10-20 night-coverage card, not the 2026-10-22 monthly-chart fixes
+  (`8280934`). The second audit recorded the monthly views as "live behind TrendsView" (C2); that was wrong.
+  Reconnecting means a tab or a dashboard link, which overlaps D1's `MainView` rework. Parking means
+  `PARKED_CAPABILITIES.md`. Either way, three things are still wrong on it:
+  - Monthly consistency compares variances (seconds²) with limits written in seconds, so more than about a
+    minute of spread reads 0% and triggers "Consider stabilizing your sleep schedule".
+  - Bedtimes are measured as seconds since midnight, so 23:50 and 00:10 count as almost 24 hours apart.
+  - `TrendChart` divides by zero when every plotted value is equal, which plots NaN coordinates.
+
+  `StatsDataProvider` and `SleepStatsRange`, in the same tree, have no callers either.
+- **Swift Testing can pass a test whose expectation failed.** An `#expect` inside `viewContext.performAndWait`,
+  in a test that is not on the main actor, runs on the main queue outside the test's task. Swift Testing then
+  records it "without an associated test": the test passes, xcodebuild prints `** TEST SUCCEEDED **` and exits 0,
+  and CI stays green (only the `✘ Test run with … failed … with N issues` line gives it away). Found 2026-10-22. A
+  full run shows no hidden failures today, but up to 21 suites assert inside that pattern, the `withInMemoryContext`
+  helpers among them. Fix by marking those suites `@MainActor` (`performAndWait` then runs inline) or by asserting
+  outside the closure. CI could also fail on that `✘ Test run` line. The `@MainActor` mock tests in
+  `ZeezScoreBreakdownTests` are the reference.
 - Per-night preferred source for overlapping sleep sources — needs an amendment to
   `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first, which defines time asleep as the union across sources.
 - `NavigationView` → `NavigationStack` migration (start with `MainView` — remove the
@@ -86,7 +111,8 @@ status line. In summary:
   §8a). Outstanding: the on-device re-import check, `DEVICE_TEST_RUN.md` T3.1.
 - **Phase 4 (longitudinal review)** — mostly delivered (B4, B6, B7). Night and per-session input
   coverage landed 2026-10-20 (`SleepCoverage.swift`). Outstanding: an explicit date-range picker beyond
-  the fixed Days/Week/Month ranges (Days and Week are currently the same 7-day window).
+  the fixed Week/Month ranges (a duplicate 7-day "Days" range was removed 2026-10-22). Trends itself has no
+  entry point, so its share of this phase has never shipped; see "Still open" above.
 - **Phase 5 (experimental score)** — substantially delivered (B8, plus A1/A7). It **diverges** from
   the plan on purpose: the score is computed only from Zeez-inferred stages and never grades
   Apple-reported ones. The user-visible component breakdown landed 2026-10-20
