@@ -75,7 +75,7 @@ Zeez/
 ├── DataImport/      # HealthKitDataImporter, RealDataManager
 ├── CoreData/        # Core Data entity class files (paired +CoreDataClass / +CoreDataProperties)
 ├── Shared/          # ModalCoordinator and other cross-cutting components
-├── Watch/           # WatchConnectivityHandler, WatchCommunicationSupport, WatchSleepSummary+CoreData
+├── Watch/           # WatchConnectivityHandler (incl. watchSleepSummary(for:)), WatchPayloadBuilder, WatchCommunicationSupport
 ├── Development/     # DeveloperSettings
 │   └── Mocks/       # MockDataGenerator, MockSleepPatternGenerator
 ├── Sleep/           # Sleep analysis and views
