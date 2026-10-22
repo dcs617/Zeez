@@ -189,59 +189,67 @@ final class CoreDataMigrationManager {
     }
     
     // MARK: - Backup and Recovery
-    
-    private func createMigrationBackup(from sourceURL: URL) throws -> URL {
-        let backupURL = sourceURL.appendingPathExtension("migration-backup-\(Date().timeIntervalSince1970)")
-        
-        try FileManager.default.copyItem(at: sourceURL, to: backupURL)
-        
-        // Also backup associated files
-        let shmURL = sourceURL.appendingPathExtension("shm")
-        let walURL = sourceURL.appendingPathExtension("wal")
-        
-        if FileManager.default.fileExists(atPath: shmURL.path) {
-            try FileManager.default.copyItem(
-                at: shmURL,
-                to: backupURL.appendingPathExtension("shm")
-            )
+
+    /// Store files are copied with `replacePersistentStore`, never `FileManager`: WAL is on,
+    /// so the newest transactions may live only in `Zeez.sqlite-wal`, and the sidecars are
+    /// named with a `-` suffix, not a path extension. The old hand-rolled copies used
+    /// `appendingPathExtension("wal")` and silently left the real WAL behind.
+    private static let storeOptions: [AnyHashable: Any] = [NSPersistentHistoryTrackingKey: true as NSNumber]
+
+    /// Copy the store at `source` to `destination`, WAL included. Works across model
+    /// versions: the copy is made at the SQLite level and keeps the source's model.
+    func copyStore(from source: URL, to destination: URL) throws {
+        let coordinator = NSPersistentStoreCoordinator(managedObjectModel: currentModel())
+        try coordinator.replacePersistentStore(
+            at: destination,
+            destinationOptions: Self.storeOptions,
+            withPersistentStoreFrom: source,
+            sourceOptions: Self.storeOptions,
+            type: .sqlite
+        )
+    }
+
+    /// Back up the store at `storeURL` beside it, returning the backup's URL.
+    @discardableResult
+    func backUpStore(at storeURL: URL) throws -> URL {
+        let backupURL = storeURL.appendingPathExtension("migration-backup-\(Date().timeIntervalSince1970)")
+        do {
+            try copyStore(from: storeURL, to: backupURL)
+        } catch {
+            // A store SQLite cannot open is exactly the one worth keeping the bytes of. Nothing
+            // has it open at this point, so copying all three files together loses nothing.
+            ZeezLogger.error(logger, "Store-level backup failed - copying the files instead", error: error)
+            for suffix in ["", "-wal", "-shm"] where FileManager.default.fileExists(atPath: storeURL.path + suffix) {
+                try FileManager.default.copyItem(atPath: storeURL.path + suffix, toPath: backupURL.path + suffix)
+            }
         }
-        
-        if FileManager.default.fileExists(atPath: walURL.path) {
-            try FileManager.default.copyItem(
-                at: walURL,
-                to: backupURL.appendingPathExtension("wal")
-            )
-        }
-        
         ZeezLogger.info(logger, "Migration backup created at \(backupURL.lastPathComponent)")
         return backupURL
     }
-    
+
+    /// Replace the store at `storeURL` with the one at `replacement`, then remove
+    /// `replacement` and its sidecars.
+    func replaceStore(at storeURL: URL, withStoreAt replacement: URL) throws {
+        try copyStore(from: replacement, to: storeURL)
+
+        let coordinator = NSPersistentStoreCoordinator(managedObjectModel: currentModel())
+        try? coordinator.destroyPersistentStore(at: replacement, type: .sqlite, options: Self.storeOptions)
+        // `destroyPersistentStore` truncates rather than unlinks.
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(atPath: replacement.path + suffix)
+        }
+    }
+
+    private func createMigrationBackup(from sourceURL: URL) throws -> URL {
+        try backUpStore(at: sourceURL)
+    }
+
     private func restoreFromBackup(backupURL: URL, originalURL: URL) throws {
         ZeezLogger.info(logger, "Restoring from backup \(backupURL.lastPathComponent) to \(originalURL.lastPathComponent)")
-        
-        // Remove corrupted files
-        try? FileManager.default.removeItem(at: originalURL)
-        try? FileManager.default.removeItem(at: originalURL.appendingPathExtension("shm"))
-        try? FileManager.default.removeItem(at: originalURL.appendingPathExtension("wal"))
-        
-        // Restore from backup
-        try FileManager.default.copyItem(at: backupURL, to: originalURL)
-        
-        let backupShmURL = backupURL.appendingPathExtension("shm")
-        let backupWalURL = backupURL.appendingPathExtension("wal")
-        
-        if FileManager.default.fileExists(atPath: backupShmURL.path) {
-            try FileManager.default.copyItem(at: backupShmURL, to: originalURL.appendingPathExtension("shm"))
-        }
-        
-        if FileManager.default.fileExists(atPath: backupWalURL.path) {
-            try FileManager.default.copyItem(at: backupWalURL, to: originalURL.appendingPathExtension("wal"))
-        }
-        
+        try copyStore(from: backupURL, to: originalURL)
         ZeezLogger.info(logger, "Successfully restored from backup")
     }
-    
+
     // MARK: - Utility Methods
     
     private func temporaryURL(for step: MigrationStep) -> URL {

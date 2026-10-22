@@ -181,30 +181,38 @@ final class PersistenceController {
 
     private func configureStoreForMigration() {
         guard let description = container.persistentStoreDescriptions.first else { return }
-        
-        // Check if migration is needed before configuring store options
-        if let storeURL = description.url, FileManager.default.fileExists(atPath: storeURL.path) {
-            let migrationManager = CoreDataMigrationManager.shared
-            
-            if migrationManager.requiresMigration(from: storeURL) {
-                ZeezLogger.info(ZeezLogger.coreData, "Migration required - disabling automatic migration for custom handling")
-                
-                // Disable automatic migration to handle it manually
-                description.setOption(false as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
-                description.setOption(false as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
-            } else {
-                ZeezLogger.info(ZeezLogger.coreData, "No migration required - enabling automatic migration")
-                
-                // Enable automatic migration for compatible changes
-                description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
-                description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
+        Self.prepareForLoading(description)
+    }
+
+    /// Set `description`'s migration and history options, backing the store up first when
+    /// it was written by an older model.
+    ///
+    /// Automatic lightweight migration stays on even when migration is required. Core Data
+    /// migrates in place and handles the WAL itself; it also uses any bundled mapping model,
+    /// so a future heavyweight step needs no change here. This used to switch automatic
+    /// migration *off* whenever it was needed, which forced every upgrade through the
+    /// load-failure → `performManualMigration` path — a path no structural model change had
+    /// ever exercised. That path is now only the fallback when automatic migration fails.
+    static func prepareForLoading(
+        _ description: NSPersistentStoreDescription,
+        migrationManager: CoreDataMigrationManager = .shared
+    ) {
+        if let storeURL = description.url,
+           FileManager.default.fileExists(atPath: storeURL.path),
+           migrationManager.requiresMigration(from: storeURL) {
+            do {
+                let backupURL = try migrationManager.backUpStore(at: storeURL)
+                ZeezLogger.info(ZeezLogger.coreData, "Migration required - backed up the store to \(backupURL.lastPathComponent), migrating automatically")
+            } catch {
+                // A failed backup must not block the upgrade: the migration itself does not
+                // depend on it, and refusing to open the store would strand the user's data.
+                ZeezLogger.error(ZeezLogger.coreData, "Pre-migration backup failed - migrating without one", error: error)
             }
-        } else {
-            // New installation - enable automatic migration
-            description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
-            description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
         }
-        
+
+        description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+        description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
+
         // History tracking must STAY enabled: existing stores were created with it,
         // and Core Data force-opens a previously-tracked store READ-ONLY when the key
         // is later omitted (the "Store opened without NSPersistentHistoryTrackingKey…"
@@ -269,32 +277,14 @@ final class PersistenceController {
         
         // Perform the migration to a temporary location
         try migrationManager.migrateStore(from: storeURL, to: tempURL)
-        
-        // Replace the original store with the migrated one
-        let fileManager = FileManager.default
-        
-        // Remove original files
-        try? fileManager.removeItem(at: storeURL)
-        try? fileManager.removeItem(at: storeURL.appendingPathExtension("shm"))
-        try? fileManager.removeItem(at: storeURL.appendingPathExtension("wal"))
-        
-        // Move migrated files to original location
-        try fileManager.moveItem(at: tempURL, to: storeURL)
-        
-        if fileManager.fileExists(atPath: tempURL.appendingPathExtension("shm").path) {
-            try fileManager.moveItem(
-                at: tempURL.appendingPathExtension("shm"),
-                to: storeURL.appendingPathExtension("shm")
-            )
-        }
-        
-        if fileManager.fileExists(atPath: tempURL.appendingPathExtension("wal").path) {
-            try fileManager.moveItem(
-                at: tempURL.appendingPathExtension("wal"),
-                to: storeURL.appendingPathExtension("wal")
-            )
-        }
-        
+
+        // Swap the migrated store in. This used to remove and move files by hand, using
+        // `appendingPathExtension("wal")` — `Zeez.sqlite.wal`, a name SQLite never writes —
+        // so the old store's real `-wal`/`-shm` were left beside the migrated file and the
+        // migrated store's own WAL was left behind. `replacePersistentStore` carries the
+        // sidecars correctly (see StoreLocation.relocateStore).
+        try migrationManager.replaceStore(at: storeURL, withStoreAt: tempURL)
+
         ZeezLogger.info(ZeezLogger.coreData, "Manual migration completed successfully")
     }
     
