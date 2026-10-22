@@ -1,8 +1,9 @@
 import SwiftUI
 import os.log
 
+/// Each range must cover a different window. A "Days" range used to sit beside Week,
+/// and both were the last 7 days.
 enum TrendTimeRange: String, CaseIterable, Identifiable {
-    case days = "Days"
     case week = "Week"
     case month = "Month"
     
@@ -10,7 +11,6 @@ enum TrendTimeRange: String, CaseIterable, Identifiable {
     
     var systemImage: String {
         switch self {
-        case .days: return "clock"
         case .week: return "calendar.badge.clock"
         case .month: return "calendar"
         }
@@ -21,9 +21,6 @@ enum TrendTimeRange: String, CaseIterable, Identifiable {
         let now = Date()
         
         switch self {
-        case .days:
-            let start = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-            return (start, now)
         case .week:
             let start = calendar.date(byAdding: .weekOfYear, value: -1, to: now) ?? now
             return (start, now)

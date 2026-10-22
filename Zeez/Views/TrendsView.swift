@@ -5,7 +5,7 @@ import os.log
 
 struct TrendsView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @State private var selectedRange: TrendTimeRange = .days
+    @State private var selectedRange: TrendTimeRange = .week
     @State private var monthlyData: MonthlyTrendData?
     @State private var isLoading = false
     @AppStorage("dev_showPremiumFeatures") private var showPremiumFeatures = false
