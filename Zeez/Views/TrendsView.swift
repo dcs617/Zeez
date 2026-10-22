@@ -140,6 +140,7 @@ struct TrendsView: View {
                 selectedDataPoint: .constant(monthlyData.dataPoints.last)
             )
             .padding(.horizontal)
+            .accessibilityElement(children: .contain)
             .accessibilityLabel("Monthly sleep analysis chart")
             .accessibilityIdentifier("monthlyChartSection")
             

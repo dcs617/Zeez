@@ -10,34 +10,39 @@ class MonthlyTrendsDataProvider {
         self.context = context
     }
     
-    /// Fetches monthly trend data for the specified number of months
-    func fetchMonthlyTrends(months: Int = 6) async throws -> MonthlyTrendData {
-        let endDate = Date()
-        let startDate = Calendar.current.date(
-            byAdding: .month,
-            value: -(months - 1),
-            to: endDate
-        )?.startOfMonth() ?? endDate
-        
-        let request = SleepSession.fetchRequest()
-        request.predicate = NSPredicate(
-            format: "startTime >= %@ AND endTime <= %@ AND isActive == NO",
-            startDate as NSDate,
-            endDate as NSDate
-        )
-        request.sortDescriptors = [
-            NSSortDescriptor(keyPath: \SleepSession.startTime, ascending: true)
-        ]
-        
-        let sessions = try context.fetch(request)
-        return try await aggregateMonthlyData(sessions, start: startDate, end: endDate)
+    /// Fetches monthly trend data for the `months` calendar months ending at `now`.
+    ///
+    /// Runs on the context's queue: this is a nonisolated async method, so without
+    /// `perform` it would read the view context off the main thread.
+    func fetchMonthlyTrends(months: Int = 6, now: Date = Date()) async throws -> MonthlyTrendData {
+        try await context.perform { [self] in
+            let endDate = now
+            let startDate = Calendar.current.date(
+                byAdding: .month,
+                value: -(months - 1),
+                to: endDate
+            )?.startOfMonth() ?? endDate
+
+            let request = SleepSession.fetchRequest()
+            request.predicate = NSPredicate(
+                format: "startTime >= %@ AND endTime <= %@ AND isActive == NO",
+                startDate as NSDate,
+                endDate as NSDate
+            )
+            request.sortDescriptors = [
+                NSSortDescriptor(keyPath: \SleepSession.startTime, ascending: true)
+            ]
+
+            let sessions = try context.fetch(request)
+            return aggregateMonthlyData(sessions, start: startDate, end: endDate)
+        }
     }
-    
+
     private func aggregateMonthlyData(
         _ sessions: [SleepSession],
         start: Date,
         end: Date
-    ) async throws -> MonthlyTrendData {
+    ) -> MonthlyTrendData {
         var monthlyData: [Date: MonthlyMetrics] = [:]
         let calendar = Calendar.current
         
@@ -57,60 +62,42 @@ class MonthlyTrendsDataProvider {
             monthlyData[monthStart]?.addSession(session)
         }
         
-        // Calculate rolling averages and patterns
-        var rollingData: [MonthlyDataPoint] = []
-        let months = monthlyData.keys.sorted()
-        
-        for month in months {
+        var dataPoints: [MonthlyDataPoint] = []
+        for month in monthlyData.keys.sorted() {
             guard let metrics = monthlyData[month] else { continue }
-            
-            let previousMonths = months.prefix { $0 <= month }
-                .compactMap { monthlyData[$0] }
-            
-            let dataPoint = MonthlyDataPoint(
+            dataPoints.append(MonthlyDataPoint(
                 month: month,
                 metrics: metrics,
-                rollingAverage: calculateRollingAverage(previousMonths),
                 sleepDebt: calculateSleepGoalShortfall(metrics),
                 consistency: calculateConsistency(metrics)
-            )
-            
-            rollingData.append(dataPoint)
+            ))
         }
-        
-        // Generate insights
-        let insights = try await generateMonthlyInsights(rollingData)
-        
+
         return MonthlyTrendData(
-            dataPoints: rollingData,
-            insights: insights
+            dataPoints: dataPoints,
+            insights: generateMonthlyInsights(dataPoints)
         )
     }
-    
-    private func calculateRollingAverage(_ months: [MonthlyMetrics]) -> RollingAverages {
-        let durations = months.map { $0.averageDuration }
-        let qualities = months.map { $0.averageQuality }
-        
-        return RollingAverages(
-            duration: durations.average ?? 0,
-            quality: qualities.average ?? 0
-        )
-    }
-    
-    private func calculateSleepGoalShortfall(_ metrics: MonthlyMetrics) -> TimeInterval {
+
+    /// `nil` without a selected goal or without a recorded night: a month with nothing to
+    /// compare is not a month that met the goal.
+    private func calculateSleepGoalShortfall(_ metrics: MonthlyMetrics) -> TimeInterval? {
+        guard metrics.sessionCount > 0 else { return nil }
         let request: NSFetchRequest<UserPreferences> = UserPreferences.fetchRequest()
         guard let preferences = try? context.fetch(request).first,
               preferences.sleepGoalEnabled,
               preferences.targetSleepDuration > 0 else {
-            return 0
+            return nil
         }
         return metrics.goalShortfall(targetDuration: preferences.targetSleepDuration)
     }
-    
-    private func calculateConsistency(_ metrics: MonthlyMetrics) -> Double {
-        let bedtimeVariance = metrics.bedtimeVariance
-        let durationVariance = metrics.durationVariance
-        
+
+    /// `nil` with fewer than two sessions. Variance needs two; reading its absence as zero
+    /// made an empty month "perfectly consistent".
+    private func calculateConsistency(_ metrics: MonthlyMetrics) -> Double? {
+        guard let bedtimeVariance = metrics.bedtimeVariance,
+              let durationVariance = metrics.durationVariance else { return nil }
+
         // Convert variances to consistency scores (inverse relationship)
         let maxBedtimeVariance: TimeInterval = 3600 // 1 hour variance = 0% consistency
         let maxDurationVariance: TimeInterval = 7200 // 2 hour variance = 0% consistency
@@ -121,7 +108,7 @@ class MonthlyTrendsDataProvider {
         return (bedtimeConsistency + durationConsistency) / 2
     }
     
-    private func generateMonthlyInsights(_ data: [MonthlyDataPoint]) async throws -> [MonthlyInsight] {
+    private func generateMonthlyInsights(_ data: [MonthlyDataPoint]) -> [MonthlyInsight] {
         var insights: [MonthlyInsight] = []
         
         // Analyze trends
@@ -133,18 +120,23 @@ class MonthlyTrendsDataProvider {
                 return insights
             }
             
-            // Quality trends
-            if current.metrics.averageQuality > previous.metrics.averageQuality + 5 {
-                insights.append(.qualityImproving)
-            } else if current.metrics.averageQuality < previous.metrics.averageQuality - 5 {
-                insights.append(.qualityDeclining)
+            // Estimate trends, only between two months that both have estimates. A month
+            // without one used to count as 0, reporting a trend in the missing data.
+            if let currentQuality = current.metrics.averageQuality,
+               let previousQuality = previous.metrics.averageQuality {
+                if currentQuality > previousQuality + 5 {
+                    insights.append(.qualityImproving)
+                } else if currentQuality < previousQuality - 5 {
+                    insights.append(.qualityDeclining)
+                }
             }
-            
-            // Consistency insights
-            if current.consistency > 80 {
-                insights.append(.highConsistency)
-            } else if current.consistency < 60 {
-                insights.append(.lowConsistency)
+
+            if let consistency = current.consistency {
+                if consistency > 80 {
+                    insights.append(.highConsistency)
+                } else if consistency < 60 {
+                    insights.append(.lowConsistency)
+                }
             }
             
             // Sleep-debt and environmental insights are omitted until the underlying
@@ -162,13 +154,14 @@ struct MonthlyTrendData {
     let insights: [MonthlyInsight]
 }
 
+/// Each optional is `nil` when the month cannot support the value; charts leave such a
+/// month out rather than plotting a zero (claims rule 4).
 struct MonthlyDataPoint: Identifiable {
     let id = UUID()
     let month: Date
     let metrics: MonthlyMetrics
-    let rollingAverage: RollingAverages
-    let sleepDebt: TimeInterval
-    let consistency: Double
+    let sleepDebt: TimeInterval?
+    let consistency: Double?
 }
 
 class MonthlyMetrics {
@@ -180,20 +173,21 @@ class MonthlyMetrics {
     private var durations: [TimeInterval] = []
     private var durationsByDay: [Date: TimeInterval] = [:]
     
-    var averageDuration: TimeInterval {
-        sessionCount > 0 ? totalDuration / Double(sessionCount) : 0
+    var averageDuration: TimeInterval? {
+        sessionCount > 0 ? totalDuration / Double(sessionCount) : nil
     }
-    
-    var averageQuality: Double {
-        qualityCount > 0 ? totalQuality / Double(qualityCount) : 0
+
+    /// Mean of the month's displayable Experimental Zeez Estimates; `nil` when it has none.
+    var averageQuality: Double? {
+        qualityCount > 0 ? totalQuality / Double(qualityCount) : nil
     }
-    
-    var bedtimeVariance: TimeInterval {
-        bedtimes.variance ?? 0
+
+    var bedtimeVariance: TimeInterval? {
+        bedtimes.variance
     }
-    
-    var durationVariance: TimeInterval {
-        durations.variance ?? 0
+
+    var durationVariance: TimeInterval? {
+        durations.variance
     }
     
     func addSession(_ session: SleepSession) {
@@ -225,11 +219,6 @@ class MonthlyMetrics {
     }
 }
 
-struct RollingAverages {
-    let duration: TimeInterval
-    let quality: Double
-}
-
 enum MonthlyInsight {
     case qualityImproving
     case qualityDeclining
@@ -241,9 +230,9 @@ enum MonthlyInsight {
     var description: String {
         switch self {
         case .qualityImproving:
-            return "Estimated score is increasing"
+            return "Experimental Zeez estimate is increasing"
         case .qualityDeclining:
-            return "Estimated score is decreasing"
+            return "Experimental Zeez estimate is decreasing"
         case .highConsistency:
             return "Excellent sleep schedule consistency"
         case .lowConsistency:
