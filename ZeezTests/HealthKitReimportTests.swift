@@ -73,6 +73,26 @@ struct HealthKitReimportTests {
         }
     }
 
+    // MARK: - Sample identity
+
+    @Test("Imported stages record their Apple Health sample's uuid and source")
+    func importedStagesRecordSampleIdentity() throws {
+        let controller = PersistenceController(inMemory: true)
+        let samples = watchNight() + [sample(.inBed, -10, 370, source: Self.phone)]
+        try runImport(samples, into: controller)
+
+        let context = controller.newBackgroundContext()
+        let stored = try context.performAndWait {
+            try context.fetch(SleepStage.fetchRequest()).map { ($0.healthKitSampleUUID, $0.sourceBundleIdentifier) }
+        }
+        let expected = Dictionary(uniqueKeysWithValues: samples.map { ($0.uuid, $0.sourceBundleIdentifier) })
+        #expect(stored.count == samples.count)
+        for (uuid, source) in stored {
+            let uuid = try #require(uuid, "Every imported stage must carry its sample's uuid")
+            #expect(expected[uuid] == source)
+        }
+    }
+
     // MARK: - Re-import of an unchanged night
 
     @Test("Re-importing the same samples stores the night once")

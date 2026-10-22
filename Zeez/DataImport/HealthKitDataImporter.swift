@@ -376,6 +376,8 @@ class HealthKitDataImporter {
             sleepStage.endTime = sample.end
             sleepStage.duration = sample.end.timeIntervalSince(sample.start)
             sleepStage.confidence = 85.0
+            sleepStage.healthKitSampleUUID = sample.uuid
+            sleepStage.sourceBundleIdentifier = sample.sourceBundleIdentifier
 
             sleepStage.stageType = healthKitSleepStageType(for: sample.value)
             if sleepStage.stageType == "unknown" {
