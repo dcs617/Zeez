@@ -130,7 +130,13 @@ Uses Swift Testing (`import Testing`, `@testable import Zeez`); `ZeezUITests` is
 - **Fakes**: a product-side protocol with a `= .shared` / `= .current()` default parameter, faked by a lock-guarded `@unchecked Sendable` double. `AlarmNotificationScheduling` + `FakeNotificationCenter` (`ZeezTests/AlarmTestSupport.swift`) is the reference; see `AlarmFollowUpChainTests`. Never use the real `UNUserNotificationCenter`.
 - **Polling**: `AlarmTestSupport.waitUntil` — never fixed sleeps.
 - **Core Data**: in-memory `PersistenceController(inMemory:)`, backed by SQLite at `/dev/null`, so SQL semantics apply (NULLs sort last in a descending order).
-- **Assertions inside `viewContext.performAndWait` need `@MainActor` on the test.** Called off the main thread, the closure hops to the main queue, outside the test's task: Swift Testing records the issue "without an associated test", the test passes, and xcodebuild exits 0. Either mark the test `@MainActor` (then `performAndWait` runs inline) or return values out of the closure and assert outside it. Private-queue contexts are unaffected. Older suites still use the unsafe pattern (`FUTURE_IMPROVEMENTS.md`).
+- **Assert outside Core Data closures.** An issue recorded where Swift Testing cannot see the running test is logged as `✘ Test «unknown» recorded an issue`, the test passes, and xcodebuild exits 0. Canaries (2026-10-22, Xcode 26) showed which patterns lose the test:
+  - **Lost:** `viewContext.performAndWait` from a test not on the main actor.
+  - **Lost:** `await context.perform { }` on *any* context, even from a `@MainActor` test.
+  - **Lost:** `try #require` inside either of those. The thrown error does not fail the test.
+  - **Kept:** a private context's `performAndWait`, and `viewContext.performAndWait` in a `@MainActor` test.
+
+  Return values out of the closure and assert outside it. Older suites still assert inside (`FUTURE_IMPROVEMENTS.md`).
 - **Fixtures**: `SleepSessionValidator` needs `EnvironmentalReading` timestamps covering ≥80% of a session, so any test that ends a session must seed readings or it throws `.incompleteSensorData`.
 - **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests`) locate sources via `#filePath` so they work in CI. Use them to pin an invariant a refactor establishes.
 - **A regression test that passes against the unfixed code pins nothing** — temporarily revert the fix and confirm the test fails before trusting it.

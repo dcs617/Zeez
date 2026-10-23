@@ -84,14 +84,19 @@ Carried over from the archived roadmap's Phase 3.
   - `TrendChart` divides by zero when every plotted value is equal, which plots NaN coordinates.
 
   `StatsDataProvider` and `SleepStatsRange`, in the same tree, have no callers either.
-- **Swift Testing can pass a test whose expectation failed.** An `#expect` inside `viewContext.performAndWait`,
-  in a test that is not on the main actor, runs on the main queue outside the test's task. Swift Testing then
-  records it "without an associated test": the test passes, xcodebuild prints `** TEST SUCCEEDED **` and exits 0,
-  and CI stays green (only the `✘ Test run with … failed … with N issues` line gives it away). Found 2026-10-22. A
-  full run shows no hidden failures today, but up to 21 suites assert inside that pattern, the `withInMemoryContext`
-  helpers among them. Fix by marking those suites `@MainActor` (`performAndWait` then runs inline) or by asserting
-  outside the closure. CI could also fail on that `✘ Test run` line. The `@MainActor` mock tests in
-  `ZeezScoreBreakdownTests` are the reference.
+- **Swift Testing can pass a test whose expectation failed.** An issue recorded where Swift Testing cannot see the
+  running test is logged as `✘ Test «unknown» recorded an issue`. The test passes, xcodebuild prints
+  `** TEST SUCCEEDED **` and exits 0, and CI stays green; only a `✘ Test run with … failed … with N issues` line gives
+  it away. Canaries (2026-10-22, Xcode 26) showed which patterns lose the test:
+  - **Lost:** `viewContext.performAndWait` off the main actor.
+  - **Lost:** `await context.perform { }` on any context, even from a `@MainActor` test.
+  - **Lost:** `try #require` inside either of those.
+  - **Kept:** a private context's `performAndWait`, and `viewContext.performAndWait` in a `@MainActor` test.
+
+  A lexical scan found about 130 assertions inside such closures across 16 suites. That is an upper bound: it
+  includes the safe private-context ones. The 301-test run on 2026-10-22 had no hidden failures. Fix: assert
+  outside the closures, and add a CI step that fails on those `✘` lines. The prompt is in
+  `SECOND_AUDIT_IMPROVEMENTS.md` §7.
 - Per-night preferred source for overlapping sleep sources — needs an amendment to
   `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first, which defines time asleep as the union across sources.
 - `NavigationView` → `NavigationStack` migration (start with `MainView` — remove the
