@@ -253,6 +253,11 @@ Two audit findings drove the order:
 **Order:** D3b (paperwork, async) → **D3a** → **D4** → D3d → *stop for the §5 device + paired-watch pass
 and TestFlight* → D2a → D2b → D1a → D1b → D1c → D3c.
 
+**Resequenced 2026-10-26.** With the device pass blocked on the account renewal, Daniel lifted the wait: D1 and D2
+now run before it, and the device pass will cover the new navigation too. D1 goes first, because reconnecting
+Trends (decided the same day) puts its entry point on D1a's per-tab stacks. D2 follows under its stopping rule. D3c
+still waits for the device pass and the App Group toggle.
+
 **D1. NavigationView → NavigationStack.** 88 occurrences in 67 files. Split by behavior, not file count.
 - **D1a** (~4 files, the only part with observable behavior): `MainView.swift:6` wraps a `NavigationView`
   around the whole `TabView`, with `.navigationViewStyle(.stack)` as the escape hatch, and `LearnView`
@@ -431,35 +436,89 @@ If `StoreKitTests` fails, uninstall the app from the simulator and re-run before
 
 ## 7. Prompt for the next implementation chat
 
-Replaced 2026-10-25. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`):
+Replaced 2026-10-26. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`):
 - Phase A, replaced 2026-10-20.
 - §8a durable HealthKit import identity, delivered in code 2026-10-22 (`2244e20`…`6b15519`).
 - The data-safety + claims batch, delivered 2026-10-22 (`9d5b3b7`…`77a11db`, docs in the commit after):
   Delete All Data destroys the store in place, the monthly chart labels its estimate and leaves months without
   data off, the unused `WatchSleepSummary.init(from:)` is gone, Trends lost its duplicate Days range, and debug
   mock sessions are scored by `SleepQualityCalculator`.
-- The Swift Testing attribution fix, delivered 2026-10-25 (`b7a3379`…`3dff641`, docs in the commit after).
-  Canaries re-run on Xcode 26.6 confirmed the losing patterns and added the helper, nested-closure and
-  asserting-helper shapes; the full run before any change had no hidden failure. 112 assertions in 13 suites
-  ran where a failure reached no test. They now return values from their closures and assert outside them,
-  each fix proven by breaking an assertion. `SwiftTestingAttributionGuardTests` scans for the shapes (against
-  the pre-fix tests it reports exactly the 120 inventoried sites), and the `unit-tests` job fails on an
-  unattributed issue in its log or result bundle. Only a CI run on Xcode 16.x can confirm that check's wording;
-  it is the first item below.
+- The Swift Testing attribution fix, delivered 2026-10-25 (`b7a3379`…`3dff641`, docs `5a377d3`). 112 assertions
+  in 13 suites ran where a failure reached no test; they now return values from their closures, each fix proven
+  by breaking an assertion. `SwiftTestingAttributionGuardTests` scans for the shapes, and the `unit-tests` job fails
+  on an unattributed issue in its log or result bundle.
 
-No prompt is queued. **When the developer account is renewed, the device pass comes first** — T1 relocates the
-store *and* runs its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in
-the file.
+**Decisions 2026-10-26:** reconnect Trends, rather than park it; do D1 and D2 before the device pass (Phase D,
+"Resequenced 2026-10-26"). D1 comes first because Trends' entry point lands on D1a's per-tab stacks. The D1 chat
+ends by queueing D2's prompt here.
+
+**When the developer account is renewed, the device pass still comes first**: T1 relocates the store *and* runs
+its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. Until
+then:
+
+```
+Read CLAUDE.md, then SECOND_AUDIT_IMPROVEMENTS.md Phase D (D1, D2, "Resequenced 2026-10-26")
+and §7, and FUTURE_IMPROVEMENTS.md ("Trends has no entry point"). Context: the device pass is
+still blocked on my Apple Developer Program renewal. On 2026-10-26 I decided to reconnect
+Trends and to do D1 and D2 before the device pass; the device pass will cover the new
+navigation too.
+
+Task: D1 (NavigationView → NavigationStack), with Trends reconnected on top of D1a. D2 is
+the next chat: end this one by queueing its prompt.
+
+Work in this order and stop at each checkpoint:
+1. Investigate first.
+   - Map every NavigationView, NavigationStack and navigationTitle by tab, including
+     TrendsView's own NavigationView and WeeklyTrendCard's NavigationLink to TrendsView.
+     Confirm the 2026-07-09 findings still hold: no deep links, no isActive: or
+     tag:selection: links, and DashboardView and AlarmSettingsView take their titles from
+     MainView's outer container.
+   - Read MainViewUITests and say whether it would catch a tab losing its navigation bar.
+   - Trends: write a failing test for each of its three known bugs before touching them
+     (consistency compares seconds² with limits in seconds; bedtimes are seconds since
+     midnight; TrendChart divides by zero when every value is equal). List everything an
+     entry point makes reachable (TrendsView, its subviews, WeeklyTrendCard) and review
+     its wording and numbers against SLEEP_METRICS_CLAIMS_AND_VALIDATION.md and
+     ZEEZ_SCORE_SPECIFICATION.md. None of it has ever reached a user.
+   CHECKPOINT: report the map, the failing tests, the claims findings, and your
+   recommendation for the entry point (a Dashboard link through WeeklyTrendCard, or a
+   fourth tab). The entry point is my decision.
+2. D1a: remove MainView's outer NavigationView and give each tab its own NavigationStack;
+   drop LearnView's nested container; delete LearnHomeView and register it in
+   PARKED_CAPABILITIES.md. Add a UI test that every tab shows its navigation title, and
+   prove it by removing one tab's title on purpose, then restore it.
+3. Trends, one commit per fix, each with its failing-first test: the three bugs, the
+   claims findings, and StatsDataProvider and SleepStatsRange deleted if they still have
+   no callers. Then the entry point I chose, with accessibility labels and hints, and a UI
+   test that reaches Trends. CHECKPOINT before the entry-point commit: simulator
+   screenshots of Trends in light and dark mode, with and without data.
+4. D1b, then D1c: the mechanical swaps, one commit per tree, previews last.
+5. After each commit run -only-testing:ZeezTests on
+   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF', saving the log and result bundle,
+   and run .github/scripts/check-swift-testing-attribution.sh over them. After D1a, after
+   the entry point and before the last commit, also run the UI smoke tests (Debug, same
+   destination). Before the last commit, build "ZeezWatch Watch App" on
+   -destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976'.
+6. Update FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md (D1 and §7), CLAUDE.md
+   where it describes the entry flow and tabs, and DEVICE_TEST_RUN.md with a per-tab
+   navigation check and a Trends check. Replace the §7 prompt with one for D2: D2a's
+   WatchSessionProtocol seam, then D2b's AlarmAudioController seam, under D2's stopping
+   rule.
+
+Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start D2,
+D3c, the per-night source work or the tracked cleanups (SleepAnalysisTypes stubs, misnamed
+Core Data tests) without asking.
+```
 
 **Open items** (none needs hardware):
-- **Confirm the attribution check on the first CI run** after `3dff641`: the job runs Xcode 16.x, whose Swift
-  Testing may word the `«unknown»` and `Test run with …` lines differently or file unattributed issues
-  differently in the result bundle. The script fails loudly if the summary line is missing; a pass on a clean run
-  shows the summary matched, not that an unattributed issue would be caught.
-- **Trends: reconnect or park it** — a product decision first. `TrendsView` has had no entry point since
-  `ac140c2`; the details, and what still needs fixing before it could return, are in `FUTURE_IMPROVEMENTS.md`.
-- **D1a** NavigationView → NavigationStack in `MainView`/`LearnView`, and delete `LearnHomeView`. D1b/D1c are mechanical.
-- **D2b** `AlarmAudioController` seam + tests, and the **D2a** `WatchSessionProtocol` seam (test-unlocking work).
+- **Confirm the attribution check on the first CI run** after `3dff641` (not pushed as of 2026-10-26): the job runs
+  Xcode 16.x, whose Swift Testing may word the `«unknown»` and `Test run with …` lines differently or file
+  unattributed issues differently in the result bundle. The script fails loudly if the summary line is missing; a
+  pass on a clean run shows the summary matched, not that an unattributed issue would be caught.
+- **D2a** `WatchSessionProtocol` seam and **D2b** `AlarmAudioController` seam, after the D1 batch (Phase D).
+- **Small cleanups, tracked in `FUTURE_IMPROVEMENTS.md`:** delete the dead stubs in `SleepAnalysisTypes.swift`, two
+  of which return hard-coded values; rename or delete the Core Data tests named for migrations and indexes they do
+  not exercise, and drop their wall-clock limits.
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
   which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
 - **Blocked on the renewed account:** the device pass (T1 and T3.1 first), D3c WidgetKit extension (needs the App

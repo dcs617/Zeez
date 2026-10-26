@@ -54,6 +54,11 @@ Carried over from the archived roadmap's Phase 3.
   scan estimated. They now return values from their closures and assert outside them, as do 6 safe
   private-context ones. `SwiftTestingAttributionGuardTests` scans for the shapes, and the `unit-tests` job runs
   `.github/scripts/check-swift-testing-attribution.sh` over its log and result bundle.
+  Known limits of the guard: it knows only `perform`, `performAndWait`, and helpers whose closure parameter is
+  handed an `NSManagedObjectContext`, and it matches asserting helpers by name. It does not see other ways to leave
+  the test's task (`Task.detached`, `DispatchQueue` blocks, delegate or notification callbacks), none of which the
+  suites use today; the CI check catches those only once such an assertion fails. Extend the scanner if a suite
+  starts using one.
 
 **Still open:**
 
@@ -81,12 +86,13 @@ Carried over from the archived roadmap's Phase 3.
   showed the old code lost nothing with today's single connection (closing it had already emptied the WAL), but
   with a second connection on the store — the future widget extension — the recreated store failed every read and
   save. The `-wal`/`-shm` now stay on purpose: the recreated store reuses them. Device check T11.
-- **Trends has no entry point — reconnect it or park it.** `TrendsView` lost its tab in `ac140c2` (2025-08-19).
+- **Trends has no entry point — reconnect it (Daniel decided 2026-10-26).** `TrendsView` lost its tab in `ac140c2` (2025-08-19).
   Its only remaining link is in `WeeklyTrendCard`, which nothing creates. So nothing on it has reached a user:
   not B4's duration relabel, not the 2026-10-20 night-coverage card, not the 2026-10-22 monthly-chart fixes
   (`8280934`). The second audit recorded the monthly views as "live behind TrendsView" (C2); that was wrong.
-  Reconnecting means a tab or a dashboard link, which overlaps D1's `MainView` rework. Parking means
-  `PARKED_CAPABILITIES.md`. Either way, three things are still wrong on it:
+  Reconnecting means a tab or a dashboard link (`WeeklyTrendCard` already holds one), which lands on D1a's
+  per-tab `NavigationStack`s, so it is queued with D1 in `SECOND_AUDIT_IMPROVEMENTS.md` §7. `TrendsView` also nests
+  its own `NavigationView`. Three things must be fixed before it returns:
   - Monthly consistency compares variances (seconds²) with limits written in seconds, so more than about a
     minute of spread reads 0% and triggers "Consider stabilizing your sleep schedule".
   - Bedtimes are measured as seconds since midnight, so 23:50 and 00:10 count as almost 24 hours apart.
@@ -96,13 +102,38 @@ Carried over from the archived roadmap's Phase 3.
 - **Confirm the Swift Testing attribution check on CI.** It was verified only on Xcode 26.6; the `unit-tests` job
   runs Xcode 16.x. The first CI run after `3dff641` shows whether that Swift Testing prints the same
   `Test «unknown» recorded an issue` and `Test run with …` lines, and whether its result bundle files unattributed
-  issues as a failed test. A missing summary line fails the job loudly rather than passing it.
+  issues as a failed test. A missing summary line fails the job loudly rather than passing it. Not pushed as of
+  2026-10-26. A `/code-review` of `f3c6a47..5a377d3` first is worthwhile: the guard is ~450 lines of heuristic
+  scanning.
+- **Dead stubs in `Zeez/Sleep/SleepAnalysisTypes.swift`** (found 2026-10-25). The file's header calls them temporary
+  Phase 1A types. Every type in it except `SleepGoalPolicy`, the `SleepGoalShortfall*` types and
+  `SleepDebtCalculator` has no caller: `SessionInfo`, `CycleAnalysis`, `AnalysisResult`, `TrendDirection`,
+  `PersonalizedBaselines`, `QualityTrends`, `SleepPatternAnalysis`, `PersonalizationManager`,
+  `HistoricalAnalyzer`. The last two return hard-coded `.mock` values (a 75 consistency score, "Regular"/"Delayed"
+  patterns, 0.7–0.8 confidence). Nothing shows them today, but the first caller would put made-up numbers in front
+  of a user. Delete them. Separately, Settings → Sleep Analysis → Personalization links to a screen that only says
+  "Coming Soon"; whether that link stays is a product call (`PARKED_CAPABILITIES.md` §5).
+- **Tests named for what they do not test** (found 2026-10-25). Real migration coverage is
+  `CoreDataModelV2MigrationTests`, `CoreDataModelV3MigrationTests` and `StoreMigrationPathTests`; these are not it:
+  - `CoreDataMigrationTests.migrationManagerInitialization` asserts a non-optional singleton is non-nil.
+  - `dataPreservationDuringMigration`, `relationshipIntegrityAfterMigration`, `storeRecoveryAfterCorruption` and
+    `migrationPerformanceWithLargeDataset` save to and read from a fresh in-memory store. Nothing migrates and
+    nothing is corrupted.
+  - `CoreDataModelTests` says it "validates the index fix", but an in-memory store has no indexes.
+  - `respiratoryDataIndexPerformance` (`< 0.1 s`) and `migrationPerformanceWithLargeDataset` (`< 5 s`) assert
+    wall-clock limits that measure the runner, not the model, and can fail on a loaded CI machine.
+
+  Rename each to what it checks, or delete the ones the real suites cover, and drop the wall-clock limits.
+  Test-only; no product change.
 - Per-night preferred source for overlapping sleep sources — needs an amendment to
   `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first, which defines time asleep as the union across sources.
 - `NavigationView` → `NavigationStack` migration (start with `MainView` — remove the
-  NavigationView wrapping the TabView; give each tab its own NavigationStack). Phase D1.
+  NavigationView wrapping the TabView; give each tab its own NavigationStack). Phase D1. Approved 2026-10-26 to
+  run before the device pass, with Trends reconnected on top of it: the prompt is in `SECOND_AUDIT_IMPROVEMENTS.md`
+  §7.
 - Singleton graph → protocol injection, incrementally, following the
-  `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern. Phase D2.
+  `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern. Phase D2. Approved 2026-10-26; it follows D1, and
+  the D1 chat queues its prompt.
 
 ## Sleep product roadmap (reconciled 2026-07-09, second-audit D3d)
 
