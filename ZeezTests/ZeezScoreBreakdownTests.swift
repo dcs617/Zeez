@@ -42,10 +42,15 @@ struct ZeezScoreBreakdownTests {
     }
 
     /// Persists the estimate the way `SleepAnalyzer` does, optionally overriding what is stored.
+    /// Returns false, persisting nothing, when the session supports no estimate. It runs inside
+    /// the caller's Core Data closure, so the caller requires the result outside it — an issue
+    /// recorded in there off the main actor reaches no test (CLAUDE.md, Testing).
     private func persistEstimate(for session: SleepSession, in context: NSManagedObjectContext,
                                  storedScore: Double? = nil,
-                                 version: String = ZeezScore.version) throws {
-        let metrics = try #require(SleepQualityCalculator(session: session, context: context).calculateMetrics())
+                                 version: String = ZeezScore.version) -> Bool {
+        guard let metrics = SleepQualityCalculator(session: session, context: context).calculateMetrics() else {
+            return false
+        }
         session.qualityScore = storedScore ?? metrics.overallScore
 
         let record = SleepQualityScore(context: context)
@@ -55,6 +60,7 @@ struct ZeezScoreBreakdownTests {
         record.calculationVersion = version
         record.confidenceScore = metrics.confidence
         record.session = session
+        return true
     }
 
     // MARK: - Available
@@ -62,27 +68,29 @@ struct ZeezScoreBreakdownTests {
     @Test("A current estimate's breakdown lists every component in specification order and adds up")
     func breakdownReproducesStoredScore() throws {
         let context = PersistenceController(inMemory: true).container.viewContext
-        try context.performAndWait {
+        let (persisted, made, storedScore) = context.performAndWait {
             let session = makeSession(in: context, asleepHours: 4)
-            try persistEstimate(for: session, in: context)
-
-            guard case .available(let breakdown) = ZeezScoreBreakdown.make(for: session) else {
-                Issue.record("A freshly persisted current-version estimate must have a breakdown")
-                return
-            }
-            #expect(breakdown.entries.map(\.component) == ZeezScoreComponent.allCases)
-            #expect(abs(breakdown.overallScore - session.qualityScore) < 0.0001)
-
-            // The weighted entries must rebuild the composite, or the screen explains
-            // a different number from the one it shows.
-            let available = breakdown.entries.compactMap { entry in
-                entry.result.score.map { (score: $0, weight: entry.component.weight) }
-            }
-            let weight = available.reduce(0.0) { $0 + $1.weight }
-            let rebuilt = available.reduce(0.0) { $0 + $1.score * $1.weight } / weight
-            #expect(abs(rebuilt - session.qualityScore) < 0.0001)
-            #expect(breakdown.entries.first { $0.component == .sleepOpportunity }?.result == .available(50))
+            let persisted = persistEstimate(for: session, in: context)
+            return (persisted, ZeezScoreBreakdown.make(for: session), session.qualityScore)
         }
+        try #require(persisted)
+
+        guard case .available(let breakdown) = made else {
+            Issue.record("A freshly persisted current-version estimate must have a breakdown")
+            return
+        }
+        #expect(breakdown.entries.map(\.component) == ZeezScoreComponent.allCases)
+        #expect(abs(breakdown.overallScore - storedScore) < 0.0001)
+
+        // The weighted entries must rebuild the composite, or the screen explains
+        // a different number from the one it shows.
+        let available = breakdown.entries.compactMap { entry in
+            entry.result.score.map { (score: $0, weight: entry.component.weight) }
+        }
+        let weight = available.reduce(0.0) { $0 + $1.weight }
+        let rebuilt = available.reduce(0.0) { $0 + $1.score * $1.weight } / weight
+        #expect(abs(rebuilt - storedScore) < 0.0001)
+        #expect(breakdown.entries.first { $0.component == .sleepOpportunity }?.result == .available(50))
     }
 
     @Test("An unavailable component is listed as unavailable, never as a number")
@@ -125,13 +133,16 @@ struct ZeezScoreBreakdownTests {
         try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID, container: controller.container)
 
         let bgContext = controller.container.newBackgroundContext()
-        let (hasScore, hasBreakdown) = try await bgContext.perform {
-            let session = try #require(try bgContext.existingObject(with: objectID) as? SleepSession)
+        // `await perform` runs outside this test's task, so it returns values and the test
+        // requires them here: an issue recorded inside it would reach no test.
+        let outcome = try await bgContext.perform { () -> (hasScore: Bool, hasBreakdown: Bool)? in
+            guard let session = try bgContext.existingObject(with: objectID) as? SleepSession else { return nil }
             guard case .available = ZeezScoreBreakdown.make(for: session) else {
                 return (session.hasDisplayableScore, false)
             }
             return (session.hasDisplayableScore, true)
         }
+        let (hasScore, hasBreakdown) = try #require(outcome)
         try #require(hasScore, "Fixture must produce a displayable estimate for this test to mean anything")
         #expect(hasBreakdown, "The analyzer's own output must reproduce under the current version")
     }
@@ -187,31 +198,36 @@ struct ZeezScoreBreakdownTests {
     @Test("The sentinel score has nothing to explain")
     func sentinelHasNoBreakdown() {
         let context = PersistenceController(inMemory: true).container.viewContext
-        context.performAndWait {
+        let made = context.performAndWait {
             let session = makeSession(in: context)
             session.qualityScore = 1.0
-            #expect(ZeezScoreBreakdown.make(for: session) == .unavailable(.noEstimate))
+            return ZeezScoreBreakdown.make(for: session)
         }
+        #expect(made == .unavailable(.noEstimate))
     }
 
     @Test("An estimate from an earlier specification version is not re-explained under the current one")
     func earlierVersionHasNoBreakdown() throws {
         let context = PersistenceController(inMemory: true).container.viewContext
-        try context.performAndWait {
+        let (persisted, made) = context.performAndWait {
             let session = makeSession(in: context)
-            try persistEstimate(for: session, in: context, version: "SleepAnalyzer-2.0")
-            #expect(ZeezScoreBreakdown.make(for: session) == .unavailable(.earlierVersion))
+            return (persistEstimate(for: session, in: context, version: "SleepAnalyzer-2.0"),
+                    ZeezScoreBreakdown.make(for: session))
         }
+        try #require(persisted)
+        #expect(made == .unavailable(.earlierVersion))
     }
 
     @Test("A stored score the stages no longer reproduce gets no breakdown")
     func mismatchedScoreHasNoBreakdown() throws {
         let context = PersistenceController(inMemory: true).container.viewContext
-        try context.performAndWait {
+        let (persisted, made) = context.performAndWait {
             let session = makeSession(in: context)  // recomputes to 100
-            try persistEstimate(for: session, in: context, storedScore: 72)
-            #expect(ZeezScoreBreakdown.make(for: session) == .unavailable(.notReproducible))
+            return (persistEstimate(for: session, in: context, storedScore: 72),
+                    ZeezScoreBreakdown.make(for: session))
         }
+        try #require(persisted)
+        #expect(made == .unavailable(.notReproducible))
     }
 
     // MARK: - Wording (claims contract)
