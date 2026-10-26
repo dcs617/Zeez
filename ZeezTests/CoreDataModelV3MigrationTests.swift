@@ -78,17 +78,26 @@ struct CoreDataModelV3MigrationTests {
 
     private func expectNightIntact(in container: NSPersistentContainer) throws {
         let context = container.newBackgroundContext()
-        try context.performAndWait {
+        // A private context's performAndWait would keep this test's issues, but the
+        // attribution guard cannot tell it from the viewContext, so assert outside it.
+        let night = try context.performAndWait {
             let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             request.predicate = NSPredicate(format: "id == %@", Self.sessionID as CVarArg)
-            let session = try #require(try context.fetch(request).first, "The v2 night must survive the upgrade")
-            #expect(session.startTime == Self.nightStart)
-            #expect(session.deviceIdentifier == AppConstants.DataProvenance.healthKitImport)
-            let stages = session.sleepStages as? Set<SleepStage> ?? []
-            #expect(Set(stages.compactMap(\.stageType)) == ["light", "deep"])
-            #expect(stages.allSatisfy { $0.healthKitSampleUUID == nil && $0.sourceBundleIdentifier == nil },
-                    "Pre-v3 stages have no recorded identity")
+            return try context.fetch(request).first.map { session in
+                let stages = session.sleepStages as? Set<SleepStage> ?? []
+                return (startTime: session.startTime,
+                        deviceIdentifier: session.deviceIdentifier,
+                        stageTypes: Set(stages.compactMap(\.stageType)),
+                        stagesHaveNoIdentity: stages.allSatisfy {
+                            $0.healthKitSampleUUID == nil && $0.sourceBundleIdentifier == nil
+                        })
+            }
         }
+        let session = try #require(night, "The v2 night must survive the upgrade")
+        #expect(session.startTime == Self.nightStart)
+        #expect(session.deviceIdentifier == AppConstants.DataProvenance.healthKitImport)
+        #expect(session.stageTypes == ["light", "deep"])
+        #expect(session.stagesHaveNoIdentity, "Pre-v3 stages have no recorded identity")
     }
 
     private func closeStores(of container: NSPersistentContainer) {

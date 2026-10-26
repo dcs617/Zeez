@@ -144,17 +144,24 @@ struct CoreDataModelV2MigrationTests {
         let context = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
         context.persistentStoreCoordinator = coordinator
 
-        try context.performAndWait {
+        // A main-queue context off the main actor: assert outside the closure, where the
+        // issue reaches this test.
+        let fetched = try context.performAndWait {
             // KVC, not AlarmConfiguration: the neutralized v2 model hands back NSManagedObject.
             let request = NSFetchRequest<NSManagedObject>(entityName: "AlarmConfiguration")
             request.predicate = NSPredicate(format: "id == %@", alarmID as CVarArg)
-            let alarm = try #require(try context.fetch(request).first,
-                                     "Alarm created under v1 must be readable under v2")
-            #expect(alarm.value(forKey: "name") as? String == "Migration fixture")
-            #expect(alarm.value(forKey: "enabled") as? Bool == true)
-            #expect(alarm.value(forKey: "smartWakeEnabled") as? Bool == true)
-            #expect(alarm.value(forKey: "smartWakeWindow") as? Int16 == 15)
+            return try context.fetch(request).first.map {
+                (name: $0.value(forKey: "name") as? String,
+                 enabled: $0.value(forKey: "enabled") as? Bool,
+                 smartWakeEnabled: $0.value(forKey: "smartWakeEnabled") as? Bool,
+                 smartWakeWindow: $0.value(forKey: "smartWakeWindow") as? Int16)
+            }
         }
+        let alarm = try #require(fetched, "Alarm created under v1 must be readable under v2")
+        #expect(alarm.name == "Migration fixture")
+        #expect(alarm.enabled == true)
+        #expect(alarm.smartWakeEnabled == true)
+        #expect(alarm.smartWakeWindow == 15)
     }
 
     @Test func migrateStorePreservesAlarmDataAcrossV1ToV2Hop() throws {
@@ -183,17 +190,22 @@ struct CoreDataModelV2MigrationTests {
         let context = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
         context.persistentStoreCoordinator = coordinator
 
-        try context.performAndWait {
+        // A main-queue context off the main actor: assert outside the closure, where the
+        // issue reaches this test.
+        let fetched = try context.performAndWait {
             let request = NSFetchRequest<AlarmConfiguration>(entityName: "AlarmConfiguration")
             request.predicate = NSPredicate(format: "id == %@", alarmID as CVarArg)
-            let alarm = try #require(try context.fetch(request).first,
-                                     "Alarm created under v1 must survive migration to v2")
-            #expect(alarm.name == "Migration fixture")
-            #expect(alarm.enabled == true)
-            // Explicitly set values are preserved — the new defaults only apply to new rows.
-            #expect(alarm.smartWakeEnabled == true)
-            #expect(alarm.smartWakeWindow == 15)
+            return try context.fetch(request).first.map {
+                (name: $0.name, enabled: $0.enabled,
+                 smartWakeEnabled: $0.smartWakeEnabled, smartWakeWindow: $0.smartWakeWindow)
+            }
         }
+        let alarm = try #require(fetched, "Alarm created under v1 must survive migration to v2")
+        #expect(alarm.name == "Migration fixture")
+        #expect(alarm.enabled == true)
+        // Explicitly set values are preserved — the new defaults only apply to new rows.
+        #expect(alarm.smartWakeEnabled == true)
+        #expect(alarm.smartWakeWindow == 15)
     }
 
     @Test func newAlarmInV2ModelDefaultsToSmartWakeDisabled() throws {
@@ -208,19 +220,23 @@ struct CoreDataModelV2MigrationTests {
         let context = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
         context.persistentStoreCoordinator = coordinator
 
-        try context.performAndWait {
-            let alarm = try #require(NSEntityDescription.insertNewObject(
+        // A main-queue context off the main actor: assert outside the closure, where the
+        // issue reaches this test.
+        let defaults = try context.performAndWait { () -> (smartWakeEnabled: Bool, smartWakeWindow: Int16)? in
+            guard let alarm = NSEntityDescription.insertNewObject(
                 forEntityName: "AlarmConfiguration", into: context
-            ) as? AlarmConfiguration)
+            ) as? AlarmConfiguration else { return nil }
             alarm.id = UUID()
             alarm.name = "Defaults fixture"
             alarm.time = Date()
             try context.save()
-
-            #expect(alarm.smartWakeEnabled == false,
-                    "v2 model default for smartWakeEnabled must be NO")
-            #expect(alarm.smartWakeWindow == 30,
-                    "v2 model default for smartWakeWindow must be 30")
+            return (alarm.smartWakeEnabled, alarm.smartWakeWindow)
         }
+        let alarm = try #require(defaults)
+
+        #expect(alarm.smartWakeEnabled == false,
+                "v2 model default for smartWakeEnabled must be NO")
+        #expect(alarm.smartWakeWindow == 30,
+                "v2 model default for smartWakeWindow must be 30")
     }
 }

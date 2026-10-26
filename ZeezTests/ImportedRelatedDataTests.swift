@@ -39,10 +39,13 @@ struct ImportedRelatedDataTests {
     private func counts(for sessionID: NSManagedObjectID,
                         in controller: PersistenceController) throws -> (heartRate: Int, respiratory: Int) {
         let context = controller.newBackgroundContext()
-        return try context.performAndWait {
-            let session = try #require(try context.existingObject(with: sessionID) as? SleepSession)
+        // A private context's performAndWait would keep this test's issues, but the
+        // attribution guard cannot tell it from the viewContext, so require outside it.
+        let counts = try context.performAndWait { () -> (heartRate: Int, respiratory: Int)? in
+            guard let session = try context.existingObject(with: sessionID) as? SleepSession else { return nil }
             return (session.heartRateData?.count ?? 0, session.respiratoryData?.count ?? 0)
         }
+        return try #require(counts)
     }
 
     private func store(heartRate: [HeartRateDownsampler.Reading] = [],

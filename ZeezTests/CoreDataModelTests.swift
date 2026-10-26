@@ -23,8 +23,10 @@ struct CoreDataModelTests {
         
         let context = container.viewContext
 
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        context.performAndWait {
+        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
+        // the closure: off the main actor, an issue recorded inside it reaches no test.
+        // A save or fetch error escaping it still fails the test.
+        let fetched = try context.performAndWait {
             // Create a test RespiratoryData entity
             let respiratoryData = RespiratoryData(context: context)
             respiratoryData.id = UUID()
@@ -34,28 +36,22 @@ struct CoreDataModelTests {
             respiratoryData.deviceType = "AppleWatch"
 
             // Save the context
-            do {
-                try context.save()
-            } catch {
-                Issue.record("Failed to save RespiratoryData: \(error)")
-            }
+            try context.save()
 
             // Query the data back using indexed field (id)
             let fetchRequest: NSFetchRequest<RespiratoryData> = RespiratoryData.fetchRequest()
             fetchRequest.predicate = NSPredicate(format: "id == %@", respiratoryData.id! as CVarArg)
 
-            do {
-                let results = try context.fetch(fetchRequest)
-                #expect(results.count == 1, "Should fetch exactly one RespiratoryData entity")
-
-                let fetchedData = results.first!
-                #expect(fetchedData.respiratoryRate == 16.5)
-                #expect(fetchedData.confidence == 95.0)
-                #expect(fetchedData.deviceType == "AppleWatch")
-            } catch {
-                Issue.record("Failed to fetch RespiratoryData: \(error)")
+            return try context.fetch(fetchRequest).map {
+                (respiratoryRate: $0.respiratoryRate, confidence: $0.confidence, deviceType: $0.deviceType)
             }
         }
+        #expect(fetched.count == 1, "Should fetch exactly one RespiratoryData entity")
+
+        let fetchedData = try #require(fetched.first)
+        #expect(fetchedData.respiratoryRate == 16.5)
+        #expect(fetchedData.confidence == 95.0)
+        #expect(fetchedData.deviceType == "AppleWatch")
     }
     
     /// Test that the index actually works for performance
@@ -71,8 +67,9 @@ struct CoreDataModelTests {
         
         let context = container.viewContext
 
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        try context.performAndWait {
+        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
+        // the closure: off the main actor, an issue recorded inside it reaches no test.
+        let (resultCount, queryTime) = try context.performAndWait {
             // Create multiple RespiratoryData entries
             for i in 0..<100 {
                 let data = RespiratoryData(context: context)
@@ -93,10 +90,10 @@ struct CoreDataModelTests {
 
             let results = try context.fetch(fetchRequest)
 
-            let queryTime = CFAbsoluteTimeGetCurrent() - startTime
-
-            #expect(results.count > 0, "Should find some high-confidence respiratory data")
-            #expect(queryTime < 0.1, "Query should complete quickly with proper indexing")
+            return (results.count, CFAbsoluteTimeGetCurrent() - startTime)
         }
+
+        #expect(resultCount > 0, "Should find some high-confidence respiratory data")
+        #expect(queryTime < 0.1, "Query should complete quickly with proper indexing")
     }
 }

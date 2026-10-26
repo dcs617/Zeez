@@ -151,8 +151,9 @@ struct CoreDataMigrationTests {
         
         let context = controller.container.viewContext
 
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        try context.performAndWait {
+        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
+        // the closure: off the main actor, an issue recorded inside it reaches no test.
+        let (sessionCount, fetched) = try context.performAndWait {
             // Create test sleep session
             let session = SleepSession(context: context)
             session.id = UUID()
@@ -174,12 +175,14 @@ struct CoreDataMigrationTests {
             // Verify data was saved
             let fetchRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             let sessions = try context.fetch(fetchRequest)
-            #expect(sessions.count == 1, "Should have one sleep session")
-
-            let fetchedSession = sessions.first!
-            #expect(fetchedSession.qualityScore == 85.0, "Quality score should be preserved")
-            #expect(fetchedSession.heartRateData?.count == 1, "Heart rate data should be related")
+            return (sessions.count,
+                    sessions.first.map { (qualityScore: $0.qualityScore, heartRates: $0.heartRateData?.count) })
         }
+        #expect(sessionCount == 1, "Should have one sleep session")
+
+        let fetchedSession = try #require(fetched)
+        #expect(fetchedSession.qualityScore == 85.0, "Quality score should be preserved")
+        #expect(fetchedSession.heartRates == 1, "Heart rate data should be related")
     }
     
     @Test func relationshipIntegrityAfterMigration() async throws {
@@ -193,8 +196,9 @@ struct CoreDataMigrationTests {
         
         let context = controller.container.viewContext
 
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        try context.performAndWait {
+        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
+        // the closure: off the main actor, an issue recorded inside it reaches no test.
+        let result = try context.performAndWait {
             // Create user preferences with alarm configurations
             let userPrefs = UserPreferences(context: context)
             userPrefs.id = UUID()
@@ -214,17 +218,17 @@ struct CoreDataMigrationTests {
             // Verify relationships
             let prefsFetch: NSFetchRequest<UserPreferences> = UserPreferences.fetchRequest()
             let preferences = try context.fetch(prefsFetch)
-            #expect(preferences.count == 1, "Should have one user preferences record")
-
             let fetchedPrefs = preferences.first!
-            #expect(fetchedPrefs.alarmConfigurations?.count == 1, "Should have one related alarm configuration")
-
-            if let alarmSet = fetchedPrefs.alarmConfigurations as? Set<AlarmConfiguration> {
-                let alarm = alarmSet.first!
-                #expect(alarm.name == "Test Alarm", "Alarm name should be preserved")
-                #expect(alarm.userPreferences == fetchedPrefs, "Inverse relationship should be intact")
-            }
+            let alarm = (fetchedPrefs.alarmConfigurations as? Set<AlarmConfiguration>)?.first
+            return (preferenceCount: preferences.count,
+                    alarmCount: fetchedPrefs.alarmConfigurations?.count,
+                    alarmName: alarm?.name,
+                    inverseIntact: alarm.map { $0.userPreferences == fetchedPrefs })
         }
+        #expect(result.preferenceCount == 1, "Should have one user preferences record")
+        #expect(result.alarmCount == 1, "Should have one related alarm configuration")
+        #expect(result.alarmName == "Test Alarm", "Alarm name should be preserved")
+        #expect(result.inverseIntact == true, "Inverse relationship should be intact")
     }
     
     // MARK: - Error Recovery Tests
@@ -265,8 +269,9 @@ struct CoreDataMigrationTests {
         
         // Verify we can create and save data
         let context = controller.container.viewContext
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        try context.performAndWait {
+        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
+        // the closure: off the main actor, an issue recorded inside it reaches no test.
+        let sessionCount = try context.performAndWait {
             let testSession = SleepSession(context: context)
             testSession.id = UUID()
             testSession.startTime = Date()
@@ -276,9 +281,9 @@ struct CoreDataMigrationTests {
 
             // Verify data was saved
             let fetchRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-            let sessions = try context.fetch(fetchRequest)
-            #expect(sessions.count == 1, "Should have saved one session")
+            return try context.fetch(fetchRequest).count
         }
+        #expect(sessionCount == 1, "Should have saved one session")
     }
     
     // MARK: - Performance Tests
