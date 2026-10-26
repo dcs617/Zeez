@@ -7,7 +7,7 @@ struct YearFilterView: View {
     let years: [Int]
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section {
                     Button(action: {

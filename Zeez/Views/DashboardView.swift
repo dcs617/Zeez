@@ -570,7 +570,7 @@ struct DebugMenuView: View {
     @State private var selectedDays = 90
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section("Mock Data") {
                     Picker("Days of Data", selection: $selectedDays) {

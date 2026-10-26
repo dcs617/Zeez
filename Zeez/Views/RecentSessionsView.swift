@@ -32,7 +32,7 @@ struct RecentSessionsView: View {
         }
         .navigationTitle("Sleep History")
         .sheet(item: $selectedSession) { session in
-            NavigationView {
+            NavigationStack {
                 EnhancedSleepDetailsView(session: session)
             }
         }
