@@ -183,8 +183,9 @@ class MonthlyMetrics {
         qualityCount > 0 ? totalQuality / Double(qualityCount) : nil
     }
 
+    /// Bedtimes are clock times, so their spread is measured around midnight, not across it.
     var bedtimeVariance: TimeInterval? {
-        bedtimes.variance
+        bedtimes.circularVariance(period: 24 * 3600)
     }
 
     var durationVariance: TimeInterval? {

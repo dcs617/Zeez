@@ -17,7 +17,18 @@ extension Array where Element == Double {
         guard let variance = variance else { return nil }
         return sqrt(variance)
     }
-    
+
+    /// Sample variance of values that wrap around at `period`, such as clock times in seconds
+    /// since midnight (`period` 86 400). Each value is measured from the circular mean along
+    /// the shorter way round, so 23:50 and 00:10 are 20 minutes apart, not 23 h 40 min.
+    func circularVariance(period: Double) -> Double? {
+        guard count > 1, period > 0 else { return nil }
+        let angles = map { $0 / period * 2 * Double.pi }
+        let meanAngle = atan2(angles.map { sin($0) }.reduce(0, +), angles.map { cos($0) }.reduce(0, +))
+        let deviations = angles.map { remainder($0 - meanAngle, 2 * Double.pi) / (2 * Double.pi) * period }
+        return deviations.map { $0 * $0 }.reduce(0, +) / Double(count - 1)
+    }
+
     func percentile(_ p: Double) -> Double? {
         guard !isEmpty else { return nil }
         let sorted = self.sorted()

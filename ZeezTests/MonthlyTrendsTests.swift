@@ -190,4 +190,26 @@ struct MonthlyTrendsTests {
         #expect(!data.insights.contains { if case .lowConsistency = $0 { return true }; return false },
                 "A five-minute spread must not prompt the low-consistency insight")
     }
+
+    @Test("Bedtimes either side of midnight are minutes apart, not a day apart")
+    func bedtimeSpreadWrapsAtMidnight() async throws {
+        // May alternates 23:50 and 00:10; June alternates 22:50 and 23:10. Both spreads are 20 minutes.
+        let may: [(hour: Int, minute: Int)] = [(23, 50), (0, 10), (23, 50), (0, 10)]
+        let june: [(hour: Int, minute: Int)] = [(22, 50), (23, 10), (22, 50), (23, 10)]
+        let data = try await monthlyTrends { context in
+            for (offset, time) in may.enumerated() {
+                addSession(starting: start(month: 5, day: 10 + offset, hour: time.hour, minute: time.minute),
+                           in: context)
+            }
+            for (offset, time) in june.enumerated() {
+                addSession(starting: start(month: 6, day: 10 + offset, hour: time.hour, minute: time.minute),
+                           in: context)
+            }
+        }
+
+        let mayVariance = try #require(try point(month: 5, in: data).metrics.bedtimeVariance)
+        let juneVariance = try #require(try point(month: 6, in: data).metrics.bedtimeVariance)
+        #expect(abs(mayVariance - juneVariance) < 1,
+                "23:50 and 00:10 are 20 minutes apart; variance \(mayVariance) s² vs \(juneVariance) s²")
+    }
 }
