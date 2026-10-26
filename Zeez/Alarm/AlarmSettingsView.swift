@@ -78,12 +78,12 @@ struct AlarmSettingsView: View {
         }
         .navigationTitle("Rise")
         .sheet(isPresented: $showingNewAlarm) {
-            NavigationView {
+            NavigationStack {
                 AlarmEditView()
             }
         }
         .sheet(item: $selectedAlarm) { alarm in
-            NavigationView {
+            NavigationStack {
                 AlarmEditView(alarm: alarm)
             }
         }

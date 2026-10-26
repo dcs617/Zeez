@@ -44,7 +44,7 @@ struct TimePickerView: View {
     @State private var tempTime: Date
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 Text(timeString)
                     .font(.system(size: 54, weight: .medium, design: .rounded))
@@ -99,7 +99,7 @@ struct SchedulePickerView: View {
     ]
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section("Presets") {
                     ForEach(presets, id: \.0) { preset in

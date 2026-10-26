@@ -10,7 +10,7 @@ struct AlarmSoundPickerView: View {
     @State private var currentlyPlayingSound: String?
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section("Built-in Sounds") {
                     ForEach(sounds.filter { $0.isBuiltIn }) { sound in
