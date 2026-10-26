@@ -7,7 +7,9 @@ struct TrendChart: View {
     let valueLabel: String
     let color: Color
     
-    private var points: [CGPoint] {
+    /// Each point scaled to 0...1 on both axes. An axis whose values are all equal has no
+    /// range to divide by, so its points sit at the middle rather than at NaN.
+    var points: [CGPoint] {
         guard !data.isEmpty,
               let minDate = data.map({ $0.date }).min(),
               let maxDate = data.map({ $0.date }).max(),
@@ -19,8 +21,8 @@ struct TrendChart: View {
         let valueRange = maxValue - minValue
         
         return data.map { item in
-            let x = item.date.timeIntervalSince(minDate) / dateRange
-            let y = (item.value - minValue) / valueRange
+            let x = dateRange > 0 ? item.date.timeIntervalSince(minDate) / dateRange : 0.5
+            let y = valueRange > 0 ? (item.value - minValue) / valueRange : 0.5
             return CGPoint(x: x, y: y)
         }
     }

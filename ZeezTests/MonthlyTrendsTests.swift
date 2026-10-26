@@ -1,5 +1,6 @@
 import CoreData
 import Foundation
+import SwiftUI
 import Testing
 @testable import Zeez
 
@@ -211,5 +212,21 @@ struct MonthlyTrendsTests {
         let juneVariance = try #require(try point(month: 6, in: data).metrics.bedtimeVariance)
         #expect(abs(mayVariance - juneVariance) < 1,
                 "23:50 and 00:10 are 20 minutes apart; variance \(mayVariance) s² vs \(juneVariance) s²")
+    }
+
+    // MARK: - Chart geometry
+
+    @Test("A chart whose values are all equal plots finite points")
+    func flatSeriesPlotsFinitePoints() {
+        let values: [(date: Date, value: Double)] = [
+            (date: start(month: 4, day: 1, hour: 0, minute: 0), value: 7.5),
+            (date: start(month: 5, day: 1, hour: 0, minute: 0), value: 7.5),
+            (date: start(month: 6, day: 1, hour: 0, minute: 0), value: 7.5)
+        ]
+        let points = TrendChart(data: values, valueLabel: "Duration", color: .blue).points
+
+        #expect(points.count == 3)
+        #expect(points.allSatisfy { $0.x.isFinite && $0.y.isFinite },
+                "Equal values divided by a zero value range: \(points)")
     }
 }
