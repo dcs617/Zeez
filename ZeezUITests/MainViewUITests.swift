@@ -53,6 +53,28 @@ final class MainViewUITests: XCTestCase {
                       "The Learn tab must show its navigation title")
     }
 
+    /// A pushed screen must not bring its own navigation container: inside the Sleep tab's stack
+    /// it stacked a second bar under the first and lost the way back to Settings.
+    func testPushedPersonalizationHasOneNavigationBar() throws {
+        launch()
+
+        XCTAssertTrue(app.tabBars.buttons["Sleep"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Sleep"].tap()
+        app.buttons["settingsButton"].tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+
+        let personalization = app.buttons["personalizationSettingsLink"]
+        for _ in 0..<6 where !personalization.isHittable {
+            app.swipeUp()
+        }
+        personalization.tap()
+
+        let bar = app.navigationBars["Sleep Personalization"]
+        XCTAssertTrue(bar.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.navigationBars.count, 1, "A nested container adds a second navigation bar")
+        XCTAssertTrue(bar.buttons.firstMatch.exists, "Personalization must offer the way back to Settings")
+    }
+
     /// Trends had no entry point from 2025-08-19 until the Dashboard link of 2026-10-26.
     func testDashboardLinkOpensTrends() throws {
         launch(extraArguments: ["-uiTestResetStore", "-uiTestSeedMockData"])
