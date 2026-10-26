@@ -111,14 +111,14 @@ struct LearnNoteDetailView: View {
             LearnNoteShareView(notes: [note])
         }
         .sheet(isPresented: $showingArticleBrowser) {
-            NavigationView {
+            NavigationStack {
                 LearnArticleListView(category: .basics) { articleId in
                     linkToArticle(articleId: articleId)
                 }
             }
         }
         .sheet(isPresented: $showingRelatedArticles) {
-            NavigationView {
+            NavigationStack {
                 RelatedArticlesView(noteContent: note.content ?? "")
             }
         }

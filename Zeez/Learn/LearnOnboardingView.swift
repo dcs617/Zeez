@@ -194,7 +194,7 @@ struct LearnWelcomeSheet: View {
     @State private var showingNotificationRequest = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 24) {
                 welcomeImage
                 welcomeContent

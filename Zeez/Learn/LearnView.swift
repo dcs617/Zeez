@@ -164,17 +164,17 @@ struct LearnView: View {
             LearnSearchView()
         }
         .sheet(isPresented: $showingBookmarks) {
-            NavigationView {
+            NavigationStack {
                 LearnBookmarksView()
             }
         }
         .sheet(isPresented: $showingSettings) {
-            NavigationView {
+            NavigationStack {
                 LearnSettingsView()
             }
         }
         .sheet(isPresented: $showingQuickNote) {
-            NavigationView {
+            NavigationStack {
                 LearnQuickNoteView()
                     .environment(\.managedObjectContext, viewContext)
             }

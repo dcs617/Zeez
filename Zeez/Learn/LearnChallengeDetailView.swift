@@ -11,7 +11,7 @@ struct LearnChallengeDetailView: View {
     @State private var showingCompletionAlert = false
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 if let challenge = fetchChallenge() {
                     VStack(alignment: .leading, spacing: 20) {

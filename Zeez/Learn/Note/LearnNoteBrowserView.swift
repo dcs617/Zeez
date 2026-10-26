@@ -93,12 +93,12 @@ struct LearnNoteBrowserView: View {
             }
         }
         .sheet(isPresented: $showingNewNote) {
-            NavigationView {
+            NavigationStack {
                 LearnNoteView(article: nil)
             }
         }
         .sheet(isPresented: $showingArticleLinks) {
-            NavigationView {
+            NavigationStack {
                 LearnArticleListView(category: .basics) { articleId in
                     createArticleNote(articleId: articleId)
                 }
@@ -332,7 +332,7 @@ struct LearnNoteBrowserView: View {
         note.title = "Quick Note - \(Date().formatted(date: .abbreviated, time: .shortened))"
         
         // Show the note detail view for editing
-        let detailView = NavigationView {
+        let detailView = NavigationStack {
             LearnNoteDetailView(note: note)
         }
         

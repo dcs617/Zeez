@@ -132,7 +132,7 @@ struct SleepCycleStageInfoView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(alignment: .leading, spacing: 20) {
                 HStack {
                     Circle()

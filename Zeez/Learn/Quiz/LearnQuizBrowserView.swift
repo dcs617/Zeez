@@ -61,7 +61,7 @@ struct LearnQuizBrowserView: View {
         }
         .navigationTitle("All Quizzes")
         .fullScreenCover(item: $showingQuiz) { quiz in
-            NavigationView {
+            NavigationStack {
                 LearnQuizView(quiz: quiz)
             }
         }

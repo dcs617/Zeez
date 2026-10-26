@@ -31,7 +31,7 @@ struct LearnQuickNoteView: View {
         .position(x: position.x + dragOffset.width, y: position.y + dragOffset.height)
         .gesture(dragGesture)
         .sheet(isPresented: $showingRelatedContent) {
-            NavigationView {
+            NavigationStack {
                 RelatedContentView(noteContent: content)
             }
         }
@@ -236,7 +236,7 @@ struct LearnQuickNoteView: View {
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let window = windowScene.windows.first,
            let rootViewController = window.rootViewController {
-            let detailView = NavigationView {
+            let detailView = NavigationStack {
                 LearnNoteDetailView(note: note)
             }
             let hostingController = UIHostingController(rootView: detailView)

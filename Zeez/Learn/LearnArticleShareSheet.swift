@@ -19,7 +19,7 @@ struct LearnArticleShareSheet: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section("Export Format") {
                     Picker("Format", selection: $selectedFormat) {

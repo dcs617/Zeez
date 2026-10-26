@@ -69,12 +69,12 @@ struct LearnArticleDetailView: View {
                 }
             }
             .sheet(isPresented: $showingHighlights) {
-                NavigationView {
+                NavigationStack {
                     ArticleHighlightsList(article: article)
                 }
             }
             .sheet(item: $selectedHighlight) { highlight in
-                NavigationView {
+                NavigationStack {
                     LearnNoteView(article: article, content: highlight.text ?? "")
                 }
             }
@@ -250,7 +250,7 @@ struct ArticleHighlightsList: View {
             }
         }
         .sheet(item: $selectedHighlight) { highlight in
-            NavigationView {
+            NavigationStack {
                 LearnNoteView(article: article, content: highlight.text ?? "")
             }
         }

@@ -260,7 +260,7 @@ struct BrainActivityStageInfoView: View {
     let stage: String
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     frequencyBandInfo

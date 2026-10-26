@@ -14,7 +14,7 @@ struct LearnNoteShareView: View {
     @State private var errorMessage = ""
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section("Export Format") {
                     Picker("Format", selection: $selectedFormat) {

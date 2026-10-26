@@ -23,7 +23,7 @@ struct LearnQuizSection: View {
         }
         .fullScreenCover(isPresented: $showingQuiz) {
             if let quiz = article.quiz {
-                NavigationView {
+                NavigationStack {
                     LearnQuizView(quiz: quiz)
                 }
             }

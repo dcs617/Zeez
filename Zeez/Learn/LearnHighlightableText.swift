@@ -60,7 +60,7 @@ struct LearnHighlightableText: View {
         .sheet(isPresented: $showingNoteView) {
             if let highlight = currentHighlight,
                let article = highlight.article {
-                NavigationView {
+                NavigationStack {
                     LearnNoteView(
                         article: article,
                         content: selectedText
