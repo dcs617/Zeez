@@ -152,7 +152,7 @@ struct SleepCoverageTests {
         let coverage = SessionInputCoverage.calculate(
             isAppleHealthSource: true,
             counts: .init(stages: 2, heartRate: 0, respiratory: 30),
-            metrics: metrics(appleHealth: true, stages: [("inBed", 8 * 3600), ("deep", 3600), ("rem", 3600)]))
+            metrics: metrics(appleHealth: true, stages: [("inBed", 8.0 * 3600), ("deep", 3600), ("rem", 3600)]))
         let status = Dictionary(uniqueKeysWithValues: coverage.entries.map { ($0.input, $0.status) })
 
         #expect(status[.sleepStages] == .recorded("Reported by Apple Health"))
