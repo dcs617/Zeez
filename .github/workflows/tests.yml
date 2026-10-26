@@ -43,11 +43,19 @@ jobs:
       - name: Run unit tests
         run: |
           set -o pipefail
+          mkdir -p build
           xcodebuild test \
             -project Zeez.xcodeproj \
             -scheme Zeez \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-            -only-testing:ZeezTests
+            -only-testing:ZeezTests \
+            -resultBundlePath build/ZeezTests.xcresult \
+            2>&1 | tee build/xcodebuild-test.log
+
+      - name: Fail on Swift Testing issues that no test owns
+        # xcodebuild exits 0 when an expectation fails where Swift Testing cannot see
+        # the running test; the log and the result bundle still record it (CLAUDE.md, Testing).
+        run: bash .github/scripts/check-swift-testing-attribution.sh build/xcodebuild-test.log build/ZeezTests.xcresult
 
   watch-build:
     if: github.event_name != 'schedule'
