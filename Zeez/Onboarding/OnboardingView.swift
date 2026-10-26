@@ -23,7 +23,7 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 20) {
                 OnboardingProgressView(currentStep: manager.currentStep)
                     .padding(.top)
