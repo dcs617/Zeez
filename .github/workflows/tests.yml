@@ -40,6 +40,14 @@ jobs:
           sudo xcode-select -s "${XCODE:-/Applications/Xcode.app}"
           xcodebuild -version
 
+      - name: Boot simulator
+        # A name-only destination races the runner's lazily loaded simulator runtimes, and
+        # xcodebuild exits 70 when it loses (2 of 3 runs on 2026-10-26). The script waits,
+        # picks one device on the SDK's iOS major version, and boots it.
+        run: |
+          udid=$(python3 .github/scripts/boot-simulator.py "iPhone 16 Pro")
+          echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
+
       - name: Run unit tests
         run: |
           set -o pipefail
@@ -47,7 +55,7 @@ jobs:
           xcodebuild test \
             -project Zeez.xcodeproj \
             -scheme Zeez \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination "id=$SIM_UDID" \
             -only-testing:ZeezTests \
             -resultBundlePath build/ZeezTests.xcresult \
             2>&1 | tee build/xcodebuild-test.log
@@ -95,6 +103,14 @@ jobs:
           sudo xcode-select -s "${XCODE:-/Applications/Xcode.app}"
           xcodebuild -version
 
+      - name: Boot simulator
+        # A name-only destination races the runner's lazily loaded simulator runtimes, and
+        # xcodebuild exits 70 when it loses (2 of 3 runs on 2026-10-26). The script waits,
+        # picks one device on the SDK's iOS major version, and boots it.
+        run: |
+          udid=$(python3 .github/scripts/boot-simulator.py "iPhone 16 Pro")
+          echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
+
       - name: Run UI smoke tests
         run: |
           set -o pipefail
@@ -106,6 +122,6 @@ jobs:
             -project Zeez.xcodeproj \
             -scheme Zeez \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination "id=$SIM_UDID" \
             -only-testing:ZeezUITests/MainViewUITests \
             -only-testing:ZeezUITests/OnboardingUITests
