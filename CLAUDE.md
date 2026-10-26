@@ -36,7 +36,7 @@ Never run two `xcodebuild` invocations concurrently. To recover which tests fail
 
 Both the `Zeez` and `ZeezWatch Watch App` schemes are shared (`Zeez.xcodeproj/xcshareddata/xcschemes/`) — CI cannot build a scheme that is not. The `Zeez` scheme's launch action is wired to the local StoreKit configuration `ZeezTests/Zeez.storekit` (product IDs must match App Store Connect exactly), and its test action includes both ZeezTests and ZeezUITests.
 
-CI (`.github/workflows/tests.yml`) has three jobs: `unit-tests` (`-only-testing:ZeezTests`) and `watch-build` on every push/PR, and `ui-smoke` on a nightly schedule plus `workflow_dispatch` only. UI tests never gate a merge — they need a warm booted simulator and fail noisily.
+CI (`.github/workflows/tests.yml`) has three jobs: `unit-tests` (`-only-testing:ZeezTests`) and `watch-build` on every push/PR, and `ui-smoke` on a nightly schedule plus `workflow_dispatch` only. UI tests never gate a merge — they need a warm booted simulator and fail noisily. `unit-tests` then runs `.github/scripts/check-swift-testing-attribution.sh` over the xcodebuild log and result bundle, because xcodebuild exits 0 on a Swift Testing issue that no test owns (see Testing). Run it locally the same way: `bash .github/scripts/check-swift-testing-attribution.sh <log> <…xcresult>`.
 
 ## Core Architecture
 
@@ -125,20 +125,21 @@ Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImp
 - **Threading**: never touch a managed object or context off its queue. The alarm stack uses the snapshot pattern — `AlarmSnapshot` (`Zeez/Alarm/AlarmSnapshot.swift`) is built inside `context.perform` and only plain values cross onto dispatch queues or `UNUserNotificationCenter` callbacks. Verify threading changes by launching with `-com.apple.CoreData.ConcurrencyDebug 1`.
 
 ### Testing
-Uses Swift Testing (`import Testing`, `@testable import Zeez`); `ZeezUITests` is XCTest. ~36 suites live in `ZeezTests/` — read the directory rather than trusting a list here. Established patterns:
+Uses Swift Testing (`import Testing`, `@testable import Zeez`); `ZeezUITests` is XCTest. ~50 suites live in `ZeezTests/` — read the directory rather than trusting a list here. Established patterns:
 
 - **Fakes**: a product-side protocol with a `= .shared` / `= .current()` default parameter, faked by a lock-guarded `@unchecked Sendable` double. `AlarmNotificationScheduling` + `FakeNotificationCenter` (`ZeezTests/AlarmTestSupport.swift`) is the reference; see `AlarmFollowUpChainTests`. Never use the real `UNUserNotificationCenter`.
 - **Polling**: `AlarmTestSupport.waitUntil` — never fixed sleeps.
 - **Core Data**: in-memory `PersistenceController(inMemory:)`, backed by SQLite at `/dev/null`, so SQL semantics apply (NULLs sort last in a descending order).
-- **Assert outside Core Data closures.** An issue recorded where Swift Testing cannot see the running test is logged as `✘ Test «unknown» recorded an issue`, the test passes, and xcodebuild exits 0. Canaries (2026-10-22, Xcode 26) showed which patterns lose the test:
-  - **Lost:** `viewContext.performAndWait` from a test not on the main actor.
+- **Assert outside Core Data closures.** An issue recorded where Swift Testing cannot see the running test is logged as `✘ Test «unknown» recorded an issue`, the test passes, and xcodebuild exits 0. The result bundle still reports `Failed`, under a test named "Issues recorded without an associated test or suite". Canaries (2026-10-25, Xcode 26.6) showed which patterns lose the test:
+  - **Lost:** `viewContext.performAndWait`, or any `.mainQueueConcurrencyType` context's, from a test not on the main actor, including through a helper such as `withInMemoryContext`.
   - **Lost:** `await context.perform { }` on *any* context, even from a `@MainActor` test.
-  - **Lost:** `try #require` inside either of those. The thrown error does not fail the test.
-  - **Kept:** a private context's `performAndWait`, and `viewContext.performAndWait` in a `@MainActor` test.
+  - **Lost:** `try #require` inside either of those. The error it throws does not fail the test; an ordinary error thrown out of the closure, such as a failed `save()`, still does.
+  - **Lost:** a closure nested inside a losing one, and a helper that asserts, called from inside one.
+  - **Kept:** a private context's `performAndWait`; `viewContext.performAndWait` in a `@MainActor` test or suite; async helpers that await their body inline (`withSQLiteStore`); `loadPersistentStores` callbacks; XCTest's `XCTAssert*` in all of these.
 
-  Return values out of the closure and assert outside it. Older suites still assert inside (`FUTURE_IMPROVEMENTS.md`).
+  Return plain values out of the closure and assert outside it. `SwiftTestingAttributionGuardTests` enforces this. It cannot tell a private context from the viewContext by reading source, so it holds private contexts to the same rule, and `@MainActor` exempts only `performAndWait`. The `unit-tests` CI job also fails on the `«unknown»` line, which catches what the scan misses once that assertion fails.
 - **Fixtures**: `SleepSessionValidator` needs `EnvironmentalReading` timestamps covering ≥80% of a session, so any test that ends a session must seed readings or it throws `.incompleteSensorData`.
-- **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests`) locate sources via `#filePath` so they work in CI. Use them to pin an invariant a refactor establishes.
+- **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests`, `SwiftTestingAttributionGuardTests`) locate sources via `#filePath` so they work in CI. Use them to pin an invariant a refactor establishes.
 - **A regression test that passes against the unfixed code pins nothing** — temporarily revert the fix and confirm the test fails before trusting it.
 - **UI tests** read `#if DEBUG` launch arguments: `-uiTestCompletedOnboarding` / `-uiTestResetOnboarding` (`OnboardingManager`) and `-uiTestResetStore` (`ZeezApp.init`, clears the store before `RootView` exists). A Release UI-test run hangs on onboarding.
 - `StoreKitTests`' four `SKTestSession` tests flake under simulator contention when a live app instance is present. If they fail, uninstall the app from the simulator and re-run before investigating.

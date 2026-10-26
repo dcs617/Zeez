@@ -46,6 +46,15 @@ Carried over from the archived roadmap's Phase 3.
 - ~~Environmental noise units fiction.~~ Done — **B5**. Noise is a relative index 0–100
   (`Environment/NoiseIndex.swift`), explicitly not dB SPL.
 
+**Completed 2026-10-25:**
+
+- ~~Swift Testing can pass a test whose expectation failed.~~ Done — `b7a3379`…`3dff641`. Canaries re-run on
+  Xcode 26.6 confirmed the losing patterns (CLAUDE.md, Testing), and the full run before any change had no
+  hidden failure. 112 assertions in 13 suites ran where a failure reached no test, not the ~130 in 16 a lexical
+  scan estimated. They now return values from their closures and assert outside them, as do 6 safe
+  private-context ones. `SwiftTestingAttributionGuardTests` scans for the shapes, and the `unit-tests` job runs
+  `.github/scripts/check-swift-testing-attribution.sh` over its log and result bundle.
+
 **Still open:**
 
 - Real WidgetKit extension. The in-app `Zeez/Widgets/` tree was deleted in **B1** (it was
@@ -84,19 +93,10 @@ Carried over from the archived roadmap's Phase 3.
   - `TrendChart` divides by zero when every plotted value is equal, which plots NaN coordinates.
 
   `StatsDataProvider` and `SleepStatsRange`, in the same tree, have no callers either.
-- **Swift Testing can pass a test whose expectation failed.** An issue recorded where Swift Testing cannot see the
-  running test is logged as `✘ Test «unknown» recorded an issue`. The test passes, xcodebuild prints
-  `** TEST SUCCEEDED **` and exits 0, and CI stays green; only a `✘ Test run with … failed … with N issues` line gives
-  it away. Canaries (2026-10-22, Xcode 26) showed which patterns lose the test:
-  - **Lost:** `viewContext.performAndWait` off the main actor.
-  - **Lost:** `await context.perform { }` on any context, even from a `@MainActor` test.
-  - **Lost:** `try #require` inside either of those.
-  - **Kept:** a private context's `performAndWait`, and `viewContext.performAndWait` in a `@MainActor` test.
-
-  A lexical scan found about 130 assertions inside such closures across 16 suites. That is an upper bound: it
-  includes the safe private-context ones. The 301-test run on 2026-10-22 had no hidden failures. Fix: assert
-  outside the closures, and add a CI step that fails on those `✘` lines. The prompt is in
-  `SECOND_AUDIT_IMPROVEMENTS.md` §7.
+- **Confirm the Swift Testing attribution check on CI.** It was verified only on Xcode 26.6; the `unit-tests` job
+  runs Xcode 16.x. The first CI run after `3dff641` shows whether that Swift Testing prints the same
+  `Test «unknown» recorded an issue` and `Test run with …` lines, and whether its result bundle files unattributed
+  issues as a failed test. A missing summary line fails the job loudly rather than passing it.
 - Per-night preferred source for overlapping sleep sources — needs an amendment to
   `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first, which defines time asleep as the union across sources.
 - `NavigationView` → `NavigationStack` migration (start with `MainView` — remove the

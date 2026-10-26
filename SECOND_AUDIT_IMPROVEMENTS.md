@@ -431,66 +431,31 @@ If `StoreKitTests` fails, uninstall the app from the simulator and re-run before
 
 ## 7. Prompt for the next implementation chat
 
-Replaced 2026-10-22. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`):
+Replaced 2026-10-25. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`):
 - Phase A, replaced 2026-10-20.
 - §8a durable HealthKit import identity, delivered in code 2026-10-22 (`2244e20`…`6b15519`).
 - The data-safety + claims batch, delivered 2026-10-22 (`9d5b3b7`…`77a11db`, docs in the commit after):
   Delete All Data destroys the store in place, the monthly chart labels its estimate and leaves months without
   data off, the unused `WatchSleepSummary.init(from:)` is gone, Trends lost its duplicate Days range, and debug
   mock sessions are scored by `SleepQualityCalculator`.
+- The Swift Testing attribution fix, delivered 2026-10-25 (`b7a3379`…`3dff641`, docs in the commit after).
+  Canaries re-run on Xcode 26.6 confirmed the losing patterns and added the helper, nested-closure and
+  asserting-helper shapes; the full run before any change had no hidden failure. 112 assertions in 13 suites
+  ran where a failure reached no test. They now return values from their closures and assert outside them,
+  each fix proven by breaking an assertion. `SwiftTestingAttributionGuardTests` scans for the shapes (against
+  the pre-fix tests it reports exactly the 120 inventoried sites), and the `unit-tests` job fails on an
+  unattributed issue in its log or result bundle. Only a CI run on Xcode 16.x can confirm that check's wording;
+  it is the first item below.
 
-That batch found two problems beyond its own items, both now open below: Trends has no entry point, so items
-2 and 4 fixed a screen nobody can open; and Swift Testing can pass a test whose expectation failed.
+No prompt is queued. **When the developer account is renewed, the device pass comes first** — T1 relocates the
+store *and* runs its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in
+the file.
 
-**When the developer account is renewed, the device pass comes first** — T1 relocates the store *and* runs its
-first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. Until then:
-
-```
-Read CLAUDE.md (Testing section), then FUTURE_IMPROVEMENTS.md ("Swift Testing can pass a test
-whose expectation failed") and SECOND_AUDIT_IMPROVEMENTS.md §7. Context: the device pass is
-still blocked on my Apple Developer Program renewal, so this is code work that needs no hardware.
-
-Task: make every Swift Testing failure in ZeezTests count. An issue recorded where Swift
-Testing cannot see the running test is logged as "✘ Test «unknown» recorded an issue", the test
-passes, and xcodebuild exits 0, so CI stays green. Canaries on 2026-10-22 (Xcode 26):
-- lost: viewContext.performAndWait in a test that is not on the main actor
-- lost: await context.perform { } on any context, even from a @MainActor test
-- lost: try #require inside either; the thrown error does not fail the test
-- kept: a private context's performAndWait; viewContext.performAndWait in a @MainActor test
-
-Work in this order and stop at each checkpoint:
-1. Investigate first.
-   - Re-run those canaries in a temporary test file, deleted before any commit.
-   - Add canaries for any other pattern the suites use: helpers such as withInMemoryContext,
-     nested closures, XCTest suites.
-   - Inventory every Swift Testing assertion that runs in a losing pattern. A lexical scan on
-     2026-10-22 found about 130 in 16 suites. That is an upper bound: it includes the safe
-     private-context performAndWait ones.
-   - Before changing any test, run the full suite and check the xcresult and the log for
-     unattributed issues. The 2026-10-22 run had none; confirm it.
-   CHECKPOINT: report the inventory, any hidden failure, and the fix you propose for each
-   suite. A hidden failure is a product bug to triage on its own; never silence it.
-2. Fix one suite per commit, or one commit per group of alike suites. Prefer returning values
-   out of the closure and asserting outside it. Use @MainActor only where the closure is a
-   viewContext performAndWait. Never change product code to make a test pass. Prove each fix:
-   break one of the suite's assertions on purpose, confirm the test now fails and xcodebuild
-   exits non-zero, then restore it.
-3. Add a guard so the pattern cannot come back. Make the unit-tests CI job fail when the
-   xcodebuild log contains "✘ Test «unknown» recorded an issue" or a "✘ Test run with … failed"
-   summary. Add a source-scanning guard suite too if it can be precise, in the style of
-   SessionMonitorLifecycleGuardTests. CI runs Xcode 16.x, not 26, and its Swift Testing may
-   behave differently: say what you verified locally and what only a CI run can confirm.
-4. After each commit run -only-testing:ZeezTests on
-   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF'. Before the last commit, build
-   "ZeezWatch Watch App" on -destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976'.
-5. Update CLAUDE.md's Testing section, FUTURE_IMPROVEMENTS.md, and SECOND_AUDIT_IMPROVEMENTS.md
-   §7.
-
-Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start Trends,
-D1 or D2 work without asking.
-```
-
-**Other open items, if that prompt is not wanted next** (none needs hardware):
+**Open items** (none needs hardware):
+- **Confirm the attribution check on the first CI run** after `3dff641`: the job runs Xcode 16.x, whose Swift
+  Testing may word the `«unknown»` and `Test run with …` lines differently or file unattributed issues
+  differently in the result bundle. The script fails loudly if the summary line is missing; a pass on a clean run
+  shows the summary matched, not that an unattributed issue would be caught.
 - **Trends: reconnect or park it** — a product decision first. `TrendsView` has had no entry point since
   `ac140c2`; the details, and what still needs fixing before it could return, are in `FUTURE_IMPROVEMENTS.md`.
 - **D1a** NavigationView → NavigationStack in `MainView`/`LearnView`, and delete `LearnHomeView`. D1b/D1c are mechanical.
