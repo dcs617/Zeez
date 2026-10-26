@@ -59,7 +59,7 @@ struct TrendMetricCard<Content: View>: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         ScrollView {
             VStack(spacing: 16) {
                 TrendMetricCard(

@@ -168,7 +168,7 @@ struct LearnReferenceView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnReferenceView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

@@ -211,7 +211,7 @@ struct NoteSummaryCard: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnNoteListView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

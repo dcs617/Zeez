@@ -61,7 +61,7 @@ struct RecentSessionsView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         RecentSessionsView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

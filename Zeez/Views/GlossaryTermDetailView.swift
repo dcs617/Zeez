@@ -153,7 +153,7 @@ struct GlossaryTermDetailView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         GlossaryTermDetailView(term: GlossaryTerm())
     }
     .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)

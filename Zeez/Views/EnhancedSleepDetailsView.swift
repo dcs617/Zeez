@@ -311,7 +311,7 @@ struct EnhancedSleepDetailsView: View {
     session.endTime = Date()
     session.qualityScore = 85
     
-    return NavigationView {
+    return NavigationStack {
         EnhancedSleepDetailsView(session: session)
             .environment(\.managedObjectContext, context)
     }

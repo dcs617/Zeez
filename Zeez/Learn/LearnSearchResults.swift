@@ -209,7 +209,7 @@ private struct HighlightSearchResult: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnSearchResults(searchText: "sleep")
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

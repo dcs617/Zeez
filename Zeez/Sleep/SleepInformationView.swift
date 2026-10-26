@@ -431,7 +431,7 @@ struct TimeBreakdownRow: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         SleepInformationView(session: nil)
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

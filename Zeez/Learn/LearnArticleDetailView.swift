@@ -295,7 +295,7 @@ struct ArticleHighlightsList: View {
     article.title = "Sample Article"
     article.content = "This is a sample article content."
     article.readTimeMinutes = 5
-    return NavigationView {
+    return NavigationStack {
         LearnArticleDetailView(articleId: article.objectID)
             .environment(\.managedObjectContext, context)
     }

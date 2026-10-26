@@ -83,7 +83,7 @@ struct LearnGlossaryTermDetailView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         VStack {
             Text("No preview available")
                 .foregroundColor(.secondary)

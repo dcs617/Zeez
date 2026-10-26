@@ -330,7 +330,7 @@ struct ActivityRow: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnProgressView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

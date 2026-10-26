@@ -296,7 +296,7 @@ struct NotesSelectionView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         NotesSelectionView { note in
             ZeezLogger.debug(ZeezLogger.ui, "Selected note: \(note.title ?? "")")
         }

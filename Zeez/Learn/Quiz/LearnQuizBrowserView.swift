@@ -231,7 +231,7 @@ struct QuizCard: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnQuizBrowserView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

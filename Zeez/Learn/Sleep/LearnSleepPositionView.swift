@@ -108,7 +108,7 @@ struct LearnSleepPositionView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnSleepPositionView()
     }
 }

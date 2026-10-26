@@ -159,7 +159,7 @@ struct ModuleCard: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnPathDetail(path: PathTheme.basics)
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

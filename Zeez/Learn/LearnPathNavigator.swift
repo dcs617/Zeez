@@ -279,7 +279,7 @@ struct StatCard: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnPathNavigator()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

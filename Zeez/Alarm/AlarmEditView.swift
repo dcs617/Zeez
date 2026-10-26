@@ -546,7 +546,7 @@ struct AlarmEditView: View {
 }
 
 #Preview("New Alarm") {
-    NavigationView {
+    NavigationStack {
         AlarmEditView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }
@@ -564,7 +564,7 @@ struct AlarmEditView: View {
     alarm.vibrationOnly = false
     alarm.watchHaptics = true
     
-    return NavigationView {
+    return NavigationStack {
         AlarmEditView(alarm: alarm)
             .environment(\.managedObjectContext, context)
     }

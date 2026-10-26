@@ -321,7 +321,7 @@ struct EnvironmentalInsightsView: View {
     let context = PersistenceController.preview.container.viewContext
     let session = SleepSession(context: context)
     
-    return NavigationView {
+    return NavigationStack {
         EnvironmentalInsightsView(session: session)
             .environment(\.managedObjectContext, context)
     }

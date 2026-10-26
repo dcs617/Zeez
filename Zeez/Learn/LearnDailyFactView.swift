@@ -266,7 +266,7 @@ struct LearnDailyFactView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnDailyFactView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

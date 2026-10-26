@@ -100,7 +100,7 @@ struct RecentSleepBanner: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         VStack(spacing: 16) {
             // With session data
             RecentSleepBanner(session: createMockSession())

@@ -138,7 +138,7 @@ struct LearnNoteView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnNoteView(article: nil)
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

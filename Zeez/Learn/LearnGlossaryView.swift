@@ -156,7 +156,7 @@ struct GlossaryTermRow: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnGlossaryView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

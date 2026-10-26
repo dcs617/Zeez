@@ -154,7 +154,7 @@ struct ToolGridCard: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnToolsView()
     }
 }

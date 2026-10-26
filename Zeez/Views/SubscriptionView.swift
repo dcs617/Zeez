@@ -298,7 +298,7 @@ struct SubscriptionView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         SubscriptionView(requiredFeature: .detailedSleepStages)
     }
 }

@@ -211,7 +211,7 @@ struct EnvironmentalDetailView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         EnvironmentalDetailView(factor: .temperature)
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

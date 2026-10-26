@@ -277,7 +277,7 @@ struct TrendsView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         TrendsView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

@@ -389,7 +389,7 @@ struct RelatedArticlesView: View {
     let note = SleepNote(context: context)
     note.title = "Sample Note"
     note.content = "This is a sample note content."
-    return NavigationView {
+    return NavigationStack {
         LearnNoteDetailView(note: note)
             .environment(\.managedObjectContext, context)
     }

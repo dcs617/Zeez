@@ -333,7 +333,7 @@ struct AlarmSettingsView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         AlarmSettingsView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

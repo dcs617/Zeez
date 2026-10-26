@@ -197,7 +197,7 @@ struct LearnQuizView: View {
     let quiz = Quiz(context: context)
     quiz.title = "Sample Quiz"
     quiz.passingScore = 70
-    return NavigationView {
+    return NavigationStack {
         LearnQuizView(quiz: quiz)
             .environment(\.managedObjectContext, context)
     }

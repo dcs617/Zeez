@@ -644,7 +644,7 @@ struct DebugMenuView: View {
 #endif
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         DashboardView()
             .environment(\.managedObjectContext, createPreviewContext())
     }

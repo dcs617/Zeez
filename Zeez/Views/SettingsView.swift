@@ -558,7 +558,7 @@ struct SettingsView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         SettingsView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

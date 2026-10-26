@@ -49,7 +49,7 @@ struct AlarmGesturePickerView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         AlarmGesturePickerView(
             selectedGesture: .constant("tap"),
             title: "Snooze Gesture",

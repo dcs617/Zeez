@@ -111,7 +111,7 @@ struct LearnBookmarksView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnBookmarksView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }

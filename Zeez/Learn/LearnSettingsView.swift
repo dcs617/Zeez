@@ -325,7 +325,7 @@ struct LearnSettingsView: View {
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         LearnSettingsView()
             .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
     }
