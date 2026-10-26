@@ -9,13 +9,13 @@ struct MonthlyChartSection: View {
     enum ChartType: String, CaseIterable {
         case quality = "Experimental Zeez Estimate"
         case duration = "Duration"
-        case consistency = "Consistency"
+        case startTimeSpread = "Start Time Spread"
         case sleepDebt = "Goal Shortfall"
 
         var color: Color {
             switch self {
             case .quality, .duration: return .blue
-            case .consistency: return .green
+            case .startTimeSpread: return .green
             case .sleepDebt: return .orange
             }
         }
@@ -26,7 +26,7 @@ struct MonthlyChartSection: View {
             switch self {
             case .quality: return "Experimental Zeez estimate, monthly average"
             case .duration: return "Duration, monthly average"
-            case .consistency: return "Sleep schedule consistency by month"
+            case .startTimeSpread: return "Recorded sleep start time spread by month"
             case .sleepDebt: return "Sleep goal shortfall by month"
             }
         }
@@ -36,7 +36,7 @@ struct MonthlyChartSection: View {
             switch self {
             case .quality: return "No experimental Zeez estimates in these months"
             case .duration: return "No recorded sessions in these months"
-            case .consistency: return "Not enough sessions to show consistency"
+            case .startTimeSpread: return "Needs at least \(SleepStartSpread.minimumNights) recorded nights in a month"
             case .sleepDebt: return "No sleep goal shortfall to show for these months"
             }
         }
@@ -45,7 +45,7 @@ struct MonthlyChartSection: View {
             switch self {
             case .quality: return "no estimate"
             case .duration: return "no recorded sessions"
-            case .consistency: return "not enough sessions"
+            case .startTimeSpread: return "fewer than \(SleepStartSpread.minimumNights) recorded nights"
             case .sleepDebt: return "not available"
             }
         }
@@ -54,7 +54,7 @@ struct MonthlyChartSection: View {
             switch self {
             case .quality: return "\(Int(value.rounded())) out of 100"
             case .duration: return String(format: "%.1f hours", value)
-            case .consistency: return "\(Int(value.rounded())) percent"
+            case .startTimeSpread: return "varied by about \(Int(value.rounded())) minutes"
             case .sleepDebt: return String(format: "%.1f hours below your selected goal", value)
             }
         }
@@ -64,7 +64,7 @@ struct MonthlyChartSection: View {
             switch self {
             case .quality: return point.metrics.averageQuality
             case .duration: return point.metrics.averageDuration.map { $0 / 3600 }
-            case .consistency: return point.consistency
+            case .startTimeSpread: return point.metrics.startTimeSpread.map { $0.standardDeviation / 60 }
             case .sleepDebt: return point.sleepDebt.map { $0 / 3600 }
             }
         }
@@ -111,6 +111,10 @@ struct MonthlyChartSection: View {
 
             if selectedChart == .quality {
                 Text("Average of nights with an experimental Zeez estimate. Months without one are not plotted.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else if selectedChart == .startTimeSpread {
+                Text("Minutes, as the standard deviation of each night's recorded sleep start time. Months with fewer than \(SleepStartSpread.minimumNights) recorded nights are not plotted.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

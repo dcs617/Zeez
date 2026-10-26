@@ -7,11 +7,11 @@ struct TrendInsightsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sleep Insights")
+            Text("Observations")
                 .font(.headline)
 
             if insights.isEmpty {
-                Text("Not enough data to generate insights")
+                Text("Not enough recorded nights for observations yet")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             } else {
@@ -42,10 +42,12 @@ struct TrendInsightsSection: View {
     
     private func insightColor(_ insight: MonthlyInsight) -> Color {
         switch insight {
-        case .qualityImproving, .highConsistency:
+        case .qualityImproving:
             return .green
-        case .qualityDeclining, .lowConsistency:
+        case .qualityDeclining:
             return .orange
+        case .startTimeSpread:
+            return .blue
         case .belowSelectedGoal:
             return .orange
         case .environmentalImprovementNeeded:
@@ -59,7 +61,7 @@ struct TrendInsightsSection: View {
         TrendInsightsSection(
             insights: [
                 .qualityImproving,
-                .highConsistency,
+                .startTimeSpread(SleepStartSpread(standardDeviation: 25 * 60, nights: 12)),
                 .environmentalImprovementNeeded(recommendations: [])
             ]
         )

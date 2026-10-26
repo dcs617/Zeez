@@ -68,8 +68,7 @@ class MonthlyTrendsDataProvider {
             dataPoints.append(MonthlyDataPoint(
                 month: month,
                 metrics: metrics,
-                sleepDebt: calculateSleepGoalShortfall(metrics),
-                consistency: calculateConsistency(metrics)
+                sleepDebt: calculateSleepGoalShortfall(metrics)
             ))
         }
 
@@ -92,23 +91,6 @@ class MonthlyTrendsDataProvider {
         return metrics.goalShortfall(targetDuration: preferences.targetSleepDuration)
     }
 
-    /// `nil` with fewer than two sessions. Variance needs two; reading its absence as zero
-    /// made an empty month "perfectly consistent".
-    private func calculateConsistency(_ metrics: MonthlyMetrics) -> Double? {
-        guard let bedtimeVariance = metrics.bedtimeVariance,
-              let durationVariance = metrics.durationVariance else { return nil }
-
-        // Compare standard deviations, in seconds, with limits in seconds. Comparing the
-        // variances (seconds²) read about a minute of spread as 0% consistent.
-        let maxBedtimeDeviation: TimeInterval = 3600 // 1 hour standard deviation = 0% consistency
-        let maxDurationDeviation: TimeInterval = 7200 // 2 hour standard deviation = 0% consistency
-
-        let bedtimeConsistency = max(0, 100 - (sqrt(bedtimeVariance) / maxBedtimeDeviation * 100))
-        let durationConsistency = max(0, 100 - (sqrt(durationVariance) / maxDurationDeviation * 100))
-        
-        return (bedtimeConsistency + durationConsistency) / 2
-    }
-    
     private func generateMonthlyInsights(_ data: [MonthlyDataPoint]) -> [MonthlyInsight] {
         var insights: [MonthlyInsight] = []
         
@@ -132,16 +114,13 @@ class MonthlyTrendsDataProvider {
                 }
             }
 
-            if let consistency = current.consistency {
-                if consistency > 80 {
-                    insights.append(.highConsistency)
-                } else if consistency < 60 {
-                    insights.append(.lowConsistency)
-                }
-            }
-            
             // Sleep-debt and environmental insights are omitted until the underlying
             // measurements and computation are production-ready and data-backed.
+        }
+
+        // An observation, not a grade: the contract's wording for schedule regularity.
+        if let spread = data.last?.metrics.startTimeSpread {
+            insights.append(.startTimeSpread(spread))
         }
 
         return insights
@@ -162,7 +141,6 @@ struct MonthlyDataPoint: Identifiable {
     let month: Date
     let metrics: MonthlyMetrics
     let sleepDebt: TimeInterval?
-    let consistency: Double?
 }
 
 class MonthlyMetrics {
@@ -170,8 +148,7 @@ class MonthlyMetrics {
     private(set) var totalDuration: TimeInterval = 0
     private(set) var totalQuality: Double = 0
     private var qualityCount = 0
-    private var bedtimes: [TimeInterval] = []
-    private var durations: [TimeInterval] = []
+    private var recordings: [(start: Date, duration: TimeInterval)] = []
     private var durationsByDay: [Date: TimeInterval] = [:]
     
     var averageDuration: TimeInterval? {
@@ -183,13 +160,9 @@ class MonthlyMetrics {
         qualityCount > 0 ? totalQuality / Double(qualityCount) : nil
     }
 
-    /// Bedtimes are clock times, so their spread is measured around midnight, not across it.
-    var bedtimeVariance: TimeInterval? {
-        bedtimes.circularVariance(period: 24 * 3600)
-    }
-
-    var durationVariance: TimeInterval? {
-        durations.variance
+    /// `nil` below `SleepStartSpread.minimumNights` recorded nights.
+    var startTimeSpread: SleepStartSpread? {
+        SleepStartSpread.calculate(recordings: recordings)
     }
     
     func addSession(_ session: SleepSession) {
@@ -202,16 +175,9 @@ class MonthlyMetrics {
             totalQuality += session.qualityScore
             qualityCount += 1
         }
-        
-        // Store normalized bedtime (seconds since start of day)
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.hour, .minute, .second], from: startTime)
-        let bedtime = TimeInterval(components.hour ?? 0) * 3600 +
-                     TimeInterval(components.minute ?? 0) * 60 +
-                     TimeInterval(components.second ?? 0)
-        bedtimes.append(bedtime)
-        durations.append(duration)
-        durationsByDay[calendar.startOfDay(for: startTime), default: 0] += duration
+
+        recordings.append((start: startTime, duration: session.recordedInterval))
+        durationsByDay[Calendar.current.startOfDay(for: startTime), default: 0] += duration
     }
 
     func goalShortfall(targetDuration: TimeInterval) -> TimeInterval {
@@ -224,8 +190,7 @@ class MonthlyMetrics {
 enum MonthlyInsight {
     case qualityImproving
     case qualityDeclining
-    case highConsistency
-    case lowConsistency
+    case startTimeSpread(SleepStartSpread)
     case belowSelectedGoal
     case environmentalImprovementNeeded(recommendations: [EnvironmentalRecommendation])
     
@@ -235,10 +200,8 @@ enum MonthlyInsight {
             return "Experimental Zeez estimate is increasing"
         case .qualityDeclining:
             return "Experimental Zeez estimate is decreasing"
-        case .highConsistency:
-            return "Excellent sleep schedule consistency"
-        case .lowConsistency:
-            return "Consider stabilizing your sleep schedule"
+        case .startTimeSpread(let spread):
+            return "Your recorded sleep start time varied by about \(spread.minutes) minutes over \(spread.nights) nights this month"
         case .belowSelectedGoal:
             return "Recorded sleep is below your selected goal"
         case .environmentalImprovementNeeded(let recommendations):
@@ -253,10 +216,8 @@ enum MonthlyInsight {
             return "chart.line.uptrend.xyaxis"
         case .qualityDeclining:
             return "chart.line.downtrend.xyaxis"
-        case .highConsistency:
-            return "checkmark.circle"
-        case .lowConsistency:
-            return "exclamationmark.circle"
+        case .startTimeSpread:
+            return "clock"
         case .belowSelectedGoal:
             return "zzz"
         case .environmentalImprovementNeeded:

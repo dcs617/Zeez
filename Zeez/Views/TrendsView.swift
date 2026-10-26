@@ -145,7 +145,7 @@ struct TrendsView: View {
             
             TrendInsightsSection(insights: monthlyData.insights)
             .padding(.horizontal)
-            .accessibilityLabel("Monthly sleep insights")
+            .accessibilityLabel("Monthly observations")
             .accessibilityIdentifier("monthlyInsightsSection")
         }
     }

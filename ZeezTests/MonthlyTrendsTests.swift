@@ -20,15 +20,15 @@ struct MonthlyTrendsTests {
         Calendar.current.date(from: DateComponents(year: 2026, month: month, day: day, hour: 22))!
     }
 
-    /// A completed 8-hour Zeez session, with an estimate persisted the way `SleepAnalyzer`
-    /// persists one when `estimate` is given.
+    /// A completed Zeez session, 8 hours unless `hours` says otherwise, with an estimate
+    /// persisted the way `SleepAnalyzer` persists one when `estimate` is given.
     @discardableResult
-    private func addSession(starting start: Date, estimate: Double? = nil,
+    private func addSession(starting start: Date, hours: Double = 8, estimate: Double? = nil,
                             in context: NSManagedObjectContext) -> SleepSession {
         let session = SleepSession(context: context)
         session.id = UUID()
         session.startTime = start
-        session.endTime = start.addingTimeInterval(8 * 3600)
+        session.endTime = start.addingTimeInterval(hours * 3600)
         session.deviceIdentifier = "Manual Session"
         session.isActive = false
         if let estimate {
@@ -99,7 +99,7 @@ struct MonthlyTrendsTests {
         #expect(data.insights.contains { if case .qualityImproving = $0 { return true }; return false })
     }
 
-    @Test("Months without sessions have no duration, consistency or goal shortfall")
+    @Test("Months without sessions have no duration, start time spread or goal shortfall")
     func emptyMonthsAreUnavailable() async throws {
         let data = try await monthlyTrends { context in
             let preferences = UserPreferences(context: context)
@@ -111,13 +111,13 @@ struct MonthlyTrendsTests {
 
         let march = try point(month: 3, in: data)
         #expect(march.metrics.averageDuration == nil)
-        #expect(march.consistency == nil, "An empty month used to read as 100% consistent")
+        #expect(march.metrics.startTimeSpread == nil, "An empty month used to read as 100% consistent")
         #expect(march.sleepDebt == nil, "An empty month has no shortfall to report, not a shortfall of zero")
 
         let june = try point(month: 6, in: data)
         let juneDuration = try #require(june.metrics.averageDuration)
         #expect(abs(juneDuration - 8 * 3600) < 1)
-        #expect(june.consistency == nil, "Consistency needs at least two sessions")
+        #expect(june.metrics.startTimeSpread == nil, "A spread needs \(SleepStartSpread.minimumNights) recorded nights")
         #expect(june.sleepDebt == 0, "A recorded 8-hour night meets an 8-hour goal")
 
         for chart in MonthlyChartSection.ChartType.allCases where chart != .quality {
@@ -175,9 +175,9 @@ struct MonthlyTrendsTests {
         Calendar.current.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: minute))!
     }
 
-    @Test("Five minutes of bedtime spread is not read as an inconsistent schedule")
-    func smallBedtimeSpreadIsConsistent() async throws {
-        // Identical 8-hour nights starting between 22:55 and 23:05.
+    @Test("The schedule is described as a spread in minutes, never graded or advised on")
+    func scheduleIsDescribedNotGraded() async throws {
+        // Identical 8-hour nights starting between 22:55 and 23:05: a standard deviation of 4.2 minutes.
         let minutes: [(hour: Int, minute: Int)] = [(22, 55), (23, 0), (23, 5), (23, 0), (22, 55)]
         let data = try await monthlyTrends { context in
             for (offset, time) in minutes.enumerated() {
@@ -186,32 +186,60 @@ struct MonthlyTrendsTests {
             }
         }
 
-        let consistency = try #require(try point(month: 6, in: data).consistency)
-        #expect(consistency > 80, "A five-minute spread read as \(consistency)% consistent")
-        #expect(!data.insights.contains { if case .lowConsistency = $0 { return true }; return false },
-                "A five-minute spread must not prompt the low-consistency insight")
+        let descriptions = data.insights.map(\.description)
+        #expect(descriptions.contains("Your recorded sleep start time varied by about 4 minutes over 5 nights this month"),
+                "Insights were \(descriptions)")
+        for description in descriptions {
+            #expect(!description.contains("Excellent") && !description.contains("Consider"),
+                    "\"\(description)\" grades or advises (claims matrix, bedtime consistency and insights rows)")
+        }
+    }
+
+    @Test("A spread needs four recorded nights, and a nap is not a bedtime")
+    func spreadNeedsFourNightsAndIgnoresNaps() async throws {
+        // Every bedtime is 23:00. A one-hour nap at 14:00 shares its night (noon to noon) with
+        // that evening's bedtime, so May has three nights and June four.
+        let data = try await monthlyTrends { context in
+            for month in [5, 6] {
+                let days = month == 5 ? [8, 9, 10] : [8, 9, 10, 11]
+                for day in days {
+                    addSession(starting: start(month: month, day: day, hour: 23, minute: 0), in: context)
+                }
+                addSession(starting: start(month: month, day: 9, hour: 14, minute: 0), hours: 1, in: context)
+            }
+        }
+
+        #expect(try point(month: 5, in: data).metrics.startTimeSpread == nil)
+        #expect(MonthlyChartSection.accessibilityValue(for: .startTimeSpread, in: data.dataPoints)
+                .contains("May 2026: fewer than 4 recorded nights"))
+
+        let june = try #require(try point(month: 6, in: data).metrics.startTimeSpread)
+        #expect(june.nights == 4)
+        #expect(june.standardDeviation < 1, "The nap was read as a bedtime: \(june.standardDeviation) s")
     }
 
     @Test("Bedtimes either side of midnight are minutes apart, not a day apart")
     func bedtimeSpreadWrapsAtMidnight() async throws {
-        // May alternates 23:50 and 00:10; June alternates 22:50 and 23:10. Both spreads are 20 minutes.
-        let may: [(hour: Int, minute: Int)] = [(23, 50), (0, 10), (23, 50), (0, 10)]
-        let june: [(hour: Int, minute: Int)] = [(22, 50), (23, 10), (22, 50), (23, 10)]
+        // May alternates 23:50 and 00:10; June alternates 22:50 and 23:10. Both spreads are 20
+        // minutes. A 00:10 start belongs to the night before, so each falls on a night of its own.
+        let may: [(day: Int, hour: Int, minute: Int)] = [(10, 23, 50), (12, 0, 10), (12, 23, 50), (14, 0, 10)]
+        let june: [(day: Int, hour: Int, minute: Int)] = [(10, 22, 50), (11, 23, 10), (12, 22, 50), (13, 23, 10)]
         let data = try await monthlyTrends { context in
-            for (offset, time) in may.enumerated() {
-                addSession(starting: start(month: 5, day: 10 + offset, hour: time.hour, minute: time.minute),
-                           in: context)
+            for time in may {
+                addSession(starting: start(month: 5, day: time.day, hour: time.hour, minute: time.minute), in: context)
             }
-            for (offset, time) in june.enumerated() {
-                addSession(starting: start(month: 6, day: 10 + offset, hour: time.hour, minute: time.minute),
-                           in: context)
+            for time in june {
+                addSession(starting: start(month: 6, day: time.day, hour: time.hour, minute: time.minute), in: context)
             }
         }
 
-        let mayVariance = try #require(try point(month: 5, in: data).metrics.bedtimeVariance)
-        let juneVariance = try #require(try point(month: 6, in: data).metrics.bedtimeVariance)
-        #expect(abs(mayVariance - juneVariance) < 1,
-                "23:50 and 00:10 are 20 minutes apart; variance \(mayVariance) s² vs \(juneVariance) s²")
+        let maySpread = try #require(try point(month: 5, in: data).metrics.startTimeSpread)
+        let juneSpread = try #require(try point(month: 6, in: data).metrics.startTimeSpread)
+        #expect(maySpread.nights == 4 && juneSpread.nights == 4)
+        #expect(abs(maySpread.standardDeviation - juneSpread.standardDeviation) < 1,
+                "23:50 and 00:10 are 20 minutes apart; \(maySpread.standardDeviation) s vs \(juneSpread.standardDeviation) s")
+        #expect(MonthlyChartSection.accessibilityValue(for: .startTimeSpread, in: data.dataPoints)
+                .contains("May 2026: varied by about 12 minutes"))
     }
 
     // MARK: - Chart geometry
