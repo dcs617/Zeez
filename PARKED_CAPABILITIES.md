@@ -363,3 +363,30 @@ grade Apple's own stages (spec §2), so the two provenances must never be merged
 **Definition of done.** A go/no-go report measuring inferred stages against a labeled reference,
 documenting failure cases. If no-go, the honest outcome is to stop scoring stage distribution rather
 than to keep labeling it experimental indefinitely.
+
+---
+
+## 10. Learn home screen
+
+**Removed:** D1a — `Zeez/Learn/LearnHomeView.swift` (with its `Route` enum and `CategoryCard`).
+
+**What it did.** Nothing reachable. It was added in `ac140c2` (2025-08-19) as an alternative Learn
+landing page — a search bar, a daily-fact preview, a category grid, and progress, notes, tools, and
+practice sections — routed through a typed `Route` and `navigationDestination`. Nothing ever created
+it; the Learn tab has always been `LearnView`.
+
+**Why removed.** Dead, and not a model to copy for D1: it nested a `NavigationView` inside a sheet
+presented from its own `NavigationStack`, the double-container shape D1 removes. Its
+`navigationDestination(for:)` routing is the one useful idea in it.
+
+**Left without callers.** `LearnDailyFactView` (and `LearnDailyFactPreview`) and
+`LearnNoteBrowserView` were reachable only from this screen, so they were already unreachable. They
+are not deleted here; a Learn cleanup should decide whether they return or go.
+
+**Claims tier and label.** Educational content. `ClinicalVocabularyGuardTests` exempts `Zeez/Learn`,
+so any Learn surface that returns needs its copy reviewed by hand against
+`SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` §4.
+
+**Definition of done.** A product decision that Learn needs a landing page distinct from
+`LearnView`'s segmented tabs. Build it inside the Learn tab's `NavigationStack` (`MainView`) with
+`navigationDestination` routes and no container of its own.

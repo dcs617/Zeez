@@ -27,6 +27,32 @@ final class MainViewUITests: XCTestCase {
         app.tabBars.buttons["Learn"].tap()
     }
 
+    /// D1a gave each tab its own `NavigationStack`. A tab that loses it loses its navigation
+    /// bar (Alarm, Learn) or stops pushing (Sleep); `testMainTabNavigation` notices neither.
+    func testEveryTabHasItsOwnNavigationStack() throws {
+        // Learn otherwise opens its first-visit onboarding cover over the tab.
+        launch(extraArguments: ["-hasShownLearnOnboarding", "YES"])
+
+        // The dashboard hides its bar behind a custom header, so prove its stack by pushing.
+        XCTAssertTrue(app.tabBars.buttons["Sleep"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Sleep"].tap()
+        let settingsButton = app.buttons["settingsButton"]
+        XCTAssertTrue(settingsButton.waitForExistence(timeout: 5))
+        settingsButton.tap()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5),
+                      "The Sleep tab must push Settings onto its own stack")
+        XCTAssertTrue(app.tabBars.buttons["Alarm"].isHittable,
+                      "A push inside a tab keeps the tab bar on screen")
+
+        app.tabBars.buttons["Alarm"].tap()
+        XCTAssertTrue(app.navigationBars["Rise"].waitForExistence(timeout: 5),
+                      "The Alarm tab must show its navigation title")
+
+        app.tabBars.buttons["Learn"].tap()
+        XCTAssertTrue(app.navigationBars["Learn"].waitForExistence(timeout: 5),
+                      "The Learn tab must show its navigation title")
+    }
+
     /// Covers B11: with no completed sessions the dashboard replaces its metric cards with
     /// a single call to action that routes to the importer. This test previously waited for
     /// the "Sleep Metrics" header, which B11 stopped rendering on an empty store.

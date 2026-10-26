@@ -30,160 +30,160 @@ struct LearnView: View {
     }
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // Modern Tab Bar
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 20) {
-                        ForEach(LearnTab.allCases) { tab in
-                            VStack(spacing: 8) {
-                                Image(systemName: tab.icon)
-                                    .font(.title2)
-                                    .foregroundColor(selectedTab == tab ? .blue : .gray)
-                                Text(tab.rawValue)
-                                    .font(.subheadline)
-                                    .foregroundColor(selectedTab == tab ? .primary : .gray)
-                                
-                                if selectedTab == tab {
-                                    Rectangle()
-                                        .fill(Color.blue)
-                                        .frame(height: 2)
-                                        .matchedGeometryEffect(id: "activeTab", in: namespace)
-                                } else {
-                                    Rectangle()
-                                        .fill(Color.clear)
-                                        .frame(height: 2)
-                                }
-                            }
-                            .frame(width: 80)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                withAnimation(.spring(response: 0.3)) {
-                                    selectedTab = tab
-                                }
-                            }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("\(tab.rawValue) tab")
-                            .accessibilityHint(selectedTab == tab ? "Currently selected" : "Switch to \(tab.rawValue) section")
-                            .accessibilityIdentifier("learnTab_\(tab.rawValue.lowercased())")
-                            .accessibilityAddTraits(selectedTab == tab ? [.isSelected] : [])
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-                .padding(.vertical, 8)
-                .background(Color(.systemBackground))
-                
-                Divider()
-                
-                // Main Content Area with TabView for smooth transitions
-                TabView(selection: $selectedTab) {
+        VStack(spacing: 0) {
+            // Modern Tab Bar
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
                     ForEach(LearnTab.allCases) { tab in
-                        Group {
-                            switch tab {
-                            case .articles:
-                                ArticlesTabView()
-                            case .tools:
-                                LearnToolsView()
-                            case .challenges:
-                                LearnChallengeListView()
-                            case .progress:
-                                ProgressTabView()
+                        VStack(spacing: 8) {
+                            Image(systemName: tab.icon)
+                                .font(.title2)
+                                .foregroundColor(selectedTab == tab ? .blue : .gray)
+                            Text(tab.rawValue)
+                                .font(.subheadline)
+                                .foregroundColor(selectedTab == tab ? .primary : .gray)
+                            
+                            if selectedTab == tab {
+                                Rectangle()
+                                    .fill(Color.blue)
+                                    .frame(height: 2)
+                                    .matchedGeometryEffect(id: "activeTab", in: namespace)
+                            } else {
+                                Rectangle()
+                                    .fill(Color.clear)
+                                    .frame(height: 2)
                             }
                         }
-                        .tag(tab)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Learn")
-                        .font(.title3.bold())
-                }
-                
-                ToolbarItem(placement: .navigationBarLeading) {
-                    NavigationLink(destination: LearnPathNavigator()) {
-                        Label("Learning Path", systemImage: "map.fill")
-                    }
-                    .accessibilityLabel("Learning Path")
-                    .accessibilityHint("Navigate to structured learning pathways")
-                    .accessibilityIdentifier("learningPathButton")
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        if selectedTab == .articles || selectedTab == .progress {
-                            Button(action: { showingQuickNote = true }) {
-                                Label("Quick Note", systemImage: "square.and.pencil")
+                        .frame(width: 80)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.3)) {
+                                selectedTab = tab
                             }
-                            .accessibilityLabel("Quick Note")
-                            .accessibilityHint("Create a quick note about your learning")
-                            .accessibilityIdentifier("quickNoteButton")
                         }
-                        
-                        NavigationLink(destination: LearnAchievementView()) {
-                            Label("Achievements", systemImage: "star.fill")
-                        }
-                        .accessibilityLabel("Achievements")
-                        .accessibilityHint("View your learning achievements and milestones")
-                        .accessibilityIdentifier("achievementsLink")
-                        
-                        Button(action: { showingBookmarks = true }) {
-                            Label("Bookmarks", systemImage: "bookmark.fill")
-                        }
-                        .accessibilityLabel("Bookmarks")
-                        .accessibilityHint("View your saved articles and content")
-                        .accessibilityIdentifier("bookmarksButton")
-                        
-                        Button(action: { showingSearch = true }) {
-                            Label("Search", systemImage: "magnifyingglass")
-                        }
-                        .accessibilityLabel("Search")
-                        .accessibilityHint("Search through learning content and articles")
-                        .accessibilityIdentifier("searchButton")
-                        
-                        Button(action: { showingSettings = true }) {
-                            Label("Settings", systemImage: "gearshape.fill")
-                        }
-                        .accessibilityLabel("Learn Settings")
-                        .accessibilityHint("Configure learning preferences and options")
-                        .accessibilityIdentifier("learnSettingsButton")
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.title3)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("\(tab.rawValue) tab")
+                        .accessibilityHint(selectedTab == tab ? "Currently selected" : "Switch to \(tab.rawValue) section")
+                        .accessibilityIdentifier("learnTab_\(tab.rawValue.lowercased())")
+                        .accessibilityAddTraits(selectedTab == tab ? [.isSelected] : [])
                     }
-                    .accessibilityLabel("Learn menu")
-                    .accessibilityHint("Opens menu with additional learning options")
-                    .accessibilityIdentifier("learnMenuButton")
+                }
+                .padding(.horizontal)
+            }
+            .padding(.vertical, 8)
+            .background(Color(.systemBackground))
+            
+            Divider()
+            
+            // Main Content Area with TabView for smooth transitions
+            TabView(selection: $selectedTab) {
+                ForEach(LearnTab.allCases) { tab in
+                    Group {
+                        switch tab {
+                        case .articles:
+                            ArticlesTabView()
+                        case .tools:
+                            LearnToolsView()
+                        case .challenges:
+                            LearnChallengeListView()
+                        case .progress:
+                            ProgressTabView()
+                        }
+                    }
+                    .tag(tab)
                 }
             }
-            .sheet(isPresented: $showingSearch) {
-                LearnSearchView()
+            .tabViewStyle(.page(indexDisplayMode: .never))
+        }
+        // The principal item draws the title; this one names the bar and the back button.
+        .navigationTitle("Learn")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Learn")
+                    .font(.title3.bold())
             }
-            .sheet(isPresented: $showingBookmarks) {
-                NavigationView {
-                    LearnBookmarksView()
+            
+            ToolbarItem(placement: .navigationBarLeading) {
+                NavigationLink(destination: LearnPathNavigator()) {
+                    Label("Learning Path", systemImage: "map.fill")
                 }
+                .accessibilityLabel("Learning Path")
+                .accessibilityHint("Navigate to structured learning pathways")
+                .accessibilityIdentifier("learningPathButton")
             }
-            .sheet(isPresented: $showingSettings) {
-                NavigationView {
-                    LearnSettingsView()
+            
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    if selectedTab == .articles || selectedTab == .progress {
+                        Button(action: { showingQuickNote = true }) {
+                            Label("Quick Note", systemImage: "square.and.pencil")
+                        }
+                        .accessibilityLabel("Quick Note")
+                        .accessibilityHint("Create a quick note about your learning")
+                        .accessibilityIdentifier("quickNoteButton")
+                    }
+                    
+                    NavigationLink(destination: LearnAchievementView()) {
+                        Label("Achievements", systemImage: "star.fill")
+                    }
+                    .accessibilityLabel("Achievements")
+                    .accessibilityHint("View your learning achievements and milestones")
+                    .accessibilityIdentifier("achievementsLink")
+                    
+                    Button(action: { showingBookmarks = true }) {
+                        Label("Bookmarks", systemImage: "bookmark.fill")
+                    }
+                    .accessibilityLabel("Bookmarks")
+                    .accessibilityHint("View your saved articles and content")
+                    .accessibilityIdentifier("bookmarksButton")
+                    
+                    Button(action: { showingSearch = true }) {
+                        Label("Search", systemImage: "magnifyingglass")
+                    }
+                    .accessibilityLabel("Search")
+                    .accessibilityHint("Search through learning content and articles")
+                    .accessibilityIdentifier("searchButton")
+                    
+                    Button(action: { showingSettings = true }) {
+                        Label("Settings", systemImage: "gearshape.fill")
+                    }
+                    .accessibilityLabel("Learn Settings")
+                    .accessibilityHint("Configure learning preferences and options")
+                    .accessibilityIdentifier("learnSettingsButton")
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
                 }
+                .accessibilityLabel("Learn menu")
+                .accessibilityHint("Opens menu with additional learning options")
+                .accessibilityIdentifier("learnMenuButton")
             }
-            .sheet(isPresented: $showingQuickNote) {
-                NavigationView {
-                    LearnQuickNoteView()
-                        .environment(\.managedObjectContext, viewContext)
-                }
+        }
+        .sheet(isPresented: $showingSearch) {
+            LearnSearchView()
+        }
+        .sheet(isPresented: $showingBookmarks) {
+            NavigationView {
+                LearnBookmarksView()
             }
-            .fullScreenCover(isPresented: .init(
-                get: { !hasShownOnboarding },
-                set: { hasShownOnboarding = !$0 }
-            )) {
-                LearnOnboardingView()
+        }
+        .sheet(isPresented: $showingSettings) {
+            NavigationView {
+                LearnSettingsView()
             }
+        }
+        .sheet(isPresented: $showingQuickNote) {
+            NavigationView {
+                LearnQuickNoteView()
+                    .environment(\.managedObjectContext, viewContext)
+            }
+        }
+        .fullScreenCover(isPresented: .init(
+            get: { !hasShownOnboarding },
+            set: { hasShownOnboarding = !$0 }
+        )) {
+            LearnOnboardingView()
         }
     }
     
@@ -223,6 +223,8 @@ struct ArticlesTabView: View {
 }
 
 #Preview {
-    LearnView()
-        .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+    NavigationStack {
+        LearnView()
+            .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+    }
 }

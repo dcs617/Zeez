@@ -116,7 +116,7 @@ struct DashboardView: View {
             }
         }
         .navigationTitle("")
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         #if DEBUG
         .sheet(isPresented: $showingDebugMenu) {
             DebugMenuView(viewContext: viewContext)
