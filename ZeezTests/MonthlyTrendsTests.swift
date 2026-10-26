@@ -93,11 +93,27 @@ struct MonthlyTrendsTests {
     @Test("An estimate trend between two estimated months is still reported")
     func trendBetweenEstimatedMonths() async throws {
         let data = try await monthlyTrends { context in
-            addSession(starting: night(month: 5, day: 10), estimate: 60, in: context)
-            addSession(starting: night(month: 6, day: 10), estimate: 80, in: context)
+            for day in 10...13 {
+                addSession(starting: night(month: 5, day: day), estimate: 60, in: context)
+                addSession(starting: night(month: 6, day: day), estimate: 80, in: context)
+            }
         }
 
         #expect(data.insights.contains { if case .qualityImproving = $0 { return true }; return false })
+    }
+
+    @Test("No estimate trend is reported from a month with fewer than four estimated nights")
+    func noTrendFromSparseMonths() async throws {
+        // Four estimated nights in May against one in June: one night is not a month's trend.
+        let data = try await monthlyTrends { context in
+            for day in 10...13 {
+                addSession(starting: night(month: 5, day: day), estimate: 60, in: context)
+            }
+            addSession(starting: night(month: 6, day: 10), estimate: 80, in: context)
+        }
+
+        #expect(!data.insights.contains { if case .qualityImproving = $0 { return true }; return false },
+                "A change was reported from a single estimated night")
     }
 
     @Test("Estimates from an earlier version of the calculation are not averaged in")

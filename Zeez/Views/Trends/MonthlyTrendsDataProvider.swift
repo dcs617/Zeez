@@ -103,10 +103,12 @@ class MonthlyTrendsDataProvider {
                 return insights
             }
             
-            // Estimate trends, only between two months that both have estimates. A month
-            // without one used to count as 0, reporting a trend in the missing data.
+            // Estimate trends, only between two months that both have enough estimated nights.
+            // A month without one used to count as 0, and one night used to stand for a month.
             if let currentQuality = current.metrics.averageQuality,
-               let previousQuality = previous.metrics.averageQuality {
+               let previousQuality = previous.metrics.averageQuality,
+               current.metrics.estimatedNights >= MonthlyInsight.minimumEstimatedNights,
+               previous.metrics.estimatedNights >= MonthlyInsight.minimumEstimatedNights {
                 if currentQuality > previousQuality + 5 {
                     insights.append(.qualityImproving)
                 } else if currentQuality < previousQuality - 5 {
@@ -148,6 +150,7 @@ class MonthlyMetrics {
     private(set) var totalRecordedDuration: TimeInterval = 0
     private(set) var totalQuality: Double = 0
     private var qualityCount = 0
+    private var estimatedNightKeys: Set<Date> = []
     private var recordings: [(start: Date, duration: TimeInterval)] = []
     /// What the sleep goal is compared with, per day: Apple Health time asleep, or a Zeez
     /// session's recorded interval (`durationForSleepGoalComparison`).
@@ -165,6 +168,11 @@ class MonthlyMetrics {
         qualityCount > 0 ? totalQuality / Double(qualityCount) : nil
     }
 
+    /// Nights (noon to noon, as `NightCoverage` counts them) with a current-version estimate.
+    var estimatedNights: Int {
+        estimatedNightKeys.count
+    }
+
     /// `nil` below `SleepStartSpread.minimumNights` recorded nights.
     var startTimeSpread: SleepStartSpread? {
         SleepStartSpread.calculate(recordings: recordings)
@@ -178,6 +186,7 @@ class MonthlyMetrics {
         if session.hasCurrentVersionEstimate {
             totalQuality += session.qualityScore
             qualityCount += 1
+            estimatedNightKeys.insert(NightCoverage.nightKey(for: startTime, calendar: .current))
         }
 
         recordings.append((start: startTime, duration: session.recordedInterval))
@@ -196,6 +205,10 @@ class MonthlyMetrics {
 }
 
 enum MonthlyInsight {
+    /// An estimate change is reported only between two months with at least this many
+    /// estimated nights each: the contract allows no insight from sparse data.
+    static let minimumEstimatedNights = 4
+
     case qualityImproving
     case qualityDeclining
     case startTimeSpread(SleepStartSpread)
