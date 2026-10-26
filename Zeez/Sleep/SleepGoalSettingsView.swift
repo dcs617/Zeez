@@ -29,7 +29,7 @@ struct SleepGoalSettingsView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 sleepGoalSection
                     .accessibilityIdentifier("sleepGoalSection")
