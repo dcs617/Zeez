@@ -12,11 +12,13 @@ struct SleepScorePresentationTests {
 
     /// viewContext is main-queue-confined and Swift Testing runs tests off main (2.4):
     /// all Core Data work runs inside performAndWait, and the controller stays retained
-    /// for the duration of the body.
-    private func withInMemoryContext(_ body: (NSManagedObjectContext) throws -> Void) throws {
+    /// for the duration of the body. The body returns plain values and the tests assert
+    /// outside it — an issue recorded inside a viewContext closure off the main actor
+    /// reaches no test, and the test passes (CLAUDE.md, Testing).
+    private func withInMemoryContext<T>(_ body: (NSManagedObjectContext) throws -> T) throws -> T {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        try context.performAndWait {
+        return try context.performAndWait {
             try body(context)
         }
     }
@@ -34,51 +36,54 @@ struct SleepScorePresentationTests {
 
     @Test("Score of 0 (not yet analyzed) is not displayable")
     func scoreZeroIsNotDisplayable() throws {
-        try withInMemoryContext { context in
+        let displayable = try withInMemoryContext { context in
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
             session.endTime = Date()
             session.qualityScore = 0
             try context.save()
-
-            #expect(!session.hasDisplayableScore, "qualityScore == 0 must not be displayable (awaiting analysis or HealthKit source-only)")
+            return session.hasDisplayableScore
         }
+
+        #expect(!displayable, "qualityScore == 0 must not be displayable (awaiting analysis or HealthKit source-only)")
     }
 
     @Test("Score of 1.0 (sentinel for no sensor data) is not displayable")
     func sentinelScoreIsNotDisplayable() throws {
-        try withInMemoryContext { context in
+        let displayable = try withInMemoryContext { context in
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
             session.endTime = Date()
             session.qualityScore = 1.0
             try context.save()
-
-            #expect(!session.hasDisplayableScore, "qualityScore == 1.0 (sentinel) must not be displayable")
+            return session.hasDisplayableScore
         }
+
+        #expect(!displayable, "qualityScore == 1.0 (sentinel) must not be displayable")
     }
 
     @Test("Numeric score without a Zeez estimate record is not displayable")
     func orphanScoreIsNotDisplayable() throws {
-        try withInMemoryContext { context in
+        let displayable = try withInMemoryContext { context in
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
             session.endTime = Date()
             session.qualityScore = 72.0
             try context.save()
-
-            #expect(!session.hasDisplayableScore, "A number without persisted Zeez estimate provenance must not be displayed")
+            return session.hasDisplayableScore
         }
+
+        #expect(!displayable, "A number without persisted Zeez estimate provenance must not be displayed")
     }
 
     // MARK: - HealthKit import
 
     @Test("HealthKit-imported session starts at qualityScore 0 with no SleepQualityScore entity")
     func healthKitSessionHasNoQualityScoreEntity() throws {
-        try withInMemoryContext { context in
+        let (qualityScores, displayable) = try withInMemoryContext { context in
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
@@ -86,11 +91,11 @@ struct SleepScorePresentationTests {
             session.deviceIdentifier = "HealthKit Import"
             session.qualityScore = 0
             try context.save()
-
-            let qualityScores = session.qualityScores?.allObjects as? [SleepQualityScore] ?? []
-            #expect(qualityScores.isEmpty, "HealthKit import must not create a SleepQualityScore entity")
-            #expect(!session.hasDisplayableScore, "HealthKit session with score 0 must not be displayable")
+            return (session.qualityScores?.allObjects as? [SleepQualityScore] ?? [], session.hasDisplayableScore)
         }
+
+        #expect(qualityScores.isEmpty, "HealthKit import must not create a SleepQualityScore entity")
+        #expect(!displayable, "HealthKit session with score 0 must not be displayable")
     }
 
     // MARK: - Mock data
@@ -104,17 +109,17 @@ struct SleepScorePresentationTests {
         let context = controller.container.viewContext
         let generator = MockDataGenerator(context: context)
 
-        try context.performAndWait {
+        let displayable = try context.performAndWait {
             generator.generateMockData(for: 1)
 
             let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             request.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", "Mock Data")
-            let sessions = try context.fetch(request)
+            return try context.fetch(request).map(\.hasDisplayableScore)
+        }
 
-            #expect(!sessions.isEmpty)
-            for session in sessions {
-                #expect(session.hasDisplayableScore, "Mock sessions should always have a displayable quality score")
-            }
+        #expect(!displayable.isEmpty)
+        for sessionDisplayable in displayable {
+            #expect(sessionDisplayable, "Mock sessions should always have a displayable quality score")
         }
     }
 
@@ -122,7 +127,7 @@ struct SleepScorePresentationTests {
 
     @Test("SleepQualityScore entity distinguishes Zeez-estimated from unavailable score")
     func qualityScoreEntityDistinguishesSource() throws {
-        try withInMemoryContext { context in
+        let result = try withInMemoryContext { context in
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
@@ -134,34 +139,42 @@ struct SleepScorePresentationTests {
             try context.save()
 
             let entities = session.qualityScores?.allObjects as? [SleepQualityScore] ?? []
-            #expect(entities.count == 1, "One SleepQualityScore entity should be attached after analysis")
-            #expect(entities.first?.calculationVersion?.contains("ZeezScore") == true)
-            #expect(session.hasDisplayableScore, "Session with a Zeez estimate must be displayable")
-            #expect(session.hasZeezEstimatedScore)
+            return (entityCount: entities.count,
+                    version: entities.first?.calculationVersion,
+                    displayable: session.hasDisplayableScore,
+                    zeezEstimated: session.hasZeezEstimatedScore)
         }
+
+        #expect(result.entityCount == 1, "One SleepQualityScore entity should be attached after analysis")
+        #expect(result.version?.contains("ZeezScore") == true)
+        #expect(result.displayable, "Session with a Zeez estimate must be displayable")
+        #expect(result.zeezEstimated)
     }
 
     @Test("Imported stages retain Apple Health provenance while Zeez stages are labeled experimental")
     func stageSourceDescriptionIdentifiesProvenance() throws {
-        try withInMemoryContext { context in
+        let (imported, zeez) = try withInMemoryContext { context in
             let imported = SleepSession(context: context)
             imported.deviceIdentifier = "HealthKit Import"
 
             let zeez = SleepSession(context: context)
             zeez.deviceIdentifier = "Local Tracking"
 
-            #expect(imported.hasSourceReportedStages)
-            #expect(imported.stageSourceDescription == "Reported by Apple Health")
-            #expect(!zeez.hasSourceReportedStages)
-            #expect(zeez.stageSourceDescription == "Experimental Zeez-estimated stages")
+            return ((reported: imported.hasSourceReportedStages, source: imported.stageSourceDescription),
+                    (reported: zeez.hasSourceReportedStages, source: zeez.stageSourceDescription))
         }
+
+        #expect(imported.reported)
+        #expect(imported.source == "Reported by Apple Health")
+        #expect(!zeez.reported)
+        #expect(zeez.source == "Experimental Zeez-estimated stages")
     }
 
     // MARK: - Trends aggregation
 
     @Test("Trends fetch excludes sessions with non-displayable scores")
     func trendsFetchExcludesNonDisplayableSessions() throws {
-        try withInMemoryContext { context in
+        let displayableScores = try withInMemoryContext { context in
             // Sentinel score — should be excluded
             let sentinelSession = SleepSession(context: context)
             sentinelSession.id = UUID()
@@ -187,32 +200,33 @@ struct SleepScorePresentationTests {
             try context.save()
 
             let allSessions = [sentinelSession, zeroSession, realSession]
-            let displayable = allSessions.filter { $0.hasDisplayableScore }
-
-            #expect(displayable.count == 1, "Only sessions with score > 1.0 should be included in trend aggregates")
-            #expect(displayable.first?.qualityScore == 78.0)
+            return allSessions.filter { $0.hasDisplayableScore }.map(\.qualityScore)
         }
+
+        #expect(displayableScores.count == 1, "Only sessions with score > 1.0 should be included in trend aggregates")
+        #expect(displayableScores.first == 78.0)
     }
 
     @Test("Watch payload states unavailable score and omits its numeric value")
     func watchPayloadOmitsUnavailableScore() throws {
-        try withInMemoryContext { context in
+        let summary = try withInMemoryContext { context in
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
             session.endTime = Date()
             session.qualityScore = 1.0
             try context.save()
-
-            let payload = try #require(watchSleepSummary(for: session)).toPayload()
-            #expect(payload["qualityAvailable"] as? Bool == false)
-            #expect(payload["quality"] == nil)
+            return watchSleepSummary(for: session)
         }
+
+        let payload = try #require(summary).toPayload()
+        #expect(payload["qualityAvailable"] as? Bool == false)
+        #expect(payload["quality"] == nil)
     }
 
     @Test("Watch payload sends an available score explicitly")
     func watchPayloadIncludesAvailableScore() throws {
-        try withInMemoryContext { context in
+        let summary = try withInMemoryContext { context in
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
@@ -220,35 +234,36 @@ struct SleepScorePresentationTests {
             session.qualityScore = 84
             attachZeezEstimate(to: session, in: context)
             try context.save()
-
-            let payload = try #require(watchSleepSummary(for: session)).toPayload()
-            #expect(payload["qualityAvailable"] as? Bool == true)
-            #expect(payload["quality"] as? Double == 84)
+            return watchSleepSummary(for: session)
         }
+
+        let payload = try #require(summary).toPayload()
+        #expect(payload["qualityAvailable"] as? Bool == true)
+        #expect(payload["quality"] as? Double == 84)
     }
 
     @Test("Dashboard quality preview renders unavailable without inventing a metric")
     func dashboardPreviewStatesUnavailableScore() throws {
-        try withInMemoryContext { context in
+        let stat = try withInMemoryContext { context in
             let session = SleepSession(context: context)
             session.qualityScore = 0
-
-            let stat = SleepQualityPreviewStats.getRandomStat(from: session)
-            #expect(stat?.label == "Score")
-            #expect(stat?.value == "Unavailable")
+            return SleepQualityPreviewStats.getRandomStat(from: session)
         }
+
+        #expect(stat?.label == "Score")
+        #expect(stat?.value == "Unavailable")
     }
 
     @Test("Dashboard quality preview identifies available values as experimental Zeez estimates")
     func dashboardPreviewLabelsEstimatedScore() throws {
-        try withInMemoryContext { context in
+        let stat = try withInMemoryContext { context in
             let session = SleepSession(context: context)
             session.qualityScore = 84
             attachZeezEstimate(to: session, in: context)
-
-            let stat = SleepQualityPreviewStats.getRandomStat(from: session)
-            #expect(stat?.label == "Experimental Zeez Estimate")
-            #expect(stat?.value == "84 pts")
+            return SleepQualityPreviewStats.getRandomStat(from: session)
         }
+
+        #expect(stat?.label == "Experimental Zeez Estimate")
+        #expect(stat?.value == "84 pts")
     }
 }

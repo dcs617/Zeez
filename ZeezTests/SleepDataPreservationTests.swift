@@ -10,11 +10,13 @@ struct SleepDataPreservationTests {
     /// Runs `body` on the viewContext's own queue with the controller kept
     /// alive. The viewContext is main-queue-confined and Swift Testing runs
     /// tests off the main thread — unguarded access raced the main runloop
-    /// and crashed the runner inside MockDataGenerator (2.4).
-    private func withInMemoryContext(_ body: (NSManagedObjectContext) throws -> Void) throws {
+    /// and crashed the runner inside MockDataGenerator (2.4). The body returns plain
+    /// values and the tests assert outside it — an issue recorded inside a viewContext
+    /// closure off the main actor reaches no test, and the test passes (CLAUDE.md, Testing).
+    private func withInMemoryContext<T>(_ body: (NSManagedObjectContext) throws -> T) throws -> T {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
-        try context.performAndWait {
+        return try context.performAndWait {
             try body(context)
         }
     }
@@ -45,7 +47,7 @@ struct SleepDataPreservationTests {
 
     @Test("clearMockData preserves real HealthKit session")
     func clearMockDataPreservesHealthKitSession() throws {
-        try withInMemoryContext { context in
+        let (survivors, survivingStages) = try withInMemoryContext { context in
             let realSession = makeRealSession(in: context)
             let mockSession = makeMockSession(in: context)
 
@@ -68,20 +70,21 @@ struct SleepDataPreservationTests {
             // Real session must survive
             let sessionRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             sessionRequest.predicate = NSPredicate(format: "deviceIdentifier == %@", "HealthKit Import")
-            let survivors = try context.fetch(sessionRequest)
-            #expect(survivors.count == 1, "Real HealthKit session must survive mock cleanup")
+            let survivors = try context.fetch(sessionRequest).count
 
             // Real session's child stage must survive
             let stageRequest: NSFetchRequest<SleepStage> = SleepStage.fetchRequest()
             stageRequest.predicate = NSPredicate(format: "session.deviceIdentifier == %@", "HealthKit Import")
-            let survivingStages = try context.fetch(stageRequest)
-            #expect(survivingStages.count == 1, "Real session's sleep stages must survive mock cleanup")
+            return (survivors, try context.fetch(stageRequest).count)
         }
+
+        #expect(survivors == 1, "Real HealthKit session must survive mock cleanup")
+        #expect(survivingStages == 1, "Real session's sleep stages must survive mock cleanup")
     }
 
     @Test("clearMockData removes all mock sessions and their stages")
     func clearMockDataRemovesMockData() throws {
-        try withInMemoryContext { context in
+        let remaining = try withInMemoryContext { context in
             let real = makeRealSession(in: context)
             _ = real // ensure retained
 
@@ -99,14 +102,15 @@ struct SleepDataPreservationTests {
 
             let mockRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             mockRequest.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", "Mock Data")
-            let remaining = try context.fetch(mockRequest)
-            #expect(remaining.isEmpty, "All mock sessions should be removed")
+            return try context.fetch(mockRequest).count
         }
+
+        #expect(remaining == 0, "All mock sessions should be removed")
     }
 
     @Test("generateMockData preserves real HealthKit session")
     func generateMockDataPreservesRealSession() throws {
-        try withInMemoryContext { context in
+        let survivors = try withInMemoryContext { context in
             let realSession = makeRealSession(in: context)
             let realStage = SleepStage(context: context)
             realStage.id = UUID()
@@ -119,14 +123,15 @@ struct SleepDataPreservationTests {
 
             let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             request.predicate = NSPredicate(format: "deviceIdentifier == %@", "HealthKit Import")
-            let survivors = try context.fetch(request)
-            #expect(survivors.count == 1, "Real HealthKit session must survive generateMockData")
+            return try context.fetch(request).count
         }
+
+        #expect(survivors == 1, "Real HealthKit session must survive generateMockData")
     }
 
     @Test("clearMockData is source-aware across multiple real origins")
     func clearMockDataPreservesMultipleRealOrigins() throws {
-        try withInMemoryContext { context in
+        let (all, mocks) = try withInMemoryContext { context in
             // Real sessions from different non-mock sources
             _ = makeRealSession(in: context, deviceIdentifier: "HealthKit Import")
             // Legacy identifier: the Pillow importer is gone, but sessions it wrote
@@ -139,13 +144,14 @@ struct SleepDataPreservationTests {
             MockDataGenerator(context: context).clearMockData()
 
             let allRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-            let all = try context.fetch(allRequest)
-            #expect(all.count == 3, "All three real-origin sessions should survive")
+            let all = try context.fetch(allRequest).count
 
             let mockRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
             mockRequest.predicate = NSPredicate(format: "deviceIdentifier CONTAINS[c] %@", "Mock Data")
-            let mocks = try context.fetch(mockRequest)
-            #expect(mocks.isEmpty, "Mock session should be gone")
+            return (all, try context.fetch(mockRequest).count)
         }
+
+        #expect(all == 3, "All three real-origin sessions should survive")
+        #expect(mocks == 0, "Mock session should be gone")
     }
 }
