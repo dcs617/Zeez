@@ -1,6 +1,5 @@
 import CoreData
 import Foundation
-import SwiftUI
 import Testing
 @testable import Zeez
 
@@ -316,19 +315,20 @@ struct MonthlyTrendsTests {
                 .contains("May 2026: varied by about 12 minutes"))
     }
 
-    // MARK: - Chart geometry
+    // MARK: - Chart scale
 
-    @Test("A chart whose values are all equal plots finite points")
-    func flatSeriesPlotsFinitePoints() {
-        let values: [(date: Date, value: Double)] = [
-            (date: start(month: 4, day: 1, hour: 0, minute: 0), value: 7.5),
-            (date: start(month: 5, day: 1, hour: 0, minute: 0), value: 7.5),
-            (date: start(month: 6, day: 1, hour: 0, minute: 0), value: 7.5)
-        ]
-        let points = TrendChart(data: values, valueLabel: "Duration", color: .blue).points
+    @Test("The monthly estimate keeps its full 0-100 scale, so a two-point change looks like one")
+    func estimateAxisIsFullScale() {
+        #expect(MonthlyChartSection.valueDomain(for: .quality, values: [92, 91, 90]) == 0...100)
+    }
 
-        #expect(points.count == 3)
-        #expect(points.allSatisfy { $0.x.isFinite && $0.y.isFinite },
-                "Equal values divided by a zero value range: \(points)")
+    @Test("Every other monthly measure starts at zero, and an all-zero series still has an axis")
+    func otherAxesStartAtZero() {
+        for chart in MonthlyChartSection.ChartType.allCases where chart != .quality {
+            let domain = MonthlyChartSection.valueDomain(for: chart, values: [7.9, 8.1])
+            #expect(domain.lowerBound == 0, "\(chart) starts at \(domain.lowerBound)")
+            #expect(domain.upperBound > 8.1, "\(chart) cuts off its highest month")
+        }
+        #expect(MonthlyChartSection.valueDomain(for: .sleepDebt, values: [0, 0]).upperBound > 0)
     }
 }

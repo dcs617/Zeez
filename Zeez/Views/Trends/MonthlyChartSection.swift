@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import os.log
 
 struct MonthlyChartSection: View {
@@ -16,6 +17,15 @@ struct MonthlyChartSection: View {
             case .quality, .duration: return .blue
             case .startTimeSpread: return .green
             case .sleepDebt: return .orange
+            }
+        }
+
+        /// The value axis's unit, shown beside it.
+        var unitLabel: String {
+            switch self {
+            case .quality: return "out of 100"
+            case .duration, .sleepDebt: return "hours"
+            case .startTimeSpread: return "minutes"
             }
         }
 
@@ -77,6 +87,18 @@ struct MonthlyChartSection: View {
         }
     }
 
+    /// The value axis for `chart`. Scaling it to the months' own lowest and highest values drew a
+    /// two-point change in the estimate across the whole chart, a trend the numbers do not make.
+    /// The estimate keeps its full 0–100 scale; every other measure starts at zero.
+    static func valueDomain(for chart: ChartType, values: [Double]) -> ClosedRange<Double> {
+        switch chart {
+        case .quality:
+            return 0...100
+        case .duration, .startTimeSpread, .sleepDebt:
+            return 0...max((values.max() ?? 0) * 1.15, 1)
+        }
+    }
+
     /// Every month in the window, including the ones the chart leaves out, so VoiceOver
     /// hears that a month had no value rather than skipping it silently.
     static func accessibilityValue(for chart: ChartType, in dataPoints: [MonthlyDataPoint]) -> String {
@@ -132,8 +154,27 @@ struct MonthlyChartSection: View {
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 200)
             } else {
-                TrendChart(data: values, valueLabel: chart.rawValue, color: chart.color)
-                    .frame(height: 200)
+                Chart(values, id: \.date) { month in
+                    LineMark(
+                        x: .value("Month", month.date, unit: .month),
+                        y: .value(chart.rawValue, month.value)
+                    )
+                    .foregroundStyle(chart.color)
+                    PointMark(
+                        x: .value("Month", month.date, unit: .month),
+                        y: .value(chart.rawValue, month.value)
+                    )
+                    .foregroundStyle(chart.color)
+                }
+                .chartYScale(domain: Self.valueDomain(for: chart, values: values.map(\.value)))
+                .chartYAxisLabel(chart.unitLabel)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) { _ in
+                        AxisGridLine()
+                        AxisValueLabel(format: .dateTime.month(.abbreviated))
+                    }
+                }
+                .frame(height: 200)
             }
         }
         .accessibilityElement(children: .ignore)
