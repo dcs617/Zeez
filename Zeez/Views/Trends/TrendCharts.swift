@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import os.log
 
 /// Line chart for displaying trend data
@@ -71,89 +72,83 @@ struct TrendChart: View {
     }
 }
 
-/// Chart showing sleep schedule consistency
+/// Each recorded night as a bar from its start to its end, on a noon-to-noon axis so a night
+/// is one unbroken bar. A midnight-to-midnight axis drew a 23:00–07:00 night from 23:00 back up
+/// to 07:00, across the hours awake, and divided by zero with a single night.
 struct ScheduleConsistencyChart: View {
     let data: [(date: Date, bedtime: Date, wakeTime: Date)]
-    
+
+    private struct Night: Identifiable {
+        let id: Int
+        let night: Date
+        let bedtime: Date
+        let wakeTime: Date
+        let start: Double
+        let end: Double
+    }
+
+    private var nights: [Night] {
+        data.enumerated().map { index, item in
+            let span = Self.span(bedtime: item.bedtime, wakeTime: item.wakeTime)
+            return Night(
+                id: index,
+                night: NightCoverage.nightKey(for: item.bedtime, calendar: .current),
+                bedtime: item.bedtime,
+                wakeTime: item.wakeTime,
+                start: span.start,
+                end: span.end
+            )
+        }
+    }
+
     var body: some View {
-        GeometryReader { geometry in
-            VStack {
-                ZStack {
-                    // Time range background
-                    ForEach(0..<24) { hour in
-                        let y = CGFloat(hour) / 24 * geometry.size.height
-                        
-                        Text(String(format: "%02d:00", hour))
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .position(x: 20, y: y)
-                        
-                        Path { path in
-                            path.move(to: CGPoint(x: 40, y: y))
-                            path.addLine(to: CGPoint(x: geometry.size.width, y: y))
-                        }
-                        .stroke(Color.gray.opacity(0.2))
-                    }
-                    
-                    // Sleep periods
-                    ForEach(data.indices, id: \.self) { index in
-                        let item = data[index]
-                        let x = CGFloat(index) / CGFloat(data.count - 1) * 
-                              (geometry.size.width - 50) + 40
-                        
-                        // Bedtime point
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 6, height: 6)
-                            .position(
-                                x: x,
-                                y: timeToY(item.bedtime, in: geometry)
-                            )
-                        
-                        // Wake time point
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 6, height: 6)
-                            .position(
-                                x: x,
-                                y: timeToY(item.wakeTime, in: geometry)
-                            )
-                        
-                        // Connection line
-                        Path { path in
-                            path.move(to: CGPoint(
-                                x: x,
-                                y: timeToY(item.bedtime, in: geometry)
-                            ))
-                            path.addLine(to: CGPoint(
-                                x: x,
-                                y: timeToY(item.wakeTime, in: geometry)
-                            ))
-                        }
-                        .stroke(Color.purple.opacity(0.5))
-                    }
-                }
-                
-                // Date labels
-                HStack {
-                    ForEach(0..<3) { i in
-                        if let date = data[safe: i * (data.count - 1) / 2]?.date {
-                            Text(FormatterUtils.shortDateFormatter.string(from: date))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+        if data.isEmpty {
+            Text("No recorded sessions in this period")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Chart(nights) { night in
+                BarMark(
+                    x: .value("Night", night.night, unit: .day),
+                    yStart: .value("Recorded start", night.start),
+                    yEnd: .value("Recorded end", night.end),
+                    width: .ratio(0.5)
+                )
+                .foregroundStyle(Color.indigo)
+                .cornerRadius(4)
+                .accessibilityLabel(Text(night.night.formatted(.dateTime.weekday(.wide).month().day())))
+                .accessibilityValue(Text("Recorded from \(Self.clockTime(night.bedtime)) to \(Self.clockTime(night.wakeTime))"))
+            }
+            .chartYScale(domain: .automatic(includesZero: false, reversed: true))
+            .chartYAxis {
+                AxisMarks(values: .stride(by: 3)) { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let hours = value.as(Double.self) {
+                            Text(Self.clockLabel(hoursAfterNoon: hours))
                         }
                     }
                 }
             }
         }
     }
-    
-    private func timeToY(_ date: Date, in geometry: GeometryProxy) -> CGFloat {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.hour, .minute], from: date)
-        let hour = Double(components.hour ?? 0)
-        let minute = Double(components.minute ?? 0)
-        let time = hour + minute / 60
-        return CGFloat(time / 24) * geometry.size.height
+
+    /// A night's bar in hours after noon: 23:00 is 11 and 07:00 the next morning is 19. The end
+    /// is the start plus the recorded duration, so a bar never wraps.
+    static func span(bedtime: Date, wakeTime: Date, calendar: Calendar = .current) -> (start: Double, end: Double) {
+        let components = calendar.dateComponents([.hour, .minute], from: bedtime)
+        let clock = Double(components.hour ?? 0) + Double(components.minute ?? 0) / 60
+        let start = (clock + 12).truncatingRemainder(dividingBy: 24)
+        return (start, start + wakeTime.timeIntervalSince(bedtime) / 3600)
+    }
+
+    private static func clockLabel(hoursAfterNoon hours: Double) -> String {
+        let hour = ((Int(hours.rounded()) + 12) % 24 + 24) % 24
+        return String(format: "%02d:00", hour)
+    }
+
+    private static func clockTime(_ date: Date) -> String {
+        date.formatted(date: .omitted, time: .shortened)
     }
 }

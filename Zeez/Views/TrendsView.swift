@@ -116,20 +116,21 @@ struct TrendsView: View {
                             ?? "Sleep duration trends: no recorded sessions in this period")
         .accessibilityIdentifier("durationTrendCard")
         
-        // Sleep Schedule Consistency
+        // Sleep schedule: each night's recorded start and end, and how much the start varied.
         TrendMetricCard(
             title: "Sleep Schedule",
-            subtitle: "Sleep timing consistency"
+            subtitle: scheduleSubtitle,
+            value: startTimeSpread.map { "\($0.minutes) min" }
         ) {
             ScheduleConsistencyChart(data: fetchScheduleData())
                 .frame(height: 200)
-                .accessibilityLabel("Sleep schedule consistency chart showing bedtime and wake time patterns")
-                .accessibilityHint("Chart displaying consistency of sleep and wake times over the selected period")
+                .accessibilityLabel("Recorded sleep schedule chart")
+                .accessibilityHint("Each night shows its recorded start and end time")
                 .accessibilityIdentifier("scheduleChart")
         }
         .padding(.horizontal)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Sleep schedule consistency analysis")
+        .accessibilityLabel("Sleep schedule: \(scheduleSubtitle)")
         .accessibilityIdentifier("scheduleTrendCard")
         
         // Monthly Analysis
@@ -179,6 +180,20 @@ struct TrendsView: View {
             nightCount: NightCoverage.nightCount(from: range.start, to: range.end),
             now: range.end
         )
+    }
+
+    /// `nil` below `SleepStartSpread.minimumNights` recorded nights in the period.
+    private var startTimeSpread: SleepStartSpread? {
+        SleepStartSpread.calculate(recordings: fetchSessions().compactMap { session in
+            session.startTime.map { (start: $0, duration: session.recordedInterval) }
+        })
+    }
+
+    private var scheduleSubtitle: String {
+        guard let spread = startTimeSpread else {
+            return "A start time spread needs at least \(SleepStartSpread.minimumNights) recorded nights"
+        }
+        return "Recorded sleep start time varied by about \(spread.minutes) minutes over \(spread.nights) nights"
     }
 
     /// `nil` when the period has no estimate: an empty period is not a score of zero.
