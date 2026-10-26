@@ -16,6 +16,12 @@ struct ZeezApp: App {
         if CommandLine.arguments.contains("-uiTestResetStore") {
             persistenceController.clearAllData()
         }
+        // Screens that need recorded nights (Trends) seed mock sessions after any reset.
+        // `-uiTestSeedMockData 75` seeds 75 days; without a count, the debug menu's default.
+        if CommandLine.arguments.contains("-uiTestSeedMockData") {
+            let days = UserDefaults.standard.integer(forKey: "uiTestSeedMockData")
+            MockDataGenerator.shared.generateMockData(for: days > 0 ? days : AppConstants.MockData.debugGenerationDays)
+        }
         #endif
     }
 

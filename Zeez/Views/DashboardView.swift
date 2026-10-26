@@ -205,8 +205,40 @@ struct DashboardView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Weekly recorded session duration chart")
                 .accessibilityHint("Shows recorded session duration for each day of the week")
+
+            trendsLink
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// The only way into Trends; it had none from `ac140c2` (2025-08-19) until 2026-10-26.
+    private var trendsLink: some View {
+        NavigationLink(destination: TrendsView()) {
+            HStack(spacing: 12) {
+                Image(systemName: "chart.xyaxis.line")
+                    .font(.title3)
+                    .foregroundColor(.blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sleep Trends")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    Text("Week and month views of your recorded sessions")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .background(Color(UIColor.tertiarySystemBackground))
+            .cornerRadius(16)
+        }
+        .accessibilityLabel("Sleep Trends")
+        .accessibilityHint("Opens week and month trends of your recorded sessions")
+        .accessibilityIdentifier("sleepTrendsLink")
     }
     
     private var metricsSection: some View {

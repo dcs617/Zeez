@@ -53,6 +53,30 @@ final class MainViewUITests: XCTestCase {
                       "The Learn tab must show its navigation title")
     }
 
+    /// Trends had no entry point from 2025-08-19 until the Dashboard link of 2026-10-26.
+    func testDashboardLinkOpensTrends() throws {
+        launch(extraArguments: ["-uiTestResetStore", "-uiTestSeedMockData"])
+
+        XCTAssertTrue(app.tabBars.buttons["Sleep"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Sleep"].tap()
+
+        let trendsLink = app.buttons["sleepTrendsLink"]
+        XCTAssertTrue(trendsLink.waitForExistence(timeout: 10), "With recorded nights the dashboard links to Trends")
+        trendsLink.tap()
+
+        XCTAssertTrue(app.navigationBars["Sleep Trends"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["nightCoverageCard"].waitForExistence(timeout: 5),
+                      "Trends opens on its coverage card")
+        XCTAssertTrue(app.tabBars.buttons["Sleep"].isHittable, "Trends is pushed inside the Sleep tab")
+    }
+
+    func testEmptyDashboardHasNoTrendsLink() throws {
+        launch(extraArguments: ["-uiTestResetStore"])
+
+        XCTAssertTrue(app.otherElements["dashboardEmptyState"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["sleepTrendsLink"].exists, "Trends is linked only once there are recorded nights")
+    }
+
     /// Covers B11: with no completed sessions the dashboard replaces its metric cards with
     /// a single call to action that routes to the importer. This test previously waited for
     /// the "Sleep Metrics" header, which B11 stopped rendering on an empty store.

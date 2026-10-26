@@ -21,8 +21,8 @@ struct TrendsView: View {
                     loadingView
                         .accessibilityIdentifier("loadingView")
                 } else {
+                    // No identifier here: on a builder group it replaces every card's own.
                     trendContent
-                        .accessibilityIdentifier("trendContent")
                 }
             }
             .padding(.vertical)
