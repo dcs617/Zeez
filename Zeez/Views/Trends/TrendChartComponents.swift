@@ -11,13 +11,13 @@ struct TrendChartComponents {
             Chart(data, id: \.date) {
                 LineMark(
                     x: .value("Date", $0.date),
-                    y: .value("Quality", $0.value)
+                    y: .value("Experimental Zeez estimate", $0.value)
                 )
                 .foregroundStyle(Color.purple)
                 
                 AreaMark(
                     x: .value("Date", $0.date),
-                    y: .value("Quality", $0.value)
+                    y: .value("Experimental Zeez estimate", $0.value)
                 )
                 .foregroundStyle(Color.purple.opacity(0.1))
             }

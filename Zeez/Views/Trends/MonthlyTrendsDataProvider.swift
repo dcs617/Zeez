@@ -160,7 +160,7 @@ class MonthlyMetrics {
         sessionCount > 0 ? totalRecordedDuration / Double(sessionCount) : nil
     }
 
-    /// Mean of the month's displayable Experimental Zeez Estimates; `nil` when it has none.
+    /// Mean of the month's current-version Experimental Zeez Estimates; `nil` when it has none.
     var averageQuality: Double? {
         qualityCount > 0 ? totalQuality / Double(qualityCount) : nil
     }
@@ -175,7 +175,7 @@ class MonthlyMetrics {
 
         sessionCount += 1
         totalRecordedDuration += session.recordedInterval
-        if session.hasDisplayableScore {
+        if session.hasCurrentVersionEstimate {
             totalQuality += session.qualityScore
             qualityCount += 1
         }

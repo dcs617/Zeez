@@ -24,6 +24,7 @@ struct MonthlyTrendsTests {
     /// persisted the way `SleepAnalyzer` persists one when `estimate` is given.
     @discardableResult
     private func addSession(starting start: Date, hours: Double = 8, estimate: Double? = nil,
+                            version: String = ZeezScore.version,
                             in context: NSManagedObjectContext) -> SleepSession {
         let session = SleepSession(context: context)
         session.id = UUID()
@@ -37,7 +38,7 @@ struct MonthlyTrendsTests {
             record.id = UUID()
             record.timestamp = session.endTime
             record.overallScore = estimate
-            record.calculationVersion = ZeezScore.version
+            record.calculationVersion = version
             record.session = session
         }
         return session
@@ -97,6 +98,18 @@ struct MonthlyTrendsTests {
         }
 
         #expect(data.insights.contains { if case .qualityImproving = $0 { return true }; return false })
+    }
+
+    @Test("Estimates from an earlier version of the calculation are not averaged in")
+    func earlierVersionEstimatesAreLeftOut() async throws {
+        // ZEEZ_SCORE_SPECIFICATION.md §6: SleepAnalyzer-2.0 scores are not comparable with 3.0
+        // scores and must not be mixed into a trend without disclosure.
+        let data = try await monthlyTrends { context in
+            addSession(starting: night(month: 6, day: 10), estimate: 80, in: context)
+            addSession(starting: night(month: 6, day: 11), estimate: 40, version: "SleepAnalyzer-2.0", in: context)
+        }
+
+        #expect(try point(month: 6, in: data).metrics.averageQuality == 80)
     }
 
     @Test("Months without sessions have no duration, start time spread or goal shortfall")

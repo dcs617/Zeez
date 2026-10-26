@@ -37,6 +37,19 @@ extension SleepSession {
         (qualityScores?.count ?? 0) > 0
     }
 
+    /// The most recent persisted estimate record, which carries its `calculationVersion`.
+    var latestQualityScoreRecord: SleepQualityScore? {
+        let records = (qualityScores?.allObjects as? [SleepQualityScore]) ?? []
+        return records.max { ($0.timestamp ?? .distantPast) < ($1.timestamp ?? .distantPast) }
+    }
+
+    /// A displayable estimate produced by the current `ZeezScore.version`. Trends average only
+    /// these: an earlier version's scores are not comparable and must not be mixed into a trend
+    /// without disclosure (`ZEEZ_SCORE_SPECIFICATION.md` §6).
+    var hasCurrentVersionEstimate: Bool {
+        hasDisplayableScore && latestQualityScoreRecord?.calculationVersion == ZeezScore.version
+    }
+
     var hasSourceReportedStages: Bool {
         deviceIdentifier?.contains(AppConstants.DataProvenance.healthKitMarker) == true
     }

@@ -66,9 +66,7 @@ struct TrendsView: View {
         // Experimental score trends. Nights without an estimate are absent, never zero.
         TrendMetricCard(
             title: "Experimental Zeez Estimate",
-            subtitle: averageQualityScore == nil
-                ? "No estimates in this period"
-                : "Average of estimated nights in this period",
+            subtitle: estimateSubtitle,
             value: averageQualityScore.map { "\(Int($0))" },
             valueColor: .blue
         ) {
@@ -187,6 +185,15 @@ struct TrendsView: View {
         return "Recorded sleep start time varied by about \(spread.minutes) minutes over \(spread.nights) nights"
     }
 
+    /// Says when estimates from an earlier calculation version are left out, rather than
+    /// dropping them silently (`ZEEZ_SCORE_SPECIFICATION.md` §6).
+    private var estimateSubtitle: String {
+        let base = averageQualityScore == nil ? "No estimates in this period" : "Average of estimated nights in this period"
+        let earlier = fetchSessions().filter { $0.hasDisplayableScore && !$0.hasCurrentVersionEstimate }.count
+        guard earlier > 0 else { return base }
+        return base + ". \(earlier) from an earlier version of the calculation \(earlier == 1 ? "is" : "are") not included"
+    }
+
     /// `nil` when the period has no estimate: an empty period is not a score of zero.
     private var averageQualityScore: Double? {
         let qualities = fetchSleepQualities()
@@ -250,7 +257,7 @@ struct TrendsView: View {
     private func fetchSleepQualities() -> [(date: Date, value: Double)] {
         fetchSessions().compactMap { session -> (date: Date, value: Double)? in
             guard let start = session.startTime,
-                  session.hasDisplayableScore else { return nil }
+                  session.hasCurrentVersionEstimate else { return nil }
             return (date: start, value: session.qualityScore)
         }
     }

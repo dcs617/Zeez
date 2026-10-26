@@ -109,7 +109,7 @@ struct MonthlyChartSection: View {
             chart(for: selectedChart)
 
             if selectedChart == .quality {
-                Text("Average of nights with an experimental Zeez estimate. Months without one are not plotted.")
+                Text("Average of nights with an experimental Zeez estimate from the current calculation. Months without one are not plotted.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else if selectedChart == .startTimeSpread {

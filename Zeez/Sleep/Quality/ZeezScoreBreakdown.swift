@@ -51,11 +51,7 @@ struct ZeezScoreBreakdown: Equatable {
             return .unavailable(.noEstimate)
         }
 
-        let records = (session.qualityScores?.allObjects as? [SleepQualityScore]) ?? []
-        let latest = records.max {
-            ($0.timestamp ?? .distantPast) < ($1.timestamp ?? .distantPast)
-        }
-        guard let latest else { return .unavailable(.notReproducible) }
+        guard let latest = session.latestQualityScoreRecord else { return .unavailable(.notReproducible) }
         guard latest.calculationVersion == ZeezScore.version else {
             return .unavailable(.earlierVersion)
         }
