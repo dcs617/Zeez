@@ -468,8 +468,8 @@ the next chat: end this one by queueing its prompt.
 
 Work in this order and stop at each checkpoint:
 0. CI first. Run `git log --oneline @{u}..` and
-   `gh run list --branch feature/sleep-simplification --limit 3`. Expected: the run for
-   541f2dd is green, including the unit-tests step "Fail on Swift Testing issues that no
+   `gh run list --branch feature/sleep-simplification --limit 3`. Expected: the latest run
+   on the branch is green, including the unit-tests step "Fail on Swift Testing issues that no
    test owns", which shows Xcode 16.4 prints the summary line that check reads. If it
    failed, fix that before D1: earlier failures were Xcode 16.4-only compile errors and a
    simulator race (CLAUDE.md, CI). Push any unpushed commits only when I say.
@@ -519,7 +519,7 @@ Core Data tests) without asking.
 **Open items** (none needs hardware):
 - **Confirm the attribution check on CI.** Pushed 2026-10-26. The first runs failed before it could run: two
   Xcode 16.4-only compile errors (`1a28f10`, `541f2dd`) and a simulator race (fixed in `dc40d8f` by booting by UDID).
-  The run for `541f2dd` was pending at handoff; step 0 of the prompt above checks it. the job runs
+  `541f2dd`'s annotation was not enough; the sum is split in the commit after it. Step 0 of the prompt checks the latest run. the job runs
   Xcode 16.x, whose Swift Testing may word the `«unknown»` and `Test run with …` lines differently or file
   unattributed issues differently in the result bundle. The script fails loudly if the summary line is missing; a
   pass on a clean run shows the summary matched, not that an unattributed issue would be caught.

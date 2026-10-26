@@ -191,7 +191,10 @@ struct SleepQualityCalculatorTests {
 
         let m = try #require(metrics(for: session, context: context))
         #expect(m.sleepOpportunityScore == 50)
-        let expected: Double = 100 * 0.25 + 50 * 0.30 + 100 * 0.25 + 100 * 0.15 + 100 * 0.05
+        // Component score × weight, summed. One long literal sum is more than Xcode 16.4's type
+        // checker will solve, even annotated.
+        let weighted: [Double] = [100 * 0.25, 50 * 0.30, 100 * 0.25, 100 * 0.15, 100 * 0.05]
+        let expected = weighted.reduce(0, +)
         #expect(abs(m.overallScore - expected) < 0.0001)
     }
 
