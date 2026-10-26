@@ -3,8 +3,25 @@ import Charts
 import os.log
 
 struct TrendChartComponents {
+    /// Days between time-axis labels for `range`. Labelling each of a month's days with its
+    /// weekday printed thirty overlapping labels.
+    static func axisStride(for range: TrendTimeRange) -> Int {
+        switch range {
+        case .week: return 1
+        case .month: return 7
+        }
+    }
+
+    static func axisLabelFormat(for range: TrendTimeRange) -> Date.FormatStyle {
+        switch range {
+        case .week: return .dateTime.weekday(.abbreviated)
+        case .month: return .dateTime.month(.abbreviated).day()
+        }
+    }
+
     struct QualityChart: View {
         let data: [(date: Date, value: Double)]
+        let range: TrendTimeRange
         let height: CGFloat
         
         var body: some View {
@@ -29,8 +46,8 @@ struct TrendChartComponents {
                 )
             }
             .chartXAxis {
-                AxisMarks(values: .stride(by: .day)) { value in
-                    AxisValueLabel(format: .dateTime.weekday(.abbreviated))
+                AxisMarks(values: .stride(by: .day, count: TrendChartComponents.axisStride(for: range))) { value in
+                    AxisValueLabel(format: TrendChartComponents.axisLabelFormat(for: range))
                 }
             }
         }
@@ -38,6 +55,7 @@ struct TrendChartComponents {
     
     struct DurationChart: View {
         let data: [(date: Date, value: Double)]
+        let range: TrendTimeRange
         let height: CGFloat
         
         var body: some View {
@@ -59,8 +77,8 @@ struct TrendChartComponents {
                 AxisMarks(values: .automatic(desiredCount: 4))
             }
             .chartXAxis {
-                AxisMarks(values: .stride(by: .day)) { value in
-                    AxisValueLabel(format: .dateTime.weekday(.abbreviated))
+                AxisMarks(values: .stride(by: .day, count: TrendChartComponents.axisStride(for: range))) { value in
+                    AxisValueLabel(format: TrendChartComponents.axisLabelFormat(for: range))
                 }
             }
         }
@@ -79,6 +97,7 @@ struct TrendChartComponents {
                 (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds), 79),
                 (Date(), 86)
             ],
+            range: .week,
             height: 200
         )
         
@@ -92,6 +111,7 @@ struct TrendChartComponents {
                 (Date().addingTimeInterval(-AppConstants.Charts.oneDayInSeconds), 6.9),
                 (Date(), 7.4)
             ],
+            range: .week,
             height: 200
         )
     }

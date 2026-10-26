@@ -72,6 +72,7 @@ struct TrendsView: View {
         ) {
             TrendChartComponents.QualityChart(
                 data: fetchSleepQualities(),
+                range: selectedRange,
                 height: 150
             )
             .accessibilityLabel("Experimental Zeez estimate trend chart showing \(fetchSleepQualities().count) data points")
@@ -95,6 +96,7 @@ struct TrendsView: View {
         ) {
             TrendChartComponents.DurationChart(
                 data: fetchSleepDurations(),
+                range: selectedRange,
                 height: 150
             )
             .accessibilityLabel("Recorded session duration trend chart showing \(fetchSleepDurations().count) data points")

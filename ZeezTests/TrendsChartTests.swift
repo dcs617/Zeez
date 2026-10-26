@@ -2,12 +2,12 @@ import Foundation
 import Testing
 @testable import Zeez
 
-/// The Trends "Sleep Schedule" chart (`ScheduleConsistencyChart`).
+/// The weekly Trends charts.
 ///
-/// A night is drawn as a bar from its recorded start to its recorded end. On a
-/// midnight-to-midnight axis a 23:00–07:00 night was drawn from 23:00 back up to 07:00,
-/// across the sixteen hours the person was awake.
-struct ScheduleChartTests {
+/// "Sleep Schedule" (`ScheduleConsistencyChart`) draws a night as a bar from its recorded start
+/// to its recorded end. On a midnight-to-midnight axis a 23:00–07:00 night was drawn from 23:00
+/// back up to 07:00, across the sixteen hours the person was awake.
+struct TrendsChartTests {
 
     private func date(day: Int, hour: Int, minute: Int = 0) -> Date {
         Calendar.current.date(from: DateComponents(year: 2026, month: 6, day: day, hour: hour, minute: minute))!
@@ -33,5 +33,12 @@ struct ScheduleChartTests {
         // A recording across noon continues past the axis end rather than wrapping to the top.
         let acrossNoon = ScheduleConsistencyChart.span(bedtime: date(day: 10, hour: 10), wakeTime: date(day: 10, hour: 13))
         #expect(acrossNoon.start == 22 && acrossNoon.end == 25)
+    }
+
+    @Test("A month's time axis is labelled weekly, a week's daily")
+    func monthAxisIsLabelledWeekly() {
+        // Labelling each of a month's 30 days with its weekday printed overlapping labels.
+        #expect(TrendChartComponents.axisStride(for: .week) == 1)
+        #expect(TrendChartComponents.axisStride(for: .month) == 7)
     }
 }
