@@ -3,7 +3,6 @@ import os.log
 
 struct MonthlyChartSection: View {
     let dataPoints: [MonthlyDataPoint]
-    @Binding var selectedDataPoint: MonthlyDataPoint?
     @State private var selectedChart: ChartType = .quality
     
     enum ChartType: String, CaseIterable {
@@ -141,24 +140,5 @@ struct MonthlyChartSection: View {
         .accessibilityLabel(chart.accessibilityLabel)
         .accessibilityValue(Self.accessibilityValue(for: chart, in: dataPoints))
         .accessibilityIdentifier("monthlyChart")
-    }
-    
-    private func point(_ sleepDebt: TimeInterval) -> Color {
-        sleepDebt > 14400 ? .red : .orange
-    }
-    
-    private func updateSelection(
-        at location: CGPoint,
-        proxy: GeometryProxy,
-        geometry: GeometryProxy
-    ) {
-        let xPosition = location.x - geometry.size.width
-        let width = geometry.size.width
-        let percentage = xPosition / width
-        
-        let index = Int(percentage * CGFloat(dataPoints.count))
-        if index >= 0 && index < dataPoints.count {
-            selectedDataPoint = dataPoints[index]
-        }
     }
 }

@@ -61,9 +61,6 @@ struct AppConstants {
         /// Target sleep duration for analysis (8 * 3600 = 8 hours)
         static let targetDuration: TimeInterval = 8 * 3600
         
-        /// Maximum sleep time variance for consistency calculation (2 * 3600 = 2 hours)
-        static let maxConsistencyVariance: TimeInterval = 2 * 3600
-        
         /// Recommended sleep hours for chart scaling (12 * 3600 = 12 hours)
         static let chartMaxHours: TimeInterval = 12 * 3600
         

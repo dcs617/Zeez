@@ -8,7 +8,6 @@ struct TrendsView: View {
     @State private var selectedRange: TrendTimeRange = .week
     @State private var monthlyData: MonthlyTrendData?
     @State private var isLoading = false
-    @State private var selectedSession: SleepSession?
     
     var body: some View {
         ScrollView {
@@ -35,11 +34,6 @@ struct TrendsView: View {
         .onChange(of: selectedRange) { _, _ in
             Task {
                 await loadData()
-            }
-        }
-        .sheet(item: $selectedSession) { session in
-            NavigationView {
-                EnhancedSleepDetailsView(session: session)
             }
         }
         .accessibilityIdentifier("trendsView")
@@ -135,10 +129,7 @@ struct TrendsView: View {
         
         // Monthly Analysis
         if selectedRange == .month, let monthlyData = monthlyData {
-            MonthlyChartSection(
-                dataPoints: monthlyData.dataPoints,
-                selectedDataPoint: .constant(monthlyData.dataPoints.last)
-            )
+            MonthlyChartSection(dataPoints: monthlyData.dataPoints)
             .padding(.horizontal)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Monthly sleep analysis chart")
