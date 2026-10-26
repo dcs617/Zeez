@@ -35,7 +35,7 @@ struct PremiumGate: ViewModifier {
             }
         }
         .sheet(isPresented: $showingUpgradeSheet) {
-            NavigationView {
+            NavigationStack {
                 SubscriptionView(requiredFeature: feature)
             }
         }
