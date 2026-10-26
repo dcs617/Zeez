@@ -86,9 +86,11 @@ struct AlarmHealthTests {
         let scheduler = AlarmScheduler(notificationCenter: fake)
         let alarm = try AlarmTestSupport.makeAlarm(in: controller.container.viewContext, days: [2, 4])
         let id = alarm.id!.uuidString
-        let expectedNext = try controller.container.viewContext.performAndWait {
-            try #require(AlarmSnapshot(alarm)?.nextFireDate())
-        }
+        // Require outside the closure: off the main actor, an issue recorded inside a
+        // viewContext closure reaches no test, and the test passes.
+        let expectedNext = try #require(controller.container.viewContext.performAndWait {
+            AlarmSnapshot(alarm)?.nextFireDate()
+        })
 
         scheduler.scheduleSpecificAlarm(alarm)
         try await AlarmTestSupport.waitUntil("two mains") {

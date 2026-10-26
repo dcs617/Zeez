@@ -23,7 +23,9 @@ struct WatchPayloadBuilderTests {
     private func snapshot(in context: NSManagedObjectContext, name: String, time: Date,
                           days: Set<Int> = everyDay, enabled: Bool = true) throws -> AlarmSnapshot {
         let alarm = try AlarmTestSupport.makeAlarm(in: context, name: name, time: time, days: days, enabled: enabled)
-        return try context.performAndWait { try #require(AlarmSnapshot(alarm)) }
+        // Require outside the closure: off the main actor, an issue recorded inside a
+        // viewContext closure reaches no test, and the test passes.
+        return try #require(context.performAndWait { AlarmSnapshot(alarm) })
     }
 
     // MARK: - Next alarm
