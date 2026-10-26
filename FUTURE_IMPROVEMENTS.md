@@ -113,6 +113,14 @@ Carried over from the archived roadmap's Phase 3.
   patterns, 0.7–0.8 confidence). Nothing shows them today, but the first caller would put made-up numbers in front
   of a user. Delete them. Separately, Settings → Sleep Analysis → Personalization links to a screen that only says
   "Coming Soon"; whether that link stays is a product call (`PARKED_CAPABILITIES.md` §5).
+  Two more files belong in the same cleanup (found 2026-10-26): `Zeez/Sleep/SleepInfoCard.swift`, whose
+  "fell asleep" row is a hard-coded "25 min" (`calculateFellAsleepTime`, a TODO), and
+  `Zeez/Sleep/SleepPositionAnalyzer.swift` ("Remove or simplify when Learn module is refactored"). Neither has a caller.
+- **The alarm sound picker's "Import from Files" button does nothing** (found 2026-10-26). It is reachable today:
+  Alarm → edit an alarm → Alarm Sound. `AlarmSoundPickerView` shows a "Pro Tip" telling the user to import their own
+  sounds, above a button whose action is `// TODO: Implement custom sound import`. Remove the tip and button, or
+  build the import; a dead control is also an App Review completeness risk. The only other code TODO,
+  `ErrorManager`'s "send to analytics", is a sink nobody asserts on (D2's non-targets) and needs nothing.
 - **Tests named for what they do not test** (found 2026-10-25). Real migration coverage is
   `CoreDataModelV2MigrationTests`, `CoreDataModelV3MigrationTests` and `StoreMigrationPathTests`; these are not it:
   - `CoreDataMigrationTests.migrationManagerInitialization` asserts a non-optional singleton is non-nil.

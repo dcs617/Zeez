@@ -38,6 +38,8 @@ Both the `Zeez` and `ZeezWatch Watch App` schemes are shared (`Zeez.xcodeproj/xc
 
 CI (`.github/workflows/tests.yml`) has three jobs: `unit-tests` (`-only-testing:ZeezTests`) and `watch-build` on every push/PR, and `ui-smoke` on a nightly schedule plus `workflow_dispatch` only. UI tests never gate a merge — they need a warm booted simulator and fail noisily. `unit-tests` then runs `.github/scripts/check-swift-testing-attribution.sh` over the xcodebuild log and result bundle, because xcodebuild exits 0 on a Swift Testing issue that no test owns (see Testing). Run it locally the same way: `bash .github/scripts/check-swift-testing-attribution.sh <log> <…xcresult>`.
 
+CI selects the newest Xcode 16.x (16.4, Swift 6.1, as of 2026-10-26), while this machine develops on Xcode 26, so code that compiles here can fail there. Gate new-SDK symbols with `#if compiler(>=6.2)`, and spell out literals whose type matters: `8 * 3600` inside a `[(String, TimeInterval)]` literal compiled on 26 and broke the 16.4 build (`1a28f10`). Both simulator jobs boot their device with `.github/scripts/boot-simulator.py` (an iPhone 16 Pro on the SDK's iOS major version) and pass `-destination id=$SIM_UDID`. A name-only destination raced the runner's lazily loaded simulator runtimes and exited 70.
+
 ## Core Architecture
 
 ### App Entry Flow
