@@ -112,8 +112,9 @@ struct SleepImportGroupingTests {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
 
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        try context.performAndWait {
+        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
+        // the closure: off the main actor, an issue recorded inside it reaches no test.
+        let (temporaryBefore, temporaryAfter) = try context.performAndWait {
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
@@ -121,16 +122,19 @@ struct SleepImportGroupingTests {
             session.deviceIdentifier = "HealthKit Import"
             session.qualityScore = 0
 
-            // Before obtainPermanentIDs, the ID should be temporary
-            #expect(session.objectID.isTemporaryID,
-                    "Newly inserted object should have a temporary ID before permanentization")
+            let temporaryBefore = session.objectID.isTemporaryID
 
             // Obtain permanent IDs without saving
             try context.obtainPermanentIDs(for: [session])
 
-            #expect(!session.objectID.isTemporaryID,
-                    "After obtainPermanentIDs, the session ID must be permanent and cross-context resolvable")
+            return (temporaryBefore, session.objectID.isTemporaryID)
         }
+
+        // Before obtainPermanentIDs, the ID should be temporary
+        #expect(temporaryBefore,
+                "Newly inserted object should have a temporary ID before permanentization")
+        #expect(!temporaryAfter,
+                "After obtainPermanentIDs, the session ID must be permanent and cross-context resolvable")
     }
 
     // Re-import idempotency, and the saved parent being resolvable before related-data

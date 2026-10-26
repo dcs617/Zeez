@@ -6,6 +6,8 @@ import Testing
 struct SleepDebtTrackingTests {
     // viewContext is main-queue-confined and Swift Testing runs tests off the
     // main thread — all Core Data work below runs inside performAndWait (2.4).
+    // The closures return values and the tests assert outside them: off the main
+    // actor, an issue recorded inside a viewContext closure reaches no test.
     private func makeContext() -> NSManagedObjectContext {
         PersistenceController(inMemory: true).container.viewContext
     }
@@ -54,7 +56,7 @@ struct SleepDebtTrackingTests {
     @Test("Goal shortfall uses reported asleep stages and excludes in-bed time")
     func healthKitShortfallUsesReportedSleepOnly() throws {
         let context = makeContext()
-        try context.performAndWait {
+        let summary = try context.performAndWait {
             addPreferences(in: context)
             let session = addSession(
                 start: date(25, hour: 22),
@@ -67,21 +69,20 @@ struct SleepDebtTrackingTests {
             addStage("awake", hours: 1, to: session, in: context)
             try context.save()
 
-            let summary = try #require(
-                SleepDebtCalculator.shared.summary(forDays: 7, endingAt: date(26), context: context)
-            )
-
-            #expect(summary.coveredDayCount == 1)
-            #expect(summary.days[0].comparedDuration == 7 * 3600)
-            #expect(summary.totalShortfall == 1 * 3600)
-            #expect(!summary.usesEstimatedDurations)
+            return SleepDebtCalculator.shared.summary(forDays: 7, endingAt: date(26), context: context)
         }
+
+        let shortfall = try #require(summary)
+        #expect(shortfall.coveredDayCount == 1)
+        #expect(shortfall.days[0].comparedDuration == 7 * 3600)
+        #expect(shortfall.totalShortfall == 1 * 3600)
+        #expect(!shortfall.usesEstimatedDurations)
     }
 
     @Test("Goal shortfall excludes missing days and identifies recorded Zeez durations as estimated")
     func missingDaysDoNotCreateDebt() throws {
         let context = makeContext()
-        try context.performAndWait {
+        let summary = try context.performAndWait {
             addPreferences(in: context)
             _ = addSession(
                 start: date(24, hour: 22),
@@ -91,20 +92,19 @@ struct SleepDebtTrackingTests {
             )
             try context.save()
 
-            let summary = try #require(
-                SleepDebtCalculator.shared.summary(forDays: 7, endingAt: date(26), context: context)
-            )
-
-            #expect(summary.coveredDayCount == 1)
-            #expect(summary.totalShortfall == 1.5 * 3600)
-            #expect(summary.usesEstimatedDurations)
+            return SleepDebtCalculator.shared.summary(forDays: 7, endingAt: date(26), context: context)
         }
+
+        let shortfall = try #require(summary)
+        #expect(shortfall.coveredDayCount == 1)
+        #expect(shortfall.totalShortfall == 1.5 * 3600)
+        #expect(shortfall.usesEstimatedDurations)
     }
 
     @Test("HealthKit in-bed context without reported asleep time is not treated as sleep")
     func inBedOnlyImportHasNoUsableDuration() throws {
         let context = makeContext()
-        try context.performAndWait {
+        let summary = try context.performAndWait {
             addPreferences(in: context)
             let session = addSession(
                 start: date(25, hour: 22),
@@ -115,13 +115,12 @@ struct SleepDebtTrackingTests {
             addStage("inBed", hours: 8, to: session, in: context)
             try context.save()
 
-            let summary = try #require(
-                SleepDebtCalculator.shared.summary(forDays: 7, endingAt: date(26), context: context)
-            )
-
-            #expect(summary.coveredDayCount == 0)
-            #expect(summary.totalShortfall == 0)
+            return SleepDebtCalculator.shared.summary(forDays: 7, endingAt: date(26), context: context)
         }
+
+        let shortfall = try #require(summary)
+        #expect(shortfall.coveredDayCount == 0)
+        #expect(shortfall.totalShortfall == 0)
     }
 
     @Test("Sleep goal duration correctly spans an overnight schedule")
@@ -149,10 +148,12 @@ struct SleepDebtTrackingTests {
 
         try await SleepMetricsCalculator().updateDailyMetrics(for: session, in: context)
 
-        try context.performAndWait {
-            let metrics = try #require(try context.fetch(DailyMetrics.fetchRequest()).first)
-            #expect(metrics.totalSleepTime == 6 * 3600)
-            #expect(metrics.sleepDebt == 2 * 3600)
+        let stored = try context.performAndWait {
+            try context.fetch(DailyMetrics.fetchRequest()).first
+                .map { (totalSleepTime: $0.totalSleepTime, sleepDebt: $0.sleepDebt) }
         }
+        let metrics = try #require(stored)
+        #expect(metrics.totalSleepTime == 6 * 3600)
+        #expect(metrics.sleepDebt == 2 * 3600)
     }
 }

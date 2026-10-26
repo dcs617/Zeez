@@ -165,7 +165,9 @@ struct SleepCoverageTests {
     @Test("In-bed rows alone are context, not recorded sleep stages")
     func inBedRowsAreNotStages() {
         let context = PersistenceController(inMemory: true).container.viewContext
-        context.performAndWait {
+        // Assert outside the closure: off the main actor, an issue recorded inside a
+        // viewContext closure reaches no test.
+        let status = context.performAndWait {
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = date(2026, 10, 12, 23)
@@ -180,8 +182,9 @@ struct SleepCoverageTests {
             inBed.duration = 8 * 3600
             inBed.session = session
 
-            let status = session.inputCoverage.entries.first { $0.input == .sleepStages }?.status
-            #expect(status == .missing("Not available"))
+            return session.inputCoverage.entries.first { $0.input == .sleepStages }?.status
         }
+
+        #expect(status == .missing("Not available"))
     }
 }

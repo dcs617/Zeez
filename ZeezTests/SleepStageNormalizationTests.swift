@@ -106,8 +106,9 @@ struct SleepStageNormalizationTests {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
 
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        context.performAndWait {
+        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
+        // the closure: off the main actor, an issue recorded inside it reaches no test.
+        let stat = context.performAndWait {
             let session = SleepSession(context: context)
 
             for (type, duration) in [("inBed", 8 * 3600.0), ("rem", 2 * 3600.0)] {
@@ -117,10 +118,11 @@ struct SleepStageNormalizationTests {
                 stage.session = session
             }
 
-            let stat = SleepStagesPreviewStats.getRandomStat(from: session)
-            #expect(stat?.label == "REM")
-            #expect(stat?.value == "100%")
+            return SleepStagesPreviewStats.getRandomStat(from: session)
         }
+
+        #expect(stat?.label == "REM")
+        #expect(stat?.value == "100%")
     }
 
     @Test("In-bed or asleep rows alone do not support an estimated efficiency rating")
@@ -150,8 +152,9 @@ struct SleepStageNormalizationTests {
         let controller = PersistenceController(inMemory: true)
         let context = controller.container.viewContext
 
-        // viewContext is main-queue-confined; tests run off main (2.4).
-        try context.performAndWait {
+        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
+        // the closure: off the main actor, an issue recorded inside it reaches no test.
+        let (metricsUpper, metricsLower) = try context.performAndWait {
             let session = SleepSession(context: context)
             session.id = UUID()
             session.startTime = Date(timeIntervalSinceNow: -8 * 3600)
@@ -175,8 +178,7 @@ struct SleepStageNormalizationTests {
 
             try context.save()
 
-            let calcUpper = SleepQualityCalculator(session: session, context: context)
-            let metricsUpper = try #require(calcUpper.calculateMetrics())
+            let metricsUpper = SleepQualityCalculator(session: session, context: context).calculateMetrics()
 
             // Reset stages to lowercase equivalents
             if let stages = session.sleepStages?.allObjects as? [SleepStage] {
@@ -187,18 +189,21 @@ struct SleepStageNormalizationTests {
             makeStage(type: "rem", duration: 90 * 60)
             try context.save()
 
-            let calcLower = SleepQualityCalculator(session: session, context: context)
-            let metricsLower = try #require(calcLower.calculateMetrics())
-
-            let upperDistribution = try #require(metricsUpper.stageDistributionScore)
-            let lowerDistribution = try #require(metricsLower.stageDistributionScore)
-            #expect(abs(upperDistribution - lowerDistribution) < 0.01,
-                    "Stage distribution scores must be identical for uppercase vs lowercase stored values")
-
-            let upperFragmentation = try #require(metricsUpper.fragmentationScore)
-            let lowerFragmentation = try #require(metricsLower.fragmentationScore)
-            #expect(abs(upperFragmentation - lowerFragmentation) < 0.01,
-                    "Fragmentation scores must be identical for uppercase vs lowercase stored values")
+            let metricsLower = SleepQualityCalculator(session: session, context: context).calculateMetrics()
+            return (metricsUpper, metricsLower)
         }
+
+        let upper = try #require(metricsUpper)
+        let lower = try #require(metricsLower)
+
+        let upperDistribution = try #require(upper.stageDistributionScore)
+        let lowerDistribution = try #require(lower.stageDistributionScore)
+        #expect(abs(upperDistribution - lowerDistribution) < 0.01,
+                "Stage distribution scores must be identical for uppercase vs lowercase stored values")
+
+        let upperFragmentation = try #require(upper.fragmentationScore)
+        let lowerFragmentation = try #require(lower.fragmentationScore)
+        #expect(abs(upperFragmentation - lowerFragmentation) < 0.01,
+                "Fragmentation scores must be identical for uppercase vs lowercase stored values")
     }
 }
