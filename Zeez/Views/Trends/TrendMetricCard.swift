@@ -52,8 +52,8 @@ struct TrendMetricCard<Content: View>: View {
         .padding()
         .background {
             RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .fill(Color(UIColor.systemBackground))
-                .shadow(radius: 2)
+                // systemBackground is the page's own color, so in dark mode the card vanished.
+                .fill(Color(UIColor.secondarySystemBackground))
         }
     }
 }

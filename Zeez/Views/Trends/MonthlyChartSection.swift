@@ -141,7 +141,7 @@ struct MonthlyChartSection: View {
             }
         }
         .padding()
-        .background(Color(.systemBackground))
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
     }
 

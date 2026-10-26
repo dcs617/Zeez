@@ -70,15 +70,17 @@ struct TrendsView: View {
             value: averageQualityScore.map { "\(Int($0))" },
             valueColor: .blue
         ) {
-            TrendChartComponents.QualityChart(
-                data: fetchSleepQualities(),
-                range: selectedRange,
-                height: 150
-            )
-            .accessibilityLabel("Experimental Zeez estimate trend chart showing \(fetchSleepQualities().count) data points")
-            .accessibilityValue(averageQualityScore.map { "Average experimental Zeez estimate \(Int($0)) out of 100" }
-                                ?? "No experimental Zeez estimates in this period")
-            .accessibilityIdentifier("qualityChart")
+            // An empty period has no chart; the subtitle already says so.
+            if let average = averageQualityScore {
+                TrendChartComponents.QualityChart(
+                    data: fetchSleepQualities(),
+                    range: selectedRange,
+                    height: 150
+                )
+                .accessibilityLabel("Experimental Zeez estimate trend chart showing \(fetchSleepQualities().count) data points")
+                .accessibilityValue("Average experimental Zeez estimate \(Int(average)) out of 100")
+                .accessibilityIdentifier("qualityChart")
+            }
         }
         .padding(.horizontal)
         .accessibilityElement(children: .contain)
@@ -94,15 +96,16 @@ struct TrendsView: View {
                 : "Average recorded session duration",
             value: averageDurationFormatted
         ) {
-            TrendChartComponents.DurationChart(
-                data: fetchSleepDurations(),
-                range: selectedRange,
-                height: 150
-            )
-            .accessibilityLabel("Recorded session duration trend chart showing \(fetchSleepDurations().count) data points")
-            .accessibilityValue(averageDurationFormatted.map { "Average recorded session duration \($0)" }
-                                ?? "No recorded sessions in this period")
-            .accessibilityIdentifier("durationChart")
+            if let average = averageDurationFormatted {
+                TrendChartComponents.DurationChart(
+                    data: fetchSleepDurations(),
+                    range: selectedRange,
+                    height: 150
+                )
+                .accessibilityLabel("Recorded session duration trend chart showing \(fetchSleepDurations().count) data points")
+                .accessibilityValue("Average recorded session duration \(average)")
+                .accessibilityIdentifier("durationChart")
+            }
         }
         .padding(.horizontal)
         .accessibilityElement(children: .contain)

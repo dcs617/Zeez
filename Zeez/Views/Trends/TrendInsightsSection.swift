@@ -23,8 +23,7 @@ struct TrendInsightsSection: View {
         .padding()
         .background {
             RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(radius: 2)
+                .fill(Color(.secondarySystemBackground))
         }
     }
     
