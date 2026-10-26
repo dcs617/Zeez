@@ -8,7 +8,6 @@ struct TrendsView: View {
     @State private var selectedRange: TrendTimeRange = .week
     @State private var monthlyData: MonthlyTrendData?
     @State private var isLoading = false
-    @AppStorage("dev_showPremiumFeatures") private var showPremiumFeatures = false
     @State private var selectedSession: SleepSession?
     
     var body: some View {
@@ -148,51 +147,6 @@ struct TrendsView: View {
             .padding(.horizontal)
             .accessibilityLabel("Monthly sleep insights")
             .accessibilityIdentifier("monthlyInsightsSection")
-        }
-        
-        // Premium Features
-        if !showPremiumFeatures {
-            Group {
-                TrendMetricCard(
-                    title: "Heart Rate",
-                    subtitle: "Nightly patterns and variability",
-                    isPremium: true,
-                    requiredFeature: .heartRateAnalysis
-                ) {
-                    EmptyView()
-                }
-                .accessibilityLabel("Heart rate analysis - Premium feature")
-                .accessibilityHint("Upgrade to access nightly heart rate patterns and variability analysis")
-                .accessibilityIdentifier("heartRatePremiumCard")
-                
-                TrendMetricCard(
-                    title: "Sleep Environment",
-                    subtitle: "Temperature, noise, and light",
-                    isPremium: true,
-                    requiredFeature: .environmentalAnalysis
-                ) {
-                    EmptyView()
-                }
-                .accessibilityLabel("Sleep environment analysis - Premium feature")
-                .accessibilityHint("Upgrade to access temperature, noise, and light analysis")
-                .accessibilityIdentifier("environmentPremiumCard")
-                
-                TrendMetricCard(
-                    title: "Sleep Stages",
-                    subtitle: "Deep, Light, and REM analysis",
-                    isPremium: true,
-                    requiredFeature: .detailedSleepStages
-                ) {
-                    EmptyView()
-                }
-                .accessibilityLabel("Sleep stages analysis - Premium feature")
-                .accessibilityHint("Upgrade to access detailed deep, light, and REM sleep analysis")
-                .accessibilityIdentifier("stagesPremiumCard")
-            }
-            .padding(.horizontal)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Premium features section")
-            .accessibilityIdentifier("premiumFeaturesSection")
         }
     }
     

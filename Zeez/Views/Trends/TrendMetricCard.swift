@@ -7,8 +7,6 @@ struct TrendMetricCard<Content: View>: View {
     let subtitle: String?
     let value: String?
     let valueColor: Color
-    let isPremium: Bool
-    let requiredFeature: PremiumFeature?
     @ViewBuilder let content: () -> Content
     
     init(
@@ -16,16 +14,12 @@ struct TrendMetricCard<Content: View>: View {
         subtitle: String? = nil,
         value: String? = nil,
         valueColor: Color = .primary,
-        isPremium: Bool = false,
-        requiredFeature: PremiumFeature? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.title = title
         self.subtitle = subtitle
         self.value = value
         self.valueColor = valueColor
-        self.isPremium = isPremium
-        self.requiredFeature = requiredFeature
         self.content = content
     }
     
@@ -53,11 +47,7 @@ struct TrendMetricCard<Content: View>: View {
                 }
             }
             
-            if isPremium {
-                premiumContent
-            } else {
-                content()
-            }
+            content()
         }
         .padding()
         .background {
@@ -65,35 +55,6 @@ struct TrendMetricCard<Content: View>: View {
                 .fill(Color(UIColor.systemBackground))
                 .shadow(radius: 2)
         }
-    }
-    
-    private var premiumContent: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "star.circle.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(.yellow)
-            
-            Text("Premium Feature")
-                .font(.headline)
-            
-            Text("Upgrade to access detailed \(title.lowercased()) analytics and insights.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            
-            NavigationLink(destination: SubscriptionView(requiredFeature: requiredFeature)) {
-                Text("Upgrade to Premium")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(.blue)
-                    }
-            }
-        }
-        .padding(.vertical, 8)
     }
 }
 
@@ -114,16 +75,6 @@ struct TrendMetricCard<Content: View>: View {
                         )
                     }
                     .frame(height: 100)
-                }
-                .padding(.horizontal)
-                
-                TrendMetricCard(
-                    title: "Deep Sleep Analysis",
-                    subtitle: "Premium feature",
-                    isPremium: true,
-                    requiredFeature: .detailedSleepStages
-                ) {
-                    EmptyView()
                 }
                 .padding(.horizontal)
             }
