@@ -191,7 +191,7 @@ struct SleepQualityCalculatorTests {
 
         let m = try #require(metrics(for: session, context: context))
         #expect(m.sleepOpportunityScore == 50)
-        let expected = 100 * 0.25 + 50 * 0.30 + 100 * 0.25 + 100 * 0.15 + 100 * 0.05
+        let expected: Double = 100 * 0.25 + 50 * 0.30 + 100 * 0.25 + 100 * 0.15 + 100 * 0.05
         #expect(abs(m.overallScore - expected) < 0.0001)
     }
 
