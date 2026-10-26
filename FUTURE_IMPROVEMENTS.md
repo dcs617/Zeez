@@ -60,8 +60,54 @@ Carried over from the archived roadmap's Phase 3.
   suites use today; the CI check catches those only once such an assertion fails. Extend the scanner if a suite
   starts using one.
 
+**Completed 2026-10-26:**
+
+- ~~Confirm the Swift Testing attribution check on CI.~~ Done — run `40282995935` on `3a59775` (Xcode 16.4): Swift
+  Testing printed `✔ Test run with 315 tests passed …`, and "Fail on Swift Testing issues that no test owns" passed.
+  That shows 16.4's summary line matches what the script reads; a clean run cannot show that 16.4 would word an
+  unattributed issue the same way. The `/code-review` of `f3c6a47..5a377d3` was not done.
+- ~~`NavigationView` → `NavigationStack`.~~ Done — second audit **D1** (`5f2d4a5`, `4e74791`…`05c7d6a`). Each tab owns
+  a `NavigationStack` in `MainView`, so pushes stay in their tab and the tab bar stays visible. `LearnView`'s nested
+  container and the unreachable `LearnHomeView` are gone (`PARKED_CAPABILITIES.md` §10). The one pushed view that
+  wrapped itself, `PersonalizationSettingsView`, stacked a second bar under Settings'; it no longer does. Sheets and
+  previews swapped mechanically. No `NavigationView` remains. Device check: `DEVICE_TEST_RUN.md` T15.1.
+- ~~Trends has no entry point.~~ Reconnected (`5583586`) through a **Sleep Trends** link under the dashboard's Weekly
+  Progress chart, shown once there are recorded nights (Daniel chose it over a fourth tab or `WeeklyTrendCard`).
+  `TrendsView`'s own body had no `NavigationView` after all, only its preview and a sheet nothing opened. Before it
+  returned (`2274ab4`…`55e388f`), each fix with a test that failed first:
+  - the three known bugs: consistency compared seconds² with seconds, bedtimes wrapped at midnight, and
+    `TrendChart` divided by zero;
+  - its three "Upgrade to Premium" cards, which would have been the paywall's first entry point, are removed (see
+    below);
+  - "consistency" was a percentage grade with "Excellent…"/"Consider stabilizing…" insights; it is now
+    `SleepStartSpread`, "your recorded sleep start time varied by about N minutes over M nights", from at least 4
+    nights, each represented by its longest recording, so a nap is not a bedtime;
+  - the schedule chart drew a 23:00–07:00 night across the 16 waking hours; it is one bar per night on a
+    noon-to-noon axis;
+  - "Sleep Duration" is "Recorded Session Duration", and the monthly duration no longer mixes in Apple Health
+    time asleep;
+  - trends use only current-`ZeezScore.version` estimates (spec §6), under their experimental series name;
+  - an estimate change needs at least 4 estimated nights in each month compared (Daniel's minimum);
+  - the monthly chart had no value axis and stretched a two-point change across its height; it is Swift Charts
+    on 0–100;
+  - the Month range's thirty overlapping weekday labels became weekly ones;
+  - cards vanished in dark mode.
+  `StatsDataProvider`, `SleepStatsRange`, `StatsComponents`, `WeeklyTrendCard` and `TrendChart` are deleted.
+  Device check: `DEVICE_TEST_RUN.md` T15.2.
+
 **Still open:**
 
+- **The paywall sells features that do not exist** (found 2026-10-26). `SubscriptionView` lists `PremiumFeature`
+  descriptions: "Personalized recommendations and coaching", "Real-time heart rate monitoring and advanced analytics",
+  "Live environmental impact tracking and optimization", "Detailed reports on how your environment affects sleep".
+  None of these exists, and the last is a causal claim the contract prohibits. A developer flag, not an entitlement,
+  hid Trends' upgrade cards, so a subscriber would have kept seeing them, and unlocking showed nothing. No screen opens
+  the paywall now, and `PaywallReachabilityGuardTests` keeps it that way. **This blocks `DEVICE_TEST_RUN.md` T13**
+  (StoreKit sandbox), which needs a paywall to buy from. Decide what premium actually unlocks, rewrite the feature
+  list against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md`, then give it an entry point and change the guard on purpose.
+- **Learn screens left without callers** (2026-10-26): `LearnDailyFactView` and `LearnNoteBrowserView` were reachable
+  only from `LearnHomeView`, deleted in D1a. They were already unreachable. Decide with the other Learn cleanup
+  (`PARKED_CAPABILITIES.md` §10).
 - Real WidgetKit extension. The in-app `Zeez/Widgets/` tree was deleted in **B1** (it was
   unreachable and carried fabricated readings); a genuine extension target has not been built.
   Tracked as Phase **D3c**; see `PARKED_CAPABILITIES.md` §4. Its Core Data prerequisite is done:
@@ -86,25 +132,6 @@ Carried over from the archived roadmap's Phase 3.
   showed the old code lost nothing with today's single connection (closing it had already emptied the WAL), but
   with a second connection on the store — the future widget extension — the recreated store failed every read and
   save. The `-wal`/`-shm` now stay on purpose: the recreated store reuses them. Device check T11.
-- **Trends has no entry point — reconnect it (Daniel decided 2026-10-26).** `TrendsView` lost its tab in `ac140c2` (2025-08-19).
-  Its only remaining link is in `WeeklyTrendCard`, which nothing creates. So nothing on it has reached a user:
-  not B4's duration relabel, not the 2026-10-20 night-coverage card, not the 2026-10-22 monthly-chart fixes
-  (`8280934`). The second audit recorded the monthly views as "live behind TrendsView" (C2); that was wrong.
-  Reconnecting means a tab or a dashboard link (`WeeklyTrendCard` already holds one), which lands on D1a's
-  per-tab `NavigationStack`s, so it is queued with D1 in `SECOND_AUDIT_IMPROVEMENTS.md` §7. `TrendsView` also nests
-  its own `NavigationView`. Three things must be fixed before it returns:
-  - Monthly consistency compares variances (seconds²) with limits written in seconds, so more than about a
-    minute of spread reads 0% and triggers "Consider stabilizing your sleep schedule".
-  - Bedtimes are measured as seconds since midnight, so 23:50 and 00:10 count as almost 24 hours apart.
-  - `TrendChart` divides by zero when every plotted value is equal, which plots NaN coordinates.
-
-  `StatsDataProvider` and `SleepStatsRange`, in the same tree, have no callers either.
-- **Confirm the Swift Testing attribution check on CI.** It was verified only on Xcode 26.6; the `unit-tests` job
-  runs Xcode 16.x. The first CI run after `3dff641` shows whether that Swift Testing prints the same
-  `Test «unknown» recorded an issue` and `Test run with …` lines, and whether its result bundle files unattributed
-  issues as a failed test. A missing summary line fails the job loudly rather than passing it. Not pushed as of
-  2026-10-26. A `/code-review` of `f3c6a47..5a377d3` first is worthwhile: the guard is ~450 lines of heuristic
-  scanning.
 - **Dead stubs in `Zeez/Sleep/SleepAnalysisTypes.swift`** (found 2026-10-25). The file's header calls them temporary
   Phase 1A types. Every type in it except `SleepGoalPolicy`, the `SleepGoalShortfall*` types and
   `SleepDebtCalculator` has no caller: `SessionInfo`, `CycleAnalysis`, `AnalysisResult`, `TrendDirection`,
@@ -135,13 +162,9 @@ Carried over from the archived roadmap's Phase 3.
   Test-only; no product change.
 - Per-night preferred source for overlapping sleep sources — needs an amendment to
   `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first, which defines time asleep as the union across sources.
-- `NavigationView` → `NavigationStack` migration (start with `MainView` — remove the
-  NavigationView wrapping the TabView; give each tab its own NavigationStack). Phase D1. Approved 2026-10-26 to
-  run before the device pass, with Trends reconnected on top of it: the prompt is in `SECOND_AUDIT_IMPROVEMENTS.md`
-  §7.
 - Singleton graph → protocol injection, incrementally, following the
-  `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern. Phase D2. Approved 2026-10-26; it follows D1, and
-  the D1 chat queues its prompt.
+  `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern. Phase D2. Approved 2026-10-26 to run before the
+  device pass; D1 is done and the prompt is in `SECOND_AUDIT_IMPROVEMENTS.md` §7.
 
 ## Sleep product roadmap (reconciled 2026-07-09, second-audit D3d)
 
@@ -155,8 +178,8 @@ status line. In summary:
   §8a). Outstanding: the on-device re-import check, `DEVICE_TEST_RUN.md` T3.1.
 - **Phase 4 (longitudinal review)** — mostly delivered (B4, B6, B7). Night and per-session input
   coverage landed 2026-10-20 (`SleepCoverage.swift`). Outstanding: an explicit date-range picker beyond
-  the fixed Week/Month ranges (a duplicate 7-day "Days" range was removed 2026-10-22). Trends itself has no
-  entry point, so its share of this phase has never shipped; see "Still open" above.
+  the fixed Week/Month ranges (a duplicate 7-day "Days" range was removed 2026-10-22). Trends had no entry point
+  from 2025-08-19 until 2026-10-26, so its share of this phase reaches users only from this build on.
 - **Phase 5 (experimental score)** — substantially delivered (B8, plus A1/A7). It **diverges** from
   the plan on purpose: the score is computed only from Zeez-inferred stages and never grades
   Apple-reported ones. The user-visible component breakdown landed 2026-10-20

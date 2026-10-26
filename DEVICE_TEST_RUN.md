@@ -217,10 +217,10 @@ rate and respiratory *either* a reading count, *or* "none recorded", *or* "not a
    - The **Recorded Inputs** card at the bottom lists all seven inputs. Sleep stages, time asleep and
      in-bed say "Reported by Apple Health"; heart rate and respiratory give a sample count or "Not
      recorded", and must agree with the import's completion message.
-5. ~~Open **Trends**.~~ Skip: Trends has no entry point in this build (found 2026-10-22; whether to reconnect
-   or park it is open in `FUTURE_IMPROVEMENTS.md`). If it is reconnected, check that the top card reads
-   "Recorded on N of the last 7 nights" with the N you actually have, and that the score card shows **no number**,
-   not 0, when the period has no estimates.
+5. Open **Trends** (Sleep tab → **Sleep Trends**, under Weekly Progress; reconnected 2026-10-26). Check that the
+   top card reads "Recorded on N of the last 7 nights" with the N you actually have, and that the Experimental
+   Zeez Estimate card shows **no number and no chart**, not 0, for a week of Apple Health nights (they are never
+   scored). The rest of Trends is T15.2.
 
 **Silent failures:** the import reports success while heart rate silently failed (that's exactly what B10
 was meant to end — if the message doesn't name HR, the reporting broke); or an Apple session shows a
@@ -532,13 +532,13 @@ another process had them open is what broke the old version.
 
 **Goal:** the claims contract binds VoiceOver output, not just visible text (rules 4, 7, 10).
 
-VoiceOver on (triple-click side button). Sweep: Dashboard → session details → watch app. (Trends has no entry
-point in this build, so its charts cannot be reached; skip them until it is reconnected or parked.)
+VoiceOver on (triple-click side button). Sweep: Dashboard → session details → Trends (Sleep Trends link) → watch
+app.
 
 **Expected — every score utterance carries "Experimental Zeez estimate".** Specifically re-listen to the
 four surfaces Phase B reworded:
-- Trends **duration** chart → "average recorded session duration", never "time asleep" (B4) — *only if Trends is
-  reconnected*
+- Trends **duration** chart → "average recorded session duration", never "time asleep" (B4). Its card is now
+  titled "Recorded Session Duration" (2026-10-26)
 - Noise → "relative noise index", never "decibels" (B5)
 - Stage composition rows announce their values (B6)
 - Sleep-goal card → real values, and **"Not set"** when no goal is saved (B12) — never a plausible default
@@ -556,6 +556,10 @@ is a worse one.
 ---
 
 ## T13 — StoreKit sandbox
+
+⚠️ **Blocked in this build: no screen opens the paywall.** Its only links were Trends' "Upgrade to Premium"
+cards, removed 2026-10-26 because `SubscriptionView` sells capabilities that do not exist (`FUTURE_IMPROVEMENTS.md`),
+and `PaywallReachabilityGuardTests` keeps it unreachable. Run T13 once a reviewed entry point exists.
 
 Needs the four product IDs to exist in App Store Connect **character for character**:
 
@@ -603,6 +607,68 @@ points at the placeholder `https://dcs617.github.io/zeez-privacy/`.
 
 ---
 
+## T15 — Navigation per tab, and Trends (D1)
+
+**Goal:** since D1 (2026-10-26) each tab owns its `NavigationStack`, a push stays inside its tab, and Trends has an
+entry point again after 14 months without one. `MainViewUITests` covers the simulator happy path; this is the
+device pass, and iPad if you have one. **[SIM OK]** apart from step 6.
+
+### T15.1 — Each tab keeps its own stack
+
+1. **Sleep:** the dashboard shows its date header and no navigation bar. Tap the gear. **Expected:** a "Settings"
+   bar with a back button, and the **tab bar still visible** (before D1 a push covered it).
+2. Settings → Sleep Analysis → **Personalization**. **Expected:** exactly **one** bar, "Sleep Personalization",
+   with a back button to Settings (before D1 two bars stacked).
+3. Without going back, switch to **Alarm**: the title reads "Rise". Switch back to **Sleep**: you are still on
+   Personalization. Back twice returns to the dashboard.
+4. **Alarm:** + (new alarm), then edit an existing alarm, then the Schedule and Alarm Sound pickers inside it. Each
+   sheet has one bar with its own title and buttons; dismissing returns to where you were.
+5. **Learn:** "Learn" in the bar, Learning Path at the leading edge, the ⋯ menu at the trailing edge. Open
+   Learning Path: its back button reads "Learn". From ⋯ open Bookmarks, Settings and Quick Note: one bar each.
+6. Push two screens deep in Sleep, then let an alarm fire (T5): the full-screen alarm still appears over it.
+7. **iPad, if available:** reset onboarding (debug build, `-uiTestResetOnboarding`) — one column, not a split view
+   with an empty pane.
+
+**Silent failures:** a tab whose title is missing, a second bar under the first, a missing back button, or a tab
+switch that resets another tab's stack.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked
+**Notes:**
+```
+
+
+```
+
+### T15.2 — Trends
+
+Needs recorded nights: T3's import, or Debug Menu → Generate Mock Data in a debug build.
+
+1. Sleep tab → **Sleep Trends**, under the Weekly Progress chart. On an empty store (T2) the link is absent — intended.
+2. **Week.** Coverage card: "Recorded on N of the last 7 nights" with your real N. Experimental Zeez Estimate: no
+   number and no chart for a week without estimates. Recorded Session Duration: an average such as "8h 24m".
+   Sleep Schedule: one bar per night from its start down to its end, never wrapping past the bottom; the subtitle
+   reads "Recorded sleep start time varied by about N minutes over M nights", or asks for at least 4 recorded nights.
+3. **Month.** The time axes are labelled weekly ("Oct 5"), not with thirty overlapping weekday names. Monthly Trends:
+   the estimate on a 0–100 axis, so a one-point change looks like one. Pick each type from the menu: Recorded Session
+   Duration (hours), Start Time Spread (minutes), Goal Shortfall (hours; needs a goal). Observations describe —
+   nothing reads "Excellent…" or "Consider…".
+4. There is **no** "Upgrade to Premium" card anywhere on Trends.
+5. Dark mode: every card stands out from the background.
+6. VoiceOver (with T12): the estimate chart's points carry "Experimental Zeez estimate"; each schedule bar reads its
+   night and "Recorded from … to …"; the monthly chart reads every month, including "no estimate" months.
+
+**Silent failures:** the link missing although you have nights; a 0 where "no estimate" belongs; a monthly line
+swinging across the whole chart for a small change (the old scaling).
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked
+**Notes:**
+```
+
+
+```
+
+---
+
 ## Run summary — fill in at the end
 
 | Test | Pass | Fail | Blocked | One-line note |
@@ -623,6 +689,8 @@ points at the placeholder `https://dcs617.github.io/zeez-privacy/`.
 | T12 accessibility | | | | |
 | T13 StoreKit sandbox | | | | |
 | T14 archive | | | | |
+| T15.1 navigation per tab | | | | |
+| T15.2 Trends | | | | |
 
 **Anything surprising that isn't on this list:**
 ```

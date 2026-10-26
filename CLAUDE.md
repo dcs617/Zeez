@@ -43,7 +43,9 @@ CI selects the newest Xcode 16.x (16.4, Swift 6.1, as of 2026-10-26), while this
 ## Core Architecture
 
 ### App Entry Flow
-`App/ZeezApp.swift` → `Views/RootView.swift` → `Views/MainView.swift` (TabView: Sleep/Alarm/Learn)
+`App/ZeezApp.swift` → `Views/RootView.swift` → `Views/MainView.swift` (TabView: Sleep/Alarm/Learn, each tab in its own `NavigationStack`)
+
+**Navigation (second-audit D1):** a tab's root view (`DashboardView`, `AlarmSettingsView`, `LearnView`) has no container of its own; `MainView` gives each one a `NavigationStack`, so a push stays inside its tab and keeps the tab bar. A pushed view never owns a container (one stacks a second bar). A view presented by `.sheet`/`.fullScreenCover` owns exactly one `NavigationStack`. `NavigationView` is gone — don't reintroduce it. Trends (`Views/TrendsView.swift`) is pushed from the dashboard's **Sleep Trends** link, shown once there are recorded nights; it is not a tab. `MainViewUITests.testEveryTabHasItsOwnNavigationStack` pins the per-tab stacks.
 
 `RootView` checks `OnboardingManager.shared.hasCompletedOnboarding` to decide between `OnboardingView` and `MainView`. It also uses `ModalCoordinator.shared` (`Shared/ModalCoordinator.swift`) to present sheets globally (data import, settings, etc.).
 
@@ -141,9 +143,9 @@ Uses Swift Testing (`import Testing`, `@testable import Zeez`); `ZeezUITests` is
 
   Return plain values out of the closure and assert outside it. `SwiftTestingAttributionGuardTests` enforces this. It cannot tell a private context from the viewContext by reading source, so it holds private contexts to the same rule, and `@MainActor` exempts only `performAndWait`. The `unit-tests` CI job also fails on the `«unknown»` line, which catches what the scan misses once that assertion fails.
 - **Fixtures**: `SleepSessionValidator` needs `EnvironmentalReading` timestamps covering ≥80% of a session, so any test that ends a session must seed readings or it throws `.incompleteSensorData`.
-- **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests`, `SwiftTestingAttributionGuardTests`) locate sources via `#filePath` so they work in CI. Use them to pin an invariant a refactor establishes.
+- **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests`, `SwiftTestingAttributionGuardTests`, `PaywallReachabilityGuardTests` — no screen opens `SubscriptionView` until its copy is reviewed — and `ExperimentalLabelGuardTests` — no chart names a score series "Quality") locate sources via `#filePath` so they work in CI. Use them to pin an invariant a refactor establishes.
 - **A regression test that passes against the unfixed code pins nothing** — temporarily revert the fix and confirm the test fails before trusting it.
-- **UI tests** read `#if DEBUG` launch arguments: `-uiTestCompletedOnboarding` / `-uiTestResetOnboarding` (`OnboardingManager`) and `-uiTestResetStore` (`ZeezApp.init`, clears the store before `RootView` exists). A Release UI-test run hangs on onboarding.
+- **UI tests** read `#if DEBUG` launch arguments: `-uiTestCompletedOnboarding` / `-uiTestResetOnboarding` (`OnboardingManager`), `-uiTestResetStore` (`ZeezApp.init`, clears the store before `RootView` exists) and `-uiTestSeedMockData [days]` (seeds mock sessions after any reset; Trends' tests need recorded nights). A Release UI-test run hangs on onboarding. Learn opens a first-visit cover; pass `-hasShownLearnOnboarding YES`, which sets the `@AppStorage` key through the launch-argument defaults domain.
 - `StoreKitTests`' four `SKTestSession` tests flake under simulator contention when a live app instance is present. If they fail, uninstall the app from the simulator and re-run before investigating.
 
 ### Logging

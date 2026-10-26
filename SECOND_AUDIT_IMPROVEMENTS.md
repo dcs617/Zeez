@@ -270,6 +270,28 @@ still waits for the device pass and the App Group toggle.
 - **D1b** (~40 sites): mechanical swap in `.sheet`/`.fullScreenCover` wrappers, one commit per tree
   (Learn alone is ~45 of the 88).
 - **D1c** (~30 sites): `#Preview` / `PreviewProvider` bodies. One commit, zero risk.
+- ✅ **Done 2026-10-26**, with Trends reconnected on top of D1a. No `NavigationView` remains.
+  - **Investigation:** the 2026-07-09 findings held: 88 sites in 67 files, no deep links, no `isActive:`/`tag:`
+    links. Of the 88, 29 were containers in a view's own body, 20 wrapped a view at its sheet call site and 39 were
+    previews. `MainViewUITests.testMainTabNavigation` only tapped tab buttons, so it could not catch a lost
+    navigation bar.
+  - **D1a** (`5f2d4a5`): `MainView` gives each tab a `NavigationStack`, and `LearnView` lost its nested container.
+    `LearnView` gained a `navigationTitle` beside its principal toolbar item, so its bar and back buttons are named.
+    The dashboard hides its bar with `toolbar(.hidden, for: .navigationBar)`. `LearnHomeView` is deleted and parked
+    (`PARKED_CAPABILITIES.md` §10).
+    - Visible change: a push from Sleep or Alarm keeps the tab bar, as Learn's already did.
+    - `testEveryTabHasItsOwnNavigationStack` checks the Alarm and Learn bars and pushes Settings from Sleep, whose
+      bar is hidden by design. Removing Alarm's "Rise" title failed it.
+  - **D1b** (`4e74791`…`a16a453`, a commit per tree): 44 mechanical swaps of sheet and modal containers.
+    - The one pushed view that wrapped itself, `PersonalizationSettingsView` (Sleep → Settings → Personalization),
+      stacked a second bar under Settings'. Its container was removed instead (`c62eb5f`);
+      `testPushedPersonalizationHasOneNavigationBar` counted two bars before.
+    - `OnboardingView` is a root screen; on iPad a bare `NavigationView` there was a two-column split view.
+  - **D1c** (`05c7d6a`): 37 previews.
+  - **Trends** (`2274ab4`…`55e388f`, entry point `5583586`): see `FUTURE_IMPROVEMENTS.md`, completed 2026-10-26.
+  - **Tests:** ZeezTests 315 → 331 in 53 suites; UI smoke 7 → 10. All green after every commit, and the watch app
+    builds.
+  - **Device check:** `DEVICE_TEST_RUN.md` T15.
 
 **D2. Singleton graph → protocol injection.** Extend the existing convention — a product-side protocol
 plus a `= .shared` / `= .current()` default parameter, faked by a lock-guarded `@unchecked Sendable` test
@@ -396,7 +418,7 @@ covered by `MainViewUITests.testFirstRunDashboardShowsEmptyStateAndOpensImporter
 (D4) — no longer a manual check. Still manual: after importing, confirm the metric cards return, and that
 the importer's completion message names heart-rate and respiratory outcomes (B10).
 **Paired Apple Watch:** summary push after a new session (**blocked by A5**), requestData refresh, wake-pattern haptics, snooze/stop from watch, offline cache behavior.
-**App Store Connect:** create/confirm the 4 product IDs char-for-char; sandbox purchase + restore; airplane-mode launch keeps premium; privacy-policy URL live; App Privacy questionnaire = "no data collected" consistent with manifests. The HealthKit read scope is now exactly `sleepAnalysis`, `heartRate`, `respiratoryRate` (B13) — answer the questionnaire against that set, not the old four.
+**App Store Connect:** create/confirm the 4 product IDs char-for-char; sandbox purchase + restore (**blocked: no screen opens the paywall**, and its feature list sells capabilities that do not exist — `FUTURE_IMPROVEMENTS.md`, found 2026-10-26); airplane-mode launch keeps premium; privacy-policy URL live; App Privacy questionnaire = "no data collected" consistent with manifests. The HealthKit read scope is now exactly `sleepAnalysis`, `heartRate`, `respiratoryRate` (B13) — answer the questionnaire against that set, not the old four.
 **App Group / store location (D3a):** toggle **App Groups** once in Xcode's Signing & Capabilities pane
 for the `Zeez` target so `group.com.danielsparano.zeez` is registered with the team — CLI `xcodebuild`
 strips profile-backed entitlements, so this cannot be done or verified from the command line. Then, on
@@ -407,7 +429,7 @@ app is about to open an empty store — treat it as a release blocker, not a war
 
 **Organizer/archive:** validate archive; confirm no `NSCameraUsageDescription` needed (AVCaptureDevice fully removed); background modes = `processing` only.
 **TestFlight:** several nights of real alarm/sleep usage; battery observation (watch heartbeat machinery until A5 cleanup).
-**Accessibility:** VoiceOver pass over Dashboard, session details, Trends charts (unreachable today — skip until Trends is reconnected or parked, see `FUTURE_IMPROVEMENTS.md`), watch app; confirm every score utterance carries "Experimental Zeez estimate"; Dynamic Type on dashboard cards. Phase B reworded several VoiceOver strings (Trends duration chart B4, noise index B5, stage composition B6, sleep-goal card B12) — re-listen to those.
+**Accessibility:** VoiceOver pass over Dashboard, session details, Trends charts (reachable from the dashboard's Sleep Trends link since 2026-10-26; `DEVICE_TEST_RUN.md` T15.2), watch app; confirm every score utterance carries "Experimental Zeez estimate"; Dynamic Type on dashboard cards. Phase B reworded several VoiceOver strings (Trends duration chart B4, noise index B5, stage composition B6, sleep-goal card B12) — re-listen to those.
 **Environmental units:** noise is now a relative index 0–100, not dB (B5). On device, confirm the Sleep Details environmental row reads "Relative Noise Index … of 100" and that a mic-denied session shows unavailable rather than 0.
 **Score behaviour:** a recorded session with sensor data but no inferrable stages must show **no** score (B8's `qualityScore = 1.0` sentinel), not a neutral one; a scored session's `SleepQualityScore.calculationVersion` must read `ZeezScore-3.0` and its `confidenceScore` must vary with sensor breadth rather than always being 85.
 **Privacy/claims review:** re-read active surfaces against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` now that B-phase has landed, and read `ZEEZ_SCORE_SPECIFICATION.md` alongside it (B8 — the spec is binding and must be re-checked whenever `ZeezScore.version` changes); review App Store description copy against both before submission. `PARKED_CAPABILITIES.md` (C0) records the claims bar each removed feature must clear before returning — check it before re-adding any surface, and never let App Store copy promise a capability listed there. `ClinicalVocabularyGuardTests` (B7) enforces the prohibited-vocabulary rules in CI, but it exempts `Zeez/Learn` — review Learn copy by hand.
@@ -443,90 +465,85 @@ Replaced 2026-10-26. Earlier prompts are in git history (`git log -p -- SECOND_A
   Delete All Data destroys the store in place, the monthly chart labels its estimate and leaves months without
   data off, the unused `WatchSleepSummary.init(from:)` is gone, Trends lost its duplicate Days range, and debug
   mock sessions are scored by `SleepQualityCalculator`.
+- D1 with Trends reconnected, delivered 2026-10-26 (`5f2d4a5`…`05c7d6a`, docs in the commit after); Phase D, D1.
 - The Swift Testing attribution fix, delivered 2026-10-25 (`b7a3379`…`3dff641`, docs `5a377d3`). 112 assertions
   in 13 suites ran where a failure reached no test; they now return values from their closures, each fix proven
   by breaking an assertion. `SwiftTestingAttributionGuardTests` scans for the shapes, and the `unit-tests` job fails
   on an unattributed issue in its log or result bundle.
 
 **Decisions 2026-10-26:** reconnect Trends, rather than park it; do D1 and D2 before the device pass (Phase D,
-"Resequenced 2026-10-26"). D1 comes first because Trends' entry point lands on D1a's per-tab stacks. The D1 chat
-ends by queueing D2's prompt here.
+"Resequenced 2026-10-26"). D1 is done; Trends is reached through a dashboard link. Daniel also chose, at the D1
+checkpoint: remove Trends' premium cards; describe schedule regularity as a start-time spread in minutes; rebuild
+the schedule chart; label durations as recorded session duration; trend only current-version estimates; and require
+four estimated nights per month before reporting an estimate change.
 
 **When the developer account is renewed, the device pass still comes first**: T1 relocates the store *and* runs
 its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. Until
 then:
 
 ```
-Read CLAUDE.md, then SECOND_AUDIT_IMPROVEMENTS.md Phase D (D1, D2, "Resequenced 2026-10-26")
-and §7, and FUTURE_IMPROVEMENTS.md ("Trends has no entry point"). Context: the device pass is
-still blocked on my Apple Developer Program renewal. On 2026-10-26 I decided to reconnect
-Trends and to do D1 and D2 before the device pass; the device pass will cover the new
-navigation too.
+Read CLAUDE.md, then SECOND_AUDIT_IMPROVEMENTS.md Phase D (D2 and its stopping rule,
+"Resequenced 2026-10-26") and §7. Context: the device pass is still blocked on my Apple
+Developer Program renewal. On 2026-10-26 I decided to do D1 and D2 before it; D1 is done
+(each tab owns a NavigationStack, and Trends is reconnected through a dashboard link).
 
-Task: D1 (NavigationView → NavigationStack), with Trends reconnected on top of D1a. D2 is
-the next chat: end this one by queueing its prompt.
+Task: D2a (the WatchSessionProtocol seam), then D2b (the AlarmAudioController seam), under
+D2's stopping rule: inject a singleton only when that unlocks a test you cannot write today.
 
 Work in this order and stop at each checkpoint:
 0. CI first. Run `git log --oneline @{u}..` and
-   `gh run list --branch feature/sleep-simplification --limit 3`. Expected: the latest run
-   on the branch is green, including the unit-tests step "Fail on Swift Testing issues that no
-   test owns", which shows Xcode 16.4 prints the summary line that check reads. If it
-   failed, fix that before D1: earlier failures were Xcode 16.4-only compile errors and a
-   simulator race (CLAUDE.md, CI). Push any unpushed commits only when I say.
+   `gh run list --branch feature/sleep-simplification --limit 3`. The D1 batch is the first
+   code since 3a59775 that only Xcode 26 has compiled. If the latest run on the branch
+   failed, fix that before D2: Xcode 16.4-only compile errors are the usual cause (CLAUDE.md,
+   CI). Push any unpushed commits only when I say.
 1. Investigate first.
-   - Map every NavigationView, NavigationStack and navigationTitle by tab, including
-     TrendsView's own NavigationView and WeeklyTrendCard's NavigationLink to TrendsView.
-     Confirm the 2026-07-09 findings still hold: no deep links, no isActive: or
-     tag:selection: links, and DashboardView and AlarmSettingsView take their titles from
-     MainView's outer container.
-   - Read MainViewUITests and say whether it would catch a tab losing its navigation bar.
-   - Trends: write a failing test for each of its three known bugs before touching them
-     (consistency compares seconds² with limits in seconds; bedtimes are seconds since
-     midnight; TrendChart divides by zero when every value is equal). List everything an
-     entry point makes reachable (TrendsView, its subviews, WeeklyTrendCard) and review
-     its wording and numbers against SLEEP_METRICS_CLAIMS_AND_VALIDATION.md and
-     ZEEZ_SCORE_SPECIFICATION.md. None of it has ever reached a user.
-   CHECKPOINT: report the map, the failing tests, the claims findings, and your
-   recommendation for the entry point (a Dashboard link through WeeklyTrendCard, or a
-   fourth tab). The entry point is my decision.
-2. D1a: remove MainView's outer NavigationView and give each tab its own NavigationStack;
-   drop LearnView's nested container; delete LearnHomeView and register it in
-   PARKED_CAPABILITIES.md. Add a UI test that every tab shows its navigation title, and
-   prove it by removing one tab's title on purpose, then restore it.
-3. Trends, one commit per fix, each with its failing-first test: the three bugs, the
-   claims findings, and StatsDataProvider and SleepStatsRange deleted if they still have
-   no callers. Then the entry point I chose, with accessibility labels and hints, and a UI
-   test that reaches Trends. CHECKPOINT before the entry-point commit: simulator
-   screenshots of Trends in light and dark mode, with and without data.
-4. D1b, then D1c: the mechanical swaps, one commit per tree, previews last.
+   - D2a: list every WCSession member WatchConnectivityHandler uses and check it against
+     Phase D's set (isSupported, delegate, activate, isReachable, isPaired,
+     isWatchAppInstalled, sendMessage, updateApplicationContext; not transferUserInfo).
+     Say whether the PersistenceController injection Phase D lists is still needed, now
+     that WatchPayloadBuilder takes a container (2026-10-20). Name the tests the seam
+     unlocks: at least handleDataRequest's reply path and sendMessage's priority→transport
+     mapping. Say who observes its four @Published properties (2026-07-09: nobody).
+   - D2b: map AlarmAudioController's call sites (18 as of 2026-07-09) and its
+     AVAudioSession, AVAudioPlayer and Timer uses. For each behavior the device pass can
+     never cover (the watchdog restart, the five-retry cap, the system-sound fallback,
+     .notifyOthersOnDeactivation on stop), name the test the seam unlocks. Do not fake
+     Timer; call the health check directly.
+   CHECKPOINT: report both seams' protocol surfaces, the tests each unlocks, and anything
+   the stopping rule says to leave alone.
+2. D2a: the protocol, faked by a lock-guarded @unchecked Sendable double with a `= .shared`
+   or `= .current()` default parameter (the AlarmNotificationScheduling +
+   FakeNotificationCenter pattern). Write the unlocked tests and prove each by breaking
+   the behavior it pins.
+3. D2b: an audio-session protocol (setCategory/setActive) and a player factory, same
+   pattern; tests for the four behaviors above, each proven by breaking it.
+   CHECKPOINT before D2b's first commit: the seam's surface and the test list.
+4. Then stop. No ErrorManager, AnalyticsManager, ModalCoordinator, OnboardingManager,
+   StoreKitManager, Learn or Environment singletons, and no repo-wide .shared sweep.
 5. After each commit run -only-testing:ZeezTests on
-   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF', saving the log and result bundle,
-   and run .github/scripts/check-swift-testing-attribution.sh over them. After D1a, after
-   the entry point and before the last commit, also run the UI smoke tests (Debug, same
-   destination). Before the last commit, build "ZeezWatch Watch App" on
-   -destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976'.
-6. Update FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md (D1 and §7), CLAUDE.md
-   where it describes the entry flow and tabs, and DEVICE_TEST_RUN.md with a per-tab
-   navigation check and a Trends check. Replace the §7 prompt with one for D2: D2a's
-   WatchSessionProtocol seam, then D2b's AlarmAudioController seam, under D2's stopping
-   rule.
+   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF', saving the log and result
+   bundle, and run .github/scripts/check-swift-testing-attribution.sh over them. Before the
+   last commit, also run the UI smoke tests (Debug, same destination) and build
+   "ZeezWatch Watch App" on -destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976'.
+6. Update FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md (D2 and §7), and
+   DEVICE_TEST_RUN.md where D2 changes what the device pass checks (T5, T8). Replace the
+   §7 prompt with one for the device pass, unless I name something else.
 
-Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start D2,
-D3c, the per-night source work or the tracked cleanups (SleepAnalysisTypes stubs, misnamed
-Core Data tests) without asking.
+Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start D3c,
+the paywall copy, the per-night source work or the tracked cleanups (SleepAnalysisTypes
+stubs, misnamed Core Data tests, the Learn orphans) without asking.
 ```
 
 **Open items** (none needs hardware):
-- **Confirm the attribution check on CI.** Pushed 2026-10-26. The first runs failed before it could run: two
-  Xcode 16.4-only compile errors (`1a28f10`, `541f2dd`) and a simulator race (fixed in `dc40d8f` by booting by UDID).
-  `541f2dd`'s annotation was not enough; the sum is split in the commit after it. Step 0 of the prompt checks the latest run. the job runs
-  Xcode 16.x, whose Swift Testing may word the `«unknown»` and `Test run with …` lines differently or file
-  unattributed issues differently in the result bundle. The script fails loudly if the summary line is missing; a
-  pass on a clean run shows the summary matched, not that an unattributed issue would be caught.
-- **D2a** `WatchSessionProtocol` seam and **D2b** `AlarmAudioController` seam, after the D1 batch (Phase D).
+- **Push the D1 batch.** 24 commits after `3a59775`, docs included, are unpushed as of 2026-10-26; Xcode 16.4 has compiled none of
+  them. Step 0 of the prompt checks the run.
+- **D2a** `WatchSessionProtocol` seam and **D2b** `AlarmAudioController` seam: the prompt above.
+- **The paywall's copy** (found 2026-10-26): `SubscriptionView` sells capabilities that do not exist, so no screen
+  opens it (`PaywallReachabilityGuardTests`), which blocks `DEVICE_TEST_RUN.md` T13. A product decision first.
 - **Small cleanups, tracked in `FUTURE_IMPROVEMENTS.md`:** delete the dead stubs in `SleepAnalysisTypes.swift`, two
   of which return hard-coded values; rename or delete the Core Data tests named for migrations and indexes they do
-  not exercise, and drop their wall-clock limits.
+  not exercise, and drop their wall-clock limits; decide on `LearnDailyFactView` and `LearnNoteBrowserView`, which
+  lost their only caller with `LearnHomeView`.
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
   which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
 - **Blocked on the renewed account:** the device pass (T1 and T3.1 first), D3c WidgetKit extension (needs the App
