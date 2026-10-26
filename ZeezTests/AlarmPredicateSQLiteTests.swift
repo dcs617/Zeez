@@ -80,6 +80,10 @@ struct AlarmPredicateSQLiteTests {
     }
 
     // MARK: - The four production query shapes
+    //
+    // Each `await context.perform` returns what it read, and the test asserts outside it:
+    // an issue recorded inside that closure reaches no test, even from the main actor, and
+    // the test passes (CLAUDE.md, Testing).
 
     @Test func snoozeLookupFindsAlarmOnSQLiteStore() async throws {
         try await withSQLiteStore { container in
@@ -87,12 +91,13 @@ struct AlarmPredicateSQLiteTests {
             try await insertAlarm(id: id, into: container)
 
             let context = container.newBackgroundContext()
-            try await context.perform {
+            let (found, foundID) = try await context.perform {
                 // AlarmNotificationUtils.scheduleSnooze: fetch alarm, read snooze duration
                 let alarm = try fetchAlarm(alarmId: id.uuidString, in: context)
-                #expect(alarm != nil, "Snooze lookup must find the alarm on a SQLite store")
-                #expect(alarm?.id == id)
+                return (alarm != nil, alarm?.id)
             }
+            #expect(found, "Snooze lookup must find the alarm on a SQLite store")
+            #expect(foundID == id)
         }
     }
 
@@ -102,12 +107,12 @@ struct AlarmPredicateSQLiteTests {
             try await insertAlarm(id: id, into: container)
 
             let context = container.newBackgroundContext()
-            try await context.perform {
+            let isHeavySleeper = try await context.perform {
                 // AlarmNotificationHandler.checkHeavySleeperMode: fetch alarm, read flag via KVC
                 let alarm = try fetchAlarm(alarmId: id.uuidString, in: context)
-                let isHeavySleeper = alarm?.value(forKey: "heavySleeperMode") as? Bool ?? false
-                #expect(isHeavySleeper, "Heavy-sleeper lookup must find the alarm and read the flag")
+                return alarm?.value(forKey: "heavySleeperMode") as? Bool ?? false
             }
+            #expect(isHeavySleeper, "Heavy-sleeper lookup must find the alarm and read the flag")
         }
     }
 
@@ -117,13 +122,14 @@ struct AlarmPredicateSQLiteTests {
             try await insertAlarm(id: id, into: container)
 
             let context = container.newBackgroundContext()
-            try await context.perform {
+            let (sound, vibrationOnly, watchHaptics) = try await context.perform {
                 // AlarmNotificationHandler.scheduleFollowUps: fetch alarm, read sound settings
                 let alarm = try fetchAlarm(alarmId: id.uuidString, in: context)
-                #expect(alarm?.alarmSound == "Alarm_Honk.caf")
-                #expect(alarm?.vibrationOnly == false)
-                #expect(alarm?.watchHaptics == true)
+                return (alarm?.alarmSound, alarm?.vibrationOnly, alarm?.watchHaptics)
             }
+            #expect(sound == "Alarm_Honk.caf")
+            #expect(vibrationOnly == false)
+            #expect(watchHaptics == true)
         }
     }
 
@@ -133,12 +139,13 @@ struct AlarmPredicateSQLiteTests {
             try await insertAlarm(id: id, into: container)
 
             let context = container.newBackgroundContext()
-            try await context.perform {
+            let (found, name) = try await context.perform {
                 // AlarmNotificationHandler.presentActiveAlarmUI: fetch the full object for the UI
                 let alarm = try fetchAlarm(alarmId: id.uuidString, in: context)
-                #expect(alarm != nil, "Present-UI lookup must find the alarm on a SQLite store")
-                #expect(alarm?.name == "Predicate Test Alarm")
+                return (alarm != nil, alarm?.name)
             }
+            #expect(found, "Present-UI lookup must find the alarm on a SQLite store")
+            #expect(name == "Predicate Test Alarm")
         }
     }
 
@@ -149,11 +156,11 @@ struct AlarmPredicateSQLiteTests {
             try await insertAlarm(id: UUID(), into: container)
 
             let context = container.newBackgroundContext()
-            try await context.perform {
+            let found = try await context.perform {
                 // Production guards on UUID(uuidString:) and takes the fallback path
-                let alarm = try fetchAlarm(alarmId: "not-a-uuid", in: context)
-                #expect(alarm == nil)
+                try fetchAlarm(alarmId: "not-a-uuid", in: context) != nil
             }
+            #expect(!found)
         }
     }
 
@@ -162,10 +169,10 @@ struct AlarmPredicateSQLiteTests {
             try await insertAlarm(id: UUID(), into: container)
 
             let context = container.newBackgroundContext()
-            try await context.perform {
-                let alarm = try fetchAlarm(alarmId: UUID().uuidString, in: context)
-                #expect(alarm == nil)
+            let found = try await context.perform {
+                try fetchAlarm(alarmId: UUID().uuidString, in: context) != nil
             }
+            #expect(!found)
         }
     }
 }
