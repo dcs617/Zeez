@@ -167,4 +167,27 @@ struct MonthlyTrendsTests {
         #expect(MonthlyChartSection.accessibilityValue(for: .quality, in: data.dataPoints)
                 == MonthlyChartSection.ChartType.quality.unavailableText)
     }
+
+    // MARK: - Schedule consistency
+
+    private func start(month: Int, day: Int, hour: Int, minute: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: 2026, month: month, day: day, hour: hour, minute: minute))!
+    }
+
+    @Test("Five minutes of bedtime spread is not read as an inconsistent schedule")
+    func smallBedtimeSpreadIsConsistent() async throws {
+        // Identical 8-hour nights starting between 22:55 and 23:05.
+        let minutes: [(hour: Int, minute: Int)] = [(22, 55), (23, 0), (23, 5), (23, 0), (22, 55)]
+        let data = try await monthlyTrends { context in
+            for (offset, time) in minutes.enumerated() {
+                addSession(starting: start(month: 6, day: 8 + offset, hour: time.hour, minute: time.minute),
+                           in: context)
+            }
+        }
+
+        let consistency = try #require(try point(month: 6, in: data).consistency)
+        #expect(consistency > 80, "A five-minute spread read as \(consistency)% consistent")
+        #expect(!data.insights.contains { if case .lowConsistency = $0 { return true }; return false },
+                "A five-minute spread must not prompt the low-consistency insight")
+    }
 }

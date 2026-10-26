@@ -98,12 +98,13 @@ class MonthlyTrendsDataProvider {
         guard let bedtimeVariance = metrics.bedtimeVariance,
               let durationVariance = metrics.durationVariance else { return nil }
 
-        // Convert variances to consistency scores (inverse relationship)
-        let maxBedtimeVariance: TimeInterval = 3600 // 1 hour variance = 0% consistency
-        let maxDurationVariance: TimeInterval = 7200 // 2 hour variance = 0% consistency
-        
-        let bedtimeConsistency = max(0, 100 - (bedtimeVariance / maxBedtimeVariance * 100))
-        let durationConsistency = max(0, 100 - (durationVariance / maxDurationVariance * 100))
+        // Compare standard deviations, in seconds, with limits in seconds. Comparing the
+        // variances (seconds²) read about a minute of spread as 0% consistent.
+        let maxBedtimeDeviation: TimeInterval = 3600 // 1 hour standard deviation = 0% consistency
+        let maxDurationDeviation: TimeInterval = 7200 // 2 hour standard deviation = 0% consistency
+
+        let bedtimeConsistency = max(0, 100 - (sqrt(bedtimeVariance) / maxBedtimeDeviation * 100))
+        let durationConsistency = max(0, 100 - (sqrt(durationVariance) / maxDurationDeviation * 100))
         
         return (bedtimeConsistency + durationConsistency) / 2
     }
