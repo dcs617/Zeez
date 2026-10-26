@@ -8,7 +8,7 @@ struct MonthlyChartSection: View {
     
     enum ChartType: String, CaseIterable {
         case quality = "Experimental Zeez Estimate"
-        case duration = "Duration"
+        case duration = "Recorded Session Duration"
         case startTimeSpread = "Start Time Spread"
         case sleepDebt = "Goal Shortfall"
 
@@ -25,7 +25,7 @@ struct MonthlyChartSection: View {
         var accessibilityLabel: String {
             switch self {
             case .quality: return "Experimental Zeez estimate, monthly average"
-            case .duration: return "Duration, monthly average"
+            case .duration: return "Recorded session duration, monthly average"
             case .startTimeSpread: return "Recorded sleep start time spread by month"
             case .sleepDebt: return "Sleep goal shortfall by month"
             }
@@ -63,7 +63,7 @@ struct MonthlyChartSection: View {
         fileprivate func value(of point: MonthlyDataPoint) -> Double? {
             switch self {
             case .quality: return point.metrics.averageQuality
-            case .duration: return point.metrics.averageDuration.map { $0 / 3600 }
+            case .duration: return point.metrics.averageRecordedDuration.map { $0 / 3600 }
             case .startTimeSpread: return point.metrics.startTimeSpread.map { $0.standardDeviation / 60 }
             case .sleepDebt: return point.sleepDebt.map { $0 / 3600 }
             }

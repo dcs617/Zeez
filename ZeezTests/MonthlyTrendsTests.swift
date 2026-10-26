@@ -110,12 +110,12 @@ struct MonthlyTrendsTests {
         }
 
         let march = try point(month: 3, in: data)
-        #expect(march.metrics.averageDuration == nil)
+        #expect(march.metrics.averageRecordedDuration == nil)
         #expect(march.metrics.startTimeSpread == nil, "An empty month used to read as 100% consistent")
         #expect(march.sleepDebt == nil, "An empty month has no shortfall to report, not a shortfall of zero")
 
         let june = try point(month: 6, in: data)
-        let juneDuration = try #require(june.metrics.averageDuration)
+        let juneDuration = try #require(june.metrics.averageRecordedDuration)
         #expect(abs(juneDuration - 8 * 3600) < 1)
         #expect(june.metrics.startTimeSpread == nil, "A spread needs \(SleepStartSpread.minimumNights) recorded nights")
         #expect(june.sleepDebt == 0, "A recorded 8-hour night meets an 8-hour goal")
@@ -124,6 +124,51 @@ struct MonthlyTrendsTests {
             #expect(MonthlyChartSection.plottedValues(for: chart, in: data.dataPoints).count <= 1,
                     "\(chart) must not plot the five empty months")
         }
+    }
+
+    @Test("The monthly duration is recorded session duration, whatever the source")
+    func monthlyDurationIsRecordedSessionDuration() async throws {
+        let data = try await monthlyTrends { context in
+            // Apple Health reports 7 hours asleep inside a 9-hour session.
+            let session = addSession(starting: night(month: 6, day: 10), hours: 9, in: context)
+            session.deviceIdentifier = AppConstants.DataProvenance.healthKitMarker
+            let asleep = SleepStage(context: context)
+            asleep.id = UUID()
+            asleep.stageType = SleepStageType.lightSleep.rawValue
+            asleep.startTime = session.startTime!.addingTimeInterval(3600)
+            asleep.endTime = session.startTime!.addingTimeInterval(8 * 3600)
+            asleep.duration = 7 * 3600
+            asleep.session = session
+        }
+
+        let average = try #require(try point(month: 6, in: data).metrics.averageRecordedDuration)
+        #expect(abs(average - 9 * 3600) < 1,
+                "Plotted \(average / 3600) h: Apple Health time asleep, mixed into a chart of recorded sessions")
+        #expect(MonthlyChartSection.ChartType.duration.accessibilityLabel.contains("Recorded session duration"))
+    }
+
+    @Test("A night with no asleep time to compare counts as recorded but has no goal shortfall")
+    func goalShortfallNeedsAComparableDuration() async throws {
+        let data = try await monthlyTrends { context in
+            let preferences = UserPreferences(context: context)
+            preferences.id = UUID()
+            preferences.sleepGoalEnabled = true
+            preferences.targetSleepDuration = 8 * 3600
+            // Apple Health reported only in-bed time, so there is no time asleep to compare.
+            let session = addSession(starting: night(month: 6, day: 10), in: context)
+            session.deviceIdentifier = AppConstants.DataProvenance.healthKitMarker
+            let inBed = SleepStage(context: context)
+            inBed.id = UUID()
+            inBed.stageType = "inBed"
+            inBed.startTime = session.startTime
+            inBed.endTime = session.endTime
+            inBed.duration = 8 * 3600
+            inBed.session = session
+        }
+
+        let june = try point(month: 6, in: data)
+        #expect(june.metrics.averageRecordedDuration != nil)
+        #expect(june.sleepDebt == nil, "No comparable duration is not a shortfall of zero")
     }
 
     @Test("Without a selected goal there is no goal shortfall")

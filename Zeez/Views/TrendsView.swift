@@ -93,9 +93,9 @@ struct TrendsView: View {
                             ?? "Experimental Zeez estimate trends: no estimates in this period")
         .accessibilityIdentifier("qualityTrendCard")
         
-        // Duration Trends
+        // Recorded session duration: the interval recorded, not time asleep (claims rule 7).
         TrendMetricCard(
-            title: "Sleep Duration",
+            title: "Recorded Session Duration",
             subtitle: averageDurationFormatted == nil
                 ? "No recorded sessions in this period"
                 : "Average recorded session duration",
@@ -112,8 +112,8 @@ struct TrendsView: View {
         }
         .padding(.horizontal)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(averageDurationFormatted.map { "Sleep duration trends: average \($0)" }
-                            ?? "Sleep duration trends: no recorded sessions in this period")
+        .accessibilityLabel(averageDurationFormatted.map { "Recorded session duration trends: average \($0)" }
+                            ?? "Recorded session duration trends: no recorded sessions in this period")
         .accessibilityIdentifier("durationTrendCard")
         
         // Sleep schedule: each night's recorded start and end, and how much the start varied.

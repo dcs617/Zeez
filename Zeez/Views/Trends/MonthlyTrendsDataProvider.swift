@@ -145,14 +145,19 @@ struct MonthlyDataPoint: Identifiable {
 
 class MonthlyMetrics {
     private(set) var sessionCount = 0
-    private(set) var totalDuration: TimeInterval = 0
+    private(set) var totalRecordedDuration: TimeInterval = 0
     private(set) var totalQuality: Double = 0
     private var qualityCount = 0
     private var recordings: [(start: Date, duration: TimeInterval)] = []
-    private var durationsByDay: [Date: TimeInterval] = [:]
-    
-    var averageDuration: TimeInterval? {
-        sessionCount > 0 ? totalDuration / Double(sessionCount) : nil
+    /// What the sleep goal is compared with, per day: Apple Health time asleep, or a Zeez
+    /// session's recorded interval (`durationForSleepGoalComparison`).
+    private var goalDurationsByDay: [Date: TimeInterval] = [:]
+
+    /// Mean recorded session interval (end − start) for every source — the quantity the weekly
+    /// "Recorded Session Duration" card shows. Not time asleep (claims rule 7); it used to mix in
+    /// Apple Health time asleep for imported nights.
+    var averageRecordedDuration: TimeInterval? {
+        sessionCount > 0 ? totalRecordedDuration / Double(sessionCount) : nil
     }
 
     /// Mean of the month's displayable Experimental Zeez Estimates; `nil` when it has none.
@@ -166,22 +171,25 @@ class MonthlyMetrics {
     }
     
     func addSession(_ session: SleepSession) {
-        guard let startTime = session.startTime,
-              let duration = session.durationForSleepGoalComparison else { return }
-        
+        guard let startTime = session.startTime, session.recordedInterval > 0 else { return }
+
         sessionCount += 1
-        totalDuration += duration
+        totalRecordedDuration += session.recordedInterval
         if session.hasDisplayableScore {
             totalQuality += session.qualityScore
             qualityCount += 1
         }
 
         recordings.append((start: startTime, duration: session.recordedInterval))
-        durationsByDay[Calendar.current.startOfDay(for: startTime), default: 0] += duration
+        if let goalDuration = session.durationForSleepGoalComparison {
+            goalDurationsByDay[Calendar.current.startOfDay(for: startTime), default: 0] += goalDuration
+        }
     }
 
-    func goalShortfall(targetDuration: TimeInterval) -> TimeInterval {
-        durationsByDay.values.reduce(0) { total, duration in
+    /// `nil` when no session has a duration the goal can be compared with.
+    func goalShortfall(targetDuration: TimeInterval) -> TimeInterval? {
+        guard !goalDurationsByDay.isEmpty else { return nil }
+        return goalDurationsByDay.values.reduce(0) { total, duration in
             total + max(0, targetDuration - duration)
         }
     }
