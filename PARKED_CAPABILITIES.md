@@ -199,6 +199,13 @@ never applied to the individual as a determination of need.
 goal-shortfall rather than sleep-need vocabulary. `ClinicalVocabularyGuardTests` now asserts
 `SleepRecommendationSystem` stays deleted, so reviving the type name is a deliberate act.
 
+**Stubs deleted 2026-10-27.** `PersonalizationManager` and `HistoricalAnalyzer`, in
+`Zeez/Sleep/SleepAnalysisTypes.swift`, returned hard-coded "personalized baselines" and "sleep
+patterns": a consistency score of 75, "Regular"/"Delayed" weekday and weekend patterns, and 0.7–0.8
+confidence. Nothing called them, but the first caller would have shown those numbers as the user's
+own. They went with the file's other dead types; the goal-shortfall types it also held now live in
+`SleepGoalShortfall.swift`. Personalization starts from this entry, not from those types.
+
 ---
 
 ## 6. Session detail, monthly trends, and environmental display views

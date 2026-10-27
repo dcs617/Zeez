@@ -1,133 +1,13 @@
 import Foundation
 import CoreData
 
-// Temporary types to maintain compilation during Phase 1A cleanup
-// These will be removed/simplified in Phase 2 implementation
-
-// SessionInfo wrapper around SleepSession for temporary compatibility
-struct SessionInfo {
-    let session: SleepSession
-    let id: UUID
-    let startTime: Date
-    let endTime: Date
-    let duration: TimeInterval
-    
-    var durationHours: Double {
-        return duration / 3600.0
-    }
-    
-    init(session: SleepSession) {
-        self.session = session
-        self.id = session.id ?? UUID()
-        self.startTime = session.startTime ?? Date()
-        self.endTime = session.endTime ?? Date()
-        self.duration = self.endTime.timeIntervalSince(self.startTime)
-    }
-}
-
-// Simple cycle analysis stub
-struct CycleAnalysis {
-    let cycleCount: Int
-    let completedCycles: Int
-    let consistency: Double
-    
-    static let empty = CycleAnalysis(cycleCount: 0, completedCycles: 0, consistency: 0.0)
-}
-
-// Analysis result stub (may still be needed by some components)
-struct AnalysisResult {
-    let success: Bool
-    let error: Error?
-}
+// The user's sleep goal compared with recorded nights: the goal's duration, and the
+// per-night shortfall shown by Sleep Goal settings and Learn's sleep-debt screen.
 
 enum SleepGoalPolicy {
     static func duration(from bedtime: Date, to wakeTime: Date) -> TimeInterval {
         let interval = wakeTime.timeIntervalSince(bedtime)
         return interval > 0 ? interval : interval + 24 * 3600
-    }
-}
-
-// Trend direction enum
-enum TrendDirection {
-    case improving
-    case declining
-    case stable
-    case unknown
-}
-
-// Personalization types stubs
-struct PersonalizedBaselines {
-    let optimalBedtime: Date
-    let targetSleepDuration: TimeInterval
-    let dataMaturity: Double
-    let confidence: Double
-    let sessionCount: Int
-    let averageSleepDuration: TimeInterval
-    let bedtimeConsistency: Double
-    let wakeTimeConsistency: Double
-    let sleepDurationVariability: TimeInterval
-    
-    static let mock = PersonalizedBaselines(
-        optimalBedtime: Date(),
-        targetSleepDuration: 8 * 3600,
-        dataMaturity: 0.5,
-        confidence: 0.7,
-        sessionCount: 30,
-        averageSleepDuration: 7.5 * 3600,
-        bedtimeConsistency: 0.85,
-        wakeTimeConsistency: 0.80,
-        sleepDurationVariability: 0.5 * 3600 // 30 minutes variability
-    )
-}
-
-struct QualityTrends {
-    let trend: TrendDirection
-    let averageScore: Double
-}
-
-struct SleepPatternAnalysis {
-    let consistencyScore: Double
-    let weekdayPattern: String
-    let weekendPattern: String
-    let trendDirection: TrendDirection
-    let confidence: Double
-    let qualityTrends: QualityTrends
-    
-    static let mock = SleepPatternAnalysis(
-        consistencyScore: 75.0,
-        weekdayPattern: "Regular",
-        weekendPattern: "Delayed",
-        trendDirection: .stable,
-        confidence: 0.8,
-        qualityTrends: QualityTrends(trend: .stable, averageScore: 78.0)
-    )
-}
-
-// Analyzer stubs
-class PersonalizationManager {
-    static let shared = PersonalizationManager()
-    
-    private init() {}
-    
-    func getPersonalizedBaselines(context: NSManagedObjectContext) async -> PersonalizedBaselines {
-        return PersonalizedBaselines.mock
-    }
-    
-    func calculatePersonalizedBaselines() async -> PersonalizedBaselines {
-        return PersonalizedBaselines.mock
-    }
-}
-
-class HistoricalAnalyzer {
-    init() {}
-    
-    func analyzeSleepPatterns(context: NSManagedObjectContext) async -> SleepPatternAnalysis {
-        return SleepPatternAnalysis.mock
-    }
-    
-    // Alternative method signature used by PersonalizationSettingsView
-    func analyzeSleepPatterns(days: Int) async -> SleepPatternAnalysis {
-        return SleepPatternAnalysis.mock
     }
 }
 
