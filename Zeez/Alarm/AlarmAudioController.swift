@@ -20,9 +20,13 @@ final class AlarmAudioController {
     private enum Source {
         case bundled(name: String, fileExtension: String)
         case file(URL)
+        /// Alarm_Classic at a fixed volume, when the chosen sound will not play.
+        case fallback
     }
     private var source: Source?
     private var requestedVolume: Float = 1.0
+    private static let fallbackName = "Alarm_Classic"
+    private static let fallbackVolume: Float = 0.8
 
     // Xcode 26's SDK renames .allowBluetooth → .allowBluetoothHFP (old name deprecated);
     // CI builds with Xcode 16.x, which only has .allowBluetooth.
@@ -61,25 +65,31 @@ final class AlarmAudioController {
             try session.setActive(true, options: [])
 
             let url: URL
-            let volumeKey: String
+            let playerVolume: Float
             switch source {
             case .bundled(let name, let fileExtension):
                 guard let bundled = Bundle.main.url(forResource: name, withExtension: fileExtension) else {
                     ZeezLogger.error(ZeezLogger.alarm, "Missing bundled audio \(name).\(fileExtension)")
-                    // Fallback to a system sound URL if available
-                    fallbackToSystemSound()
+                    fallBack(from: source)
                     return
                 }
                 url = bundled
-                volumeKey = name
+                playerVolume = normalizeVolume(volume, for: name)
             case .file(let fileURL):
                 url = fileURL
-                volumeKey = fileURL.lastPathComponent
+                playerVolume = normalizeVolume(volume, for: fileURL.lastPathComponent)
+            case .fallback:
+                guard let classic = Bundle.main.url(forResource: Self.fallbackName, withExtension: "caf") else {
+                    fallBack(from: source)
+                    return
+                }
+                url = classic
+                playerVolume = Self.fallbackVolume
             }
 
             let p = try players.makePlayer(contentsOf: url)
             p.numberOfLoops = -1
-            p.volume = normalizeVolume(volume, for: volumeKey)
+            p.volume = playerVolume
             p.prepareToPlay()
             p.play()
             player = p
@@ -95,35 +105,25 @@ final class AlarmAudioController {
                 // User file names are personal content — debug builds only.
                 ZeezLogger.info(ZeezLogger.alarm, "🔊 Started looping user audio")
                 ZeezLogger.debug(ZeezLogger.alarm, "   User audio file: \(fileURL.lastPathComponent)")
+            case .fallback:
+                ZeezLogger.info(ZeezLogger.alarm, "🎵 Started fallback bundled sound")
             }
         } catch {
             ZeezLogger.error(ZeezLogger.alarm, "AlarmAudioController startLooping error", error: error)
-            fallbackToSystemSound()
+            fallBack(from: source)
         }
     }
 
-    private func fallbackToSystemSound() {
-        ZeezLogger.info(ZeezLogger.alarm, "🎵 Using fallback system beep")
-
-        // Try to use a bundled fallback sound first
-        if let fallbackURL = Bundle.main.url(forResource: "Alarm_Classic", withExtension: "caf") {
-            do {
-                let p = try players.makePlayer(contentsOf: fallbackURL)
-                p.numberOfLoops = -1
-                p.volume = 0.8
-                p.prepareToPlay()
-                p.play()
-                player = p
-                isPlaying = true
-                ZeezLogger.info(ZeezLogger.alarm, "🎵 Started fallback bundled sound")
-                return
-            } catch {
-                ZeezLogger.error(ZeezLogger.alarm, "Failed to play fallback bundled sound", error: error)
-            }
+    /// A sound that will not play falls back to Alarm_Classic, which the watchdog then keeps
+    /// alive like any loop; Alarm_Classic falls back to the repeating system sound.
+    private func fallBack(from source: Source) {
+        if case .fallback = source {
+            ZeezLogger.error(ZeezLogger.alarm, "Fallback bundled sound will not play")
+            startSystemSoundFallback()
+        } else {
+            ZeezLogger.info(ZeezLogger.alarm, "🎵 Using fallback sound")
+            play(.fallback, volume: Self.fallbackVolume)
         }
-
-        // Final fallback: repeating system sound
-        startSystemSoundFallback()
     }
 
     private func startSystemSoundFallback() {
@@ -193,6 +193,8 @@ final class AlarmAudioController {
     /// A loop that stopped unexpectedly is restarted, up to `maxRetries` failed checks in a
     /// row; then the alarm falls back to another sound rather than keep restarting a file that
     /// will not play. A restart's `stop()` zeroes the count, so the restart carries it across.
+    /// The fallback sound gets its own `maxRetries` before the system sound, which has no
+    /// player to watch.
     func checkAudioHealth() {
         guard isPlaying, let source else { return }
 
@@ -210,16 +212,17 @@ final class AlarmAudioController {
             retryCount = failedChecks
             play(source, volume: requestedVolume)
         } else {
-            ZeezLogger.error(ZeezLogger.alarm, "Audio watchdog: max retries reached, falling back to system sound")
+            ZeezLogger.error(ZeezLogger.alarm, "Audio watchdog: max retries reached, falling back")
             // Retire the watchdog and the dead loop first. Left running, every later check
             // would fall back again, and each fallback to the system sound would add another
-            // beep timer.
+            // beep timer. A fallback sound that plays starts a watchdog of its own.
             watchdogTimer?.invalidate()
             watchdogTimer = nil
             player?.stop()
             player = nil
             self.source = nil
-            fallbackToSystemSound()
+            retryCount = 0
+            fallBack(from: source)
         }
     }
 

@@ -253,6 +253,56 @@ struct AlarmAudioControllerTests {
         controller.stop()  // ends the beep timer, which would otherwise outlive the test
     }
 
+    // MARK: - The fallback sound's watchdog
+
+    /// Nothing used to watch the fallback: an interruption after it took over (Siri, a call)
+    /// left the alarm silent until Stop.
+    @Test("The watchdog restarts the fallback sound when it stops")
+    func stoppedFallbackIsRestarted() throws {
+        let factory = FakeAudioPlayerFactory(stalling: [Self.longFile])
+        let controller = start(factory)
+        for _ in 1...6 { controller.checkAudioHealth() }
+        try #require(factory.players.last?.fileName == Self.classicFile)
+
+        try #require(factory.players.last).interrupt()
+        controller.checkAudioHealth()
+
+        #expect(factory.attempts.filter { $0 == Self.classicFile }.count == 2)
+        #expect(factory.players.last?.isPlaying == true)
+        #expect(factory.players.last?.volume == 0.8)
+        #expect(controller.isPlaying)
+    }
+
+    @Test("A fallback reached because the chosen file would not load is watched too")
+    func fallbackAfterLoadFailureIsWatched() throws {
+        let factory = FakeAudioPlayerFactory(failing: [Self.longFile])
+        let controller = start(factory)
+
+        try #require(factory.players.last).interrupt()
+        controller.checkAudioHealth()
+
+        #expect(factory.attempts == [Self.longFile, Self.classicFile, Self.classicFile])
+        #expect(factory.players.last?.isPlaying == true)
+    }
+
+    @Test("A fallback that will not play ends in the system sound after five failed restarts")
+    func stalledFallbackEndsInSystemSound() {
+        let factory = FakeAudioPlayerFactory(stalling: [Self.longFile, Self.classicFile])
+        let controller = start(factory)
+
+        for _ in 1...6 { controller.checkAudioHealth() }  // five restarts of the chosen file, then the fallback
+        for _ in 1...5 { controller.checkAudioHealth() }  // five restarts of the fallback
+        #expect(!controller.isUsingSystemSoundFallback)
+
+        controller.checkAudioHealth()
+        #expect(controller.isUsingSystemSoundFallback)
+        #expect(factory.attempts.filter { $0 == Self.classicFile }.count == 6,
+                "The first fallback, then five restarts")
+        #expect(controller.isPlaying)
+
+        controller.stop()  // ends the beep timer, which would otherwise outlive the test
+    }
+
     // MARK: - Stop
 
     /// The alarm ducks other audio. Without `.notifyOthersOnDeactivation`, an app it
