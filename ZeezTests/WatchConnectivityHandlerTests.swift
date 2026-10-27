@@ -161,6 +161,20 @@ struct WatchConnectivityHandlerTests {
         #expect(completions.values == [false])
     }
 
+    /// Nothing resends a refused message, and a wake pattern sent once the alarm has stopped
+    /// would buzz the wrist for nothing; a queued one only grew the queue, two per ring.
+    @Test("A refused wake pattern and its stop are dropped, not queued")
+    func refusedWakePatternIsNotQueued() {
+        let session = FakeWatchSession(reachable: false)
+        let handler = WatchConnectivityHandler(session: session, container: PersistenceController(inMemory: true).container)
+
+        handler.sendWakePattern(.moderate, intensity: 0.7, duration: 300)
+        handler.stopWakePattern()
+
+        #expect(session.sent.isEmpty)
+        #expect(handler.queuedMessageCount == 0)
+    }
+
     /// The application context is delivered whenever the watch app next runs, so medium and
     /// low priority must not wait for reachability.
     @Test("Medium and low priority go through the application context, reachable or not")

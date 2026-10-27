@@ -76,23 +76,28 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
     // MARK: - Enhanced Message Sending
     
     func sendMessage(_ message: WatchMessage, completion: ((Bool) -> Void)? = nil) {
-        // Add to queue for reliability
-        messageQueue.enqueue(message)
-        
-        DispatchQueue.main.async {
-            self.pendingMessages = self.messageQueue.pendingCount
-        }
-        
         // Only interactive sendMessage needs a reachable counterpart;
         // updateApplicationContext delivers whenever the watch next runs.
+        // A refused message is dropped, not queued: .high carries wake patterns,
+        // which are only worth sending while the alarm rings.
         if message.priority == .high && !session.isReachable {
-            ZeezLogger.debug(ZeezLogger.network, "Watch not reachable - message queued: \(message.type.rawValue)")
+            ZeezLogger.debug(ZeezLogger.network, "Watch not reachable - message dropped: \(message.type.rawValue)")
             completion?(false)
             return
         }
 
+        messageQueue.enqueue(message)
+
+        DispatchQueue.main.async {
+            self.pendingMessages = self.messageQueue.pendingCount
+        }
+
         performSend(message, completion: completion)
     }
+
+    /// Messages sent and not yet answered or failed. Internal for tests; `pendingMessages`
+    /// is the same count, published on main.
+    var queuedMessageCount: Int { messageQueue.pendingCount }
 
     private func performSend(_ message: WatchMessage, completion: ((Bool) -> Void)?) {
         do {
