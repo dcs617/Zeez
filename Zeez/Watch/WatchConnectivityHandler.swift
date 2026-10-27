@@ -31,7 +31,10 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
     @Published var lastSyncTime: Date?
     @Published var pendingMessages: Int = 0
     
-    private var session: WCSession
+    private let session: WatchSessionProtocol
+    /// Tests pass an in-memory container; nil means PersistenceController.shared
+    /// (resolved lazily so constructing the handler never touches the store).
+    private let container: NSPersistentContainer?
     private let messageQueue = WatchMessageQueue()
     private var retryManager = RetryManager()
 
@@ -43,14 +46,21 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
         case good = "Good"
     }
 
-    override private init() {
-        self.session = WCSession.default
+    /// Tests inject a fake session + in-memory container; production uses the real ones.
+    init(session: WatchSessionProtocol = WCSession.default,
+         container: NSPersistentContainer? = nil) {
+        self.session = session
+        self.container = container
         super.init()
 
-        if WCSession.isSupported() {
+        if session.isSupported {
             session.delegate = self
             session.activate()
         }
+    }
+
+    private var resolvedContainer: NSPersistentContainer {
+        container ?? PersistenceController.shared.container
     }
 
     // MARK: - Connection Monitoring
@@ -175,7 +185,7 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
     /// deletion or disabling a different alarm — so this reads the store rather than
     /// forwarding the alarm that changed. Callable from any queue.
     func updateAlarmContext() {
-        WatchPayloadBuilder.fetch(includeSleep: false, includeAlarm: true) { [weak self] _, alarmStatus in
+        WatchPayloadBuilder.fetch(includeSleep: false, includeAlarm: true, container: resolvedContainer) { [weak self] _, alarmStatus in
             guard let self, let alarmStatus else { return }
             self.sendMessage(WatchMessage(
                 type: WatchMessageType.alarmStatus,
@@ -186,7 +196,7 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
     }
 
     func syncSleepData() {
-        WatchPayloadBuilder.fetch(includeSleep: true, includeAlarm: false) { [weak self] sleepSummary, _ in
+        WatchPayloadBuilder.fetch(includeSleep: true, includeAlarm: false, container: resolvedContainer) { [weak self] sleepSummary, _ in
             guard let self else { return }
             guard let sleepSummary else {
                 ZeezLogger.debug(ZeezLogger.network, "No sleep data available for watch sync")
@@ -204,7 +214,7 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
     func performFullSync() {
         ZeezLogger.info(ZeezLogger.network, "Performing full watch sync")
 
-        WatchPayloadBuilder.fetch(includeSleep: true, includeAlarm: true) { [weak self] sleepSummary, alarmStatus in
+        WatchPayloadBuilder.fetch(includeSleep: true, includeAlarm: true, container: resolvedContainer) { [weak self] sleepSummary, alarmStatus in
             guard let self else { return }
 
             let envelope = WatchSyncEnvelope(sleepSummary: sleepSummary, alarmStatus: alarmStatus)
@@ -316,7 +326,8 @@ extension WatchConnectivityHandler: WCSessionDelegate {
     }
     #endif
     
-    private func handleWatchMessage(
+    // Internal for tests: the delegate methods above need a real WCSession to call.
+    func handleWatchMessage(
         _ message: [String: Any],
         replyHandler: (([String: Any]) -> Void)?
     ) {
@@ -367,7 +378,8 @@ extension WatchConnectivityHandler: WCSessionDelegate {
 
         WatchPayloadBuilder.fetch(
             includeSleep: requestType == "sleep" || requestType == "all",
-            includeAlarm: requestType == "alarm" || requestType == "all"
+            includeAlarm: requestType == "alarm" || requestType == "all",
+            container: resolvedContainer
         ) { sleepSummary, alarmStatus in
             let envelope = WatchSyncEnvelope(sleepSummary: sleepSummary, alarmStatus: alarmStatus)
             replyHandler?(envelope.toDictionary())
