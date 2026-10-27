@@ -385,9 +385,23 @@ it; the Learn tab has always been `LearnView`.
 presented from its own `NavigationStack`, the double-container shape D1 removes. Its
 `navigationDestination(for:)` routing is the one useful idea in it.
 
-**Left without callers.** `LearnDailyFactView` (and `LearnDailyFactPreview`) and
-`LearnNoteBrowserView` were reachable only from this screen, so they were already unreachable. They
-are not deleted here; a Learn cleanup should decide whether they return or go.
+**Left without callers, then deleted (2026-10-27).** `LearnDailyFactView` (and
+`LearnDailyFactPreview`) and `LearnNoteBrowserView` were reachable only from this screen. Daniel chose
+to delete them, with the two helpers only the browser used: `NoteCard` (`Note/LearnNoteCard.swift`)
+and `Views/FetchRequestView.swift`.
+- *Daily fact.* It showed one `SleepFact` a day, then the rest as a list. Nothing in the app ever
+  creates a `SleepFact`, so it could only have shown its empty state. The entity stays in the model;
+  removing it is a model change. A return needs a written, attributed set of facts, reviewed against
+  the claims contract (§4), and something that seeds it.
+- *Note browser.* It filtered notes into highlights, article notes and quick notes, and shared a
+  selection of them. Learn still reaches notes through Quick Notes and an article's highlights, and
+  `LearnNoteDetailView` still shares a single note.
+
+**Still without callers** (found 2026-10-27 by a reference search over `Zeez/`; not deleted):
+`LearnContentManager` with `LearnContentManager+DefaultContent`, `LearnEnvironmentalDetailView`,
+`LearnGlossaryView` (and `LearnGlossaryTermDetailView`, which only it opens), `LearnReferenceView`,
+`ToolCard` (`LearnToolCard.swift`), `LearnNoteListView`, `LearnQuizBrowserView` and
+`LearnSleepPositionDetailView`. A Learn cleanup should decide each one the same way.
 
 **Claims tier and label.** Educational content. `ClinicalVocabularyGuardTests` exempts `Zeez/Learn`,
 so any Learn surface that returns needs its copy reviewed by hand against
