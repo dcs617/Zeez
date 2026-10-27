@@ -15,14 +15,18 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     /// Tests pass an in-memory container; nil means PersistenceController.shared
     /// (resolved lazily so constructing the singleton never touches the store).
     private let container: NSPersistentContainer?
+    private let audio: AlarmAudioController
     /// Prevent double follow-up scheduling if multiple notifications present nearly at once.
     private var followupsGuard: [String: Date] = [:]
 
-    /// Tests inject an in-memory fake center + container; production uses the real ones.
+    /// Tests inject an in-memory fake center + container and a controller with fake players;
+    /// production uses the real ones.
     init(notificationCenter: AlarmNotificationScheduling = UNUserNotificationCenter.current(),
-         container: NSPersistentContainer? = nil) {
+         container: NSPersistentContainer? = nil,
+         audio: AlarmAudioController = .shared) {
         self.center = notificationCenter
         self.container = container
+        self.audio = audio
         super.init()
     }
 
@@ -46,7 +50,7 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
            let alarmId = info["alarmID"] as? String, !alarmId.isEmpty {
             prewarmAudio()
             presentActiveAlarmUI(alarmId: alarmId)
-            startContinuousAudio()
+            startContinuousAudio(alarmId: alarmId)
         }
 
         completionHandler([.banner, .sound])
@@ -67,13 +71,13 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
             cancelFollowUps(for: alarmId)
             resetFollowUpGuard(for: alarmId)
             AlarmNotificationUtils.scheduleSnooze(for: alarmId)
-            AlarmAudioController.shared.stop()
+            audio.stop()
 
         case AlarmNotificationRegistrar.stopId:
             ZeezLogger.info(ZeezLogger.alarm, "   User chose STOP")
             cancelFollowUps(for: alarmId)
             resetFollowUpGuard(for: alarmId)
-            AlarmAudioController.shared.stop()
+            audio.stop()
             // The cancel above consumed the pre-scheduled chain — re-arm it
             // for the alarm's NEXT firing (runs fine from a background
             // activation, which is how action handlers execute when the app
@@ -86,7 +90,7 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
             // Prewarm audio for instant start, then foreground UI and start looped audio
             prewarmAudio()
             presentActiveAlarmUI(alarmId: alarmId)
-            startContinuousAudio()
+            startContinuousAudio(alarmId: alarmId)
             cancelFollowUps(for: alarmId)
             resetFollowUpGuard(for: alarmId)
 
@@ -209,14 +213,24 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         stopWatchHaptics()
     }
     
-    private func startContinuousAudio() {
+    /// Starts the in-app loop, unless the alarm is vibration-only: `ActiveAlarmView` vibrates
+    /// for those and plays nothing, so a loop started here would ring until Stop. An alarm
+    /// that cannot be read still rings. The settings are read synchronously so the loop starts
+    /// on the same queue as before. Internal for tests: the delegate callbacks that call it
+    /// need a real UNNotification.
+    func startContinuousAudio(alarmId: String) {
+        if AlarmSnapshot.fetchNow(idString: alarmId, container: resolvedContainer)?.vibrationOnly == true {
+            ZeezLogger.info(ZeezLogger.alarm, "📳 Vibration-only alarm \(alarmId): no in-app audio")
+            return
+        }
+
         // Try to start the long audio file, fallback to default if not found
-        if AlarmAudioController.shared.canPlay(bundledName: AlarmNotificationUtils.longInAppBundledName) {
-            AlarmAudioController.shared.startLooping(bundledName: AlarmNotificationUtils.longInAppBundledName)
+        if audio.canPlay(bundledName: AlarmNotificationUtils.longInAppBundledName) {
+            audio.startLooping(bundledName: AlarmNotificationUtils.longInAppBundledName)
         } else {
             // Fallback to a guaranteed bundled sound
             ZeezLogger.info(ZeezLogger.alarm, "⚠️ Long alarm sound not found, using bundled fallback")
-            AlarmAudioController.shared.startLooping(bundledName: "Alarm_Classic", fileExtension: "caf")
+            audio.startLooping(bundledName: "Alarm_Classic", fileExtension: "caf")
         }
     }
 
@@ -248,7 +262,7 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     
     private func prewarmAudio() {
         // Prewarm the audio system for instant start
-        if AlarmAudioController.shared.canPlay(bundledName: AlarmNotificationUtils.longInAppBundledName) {
+        if audio.canPlay(bundledName: AlarmNotificationUtils.longInAppBundledName) {
             // Just prepare, don't play yet
             do {
                 if let url = Bundle.main.url(forResource: AlarmNotificationUtils.longInAppBundledName, withExtension: "caf") {

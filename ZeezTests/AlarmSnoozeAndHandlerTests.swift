@@ -150,4 +150,55 @@ struct AlarmSnoozeAndHandlerTests {
             fake.pending.filter { $0.identifier.contains("alarm-\(bystander)-fu-") }.count == 4
         }
     }
+
+    // MARK: - In-app audio (AlarmNotificationHandler)
+
+    /// A handler whose audio goes to fake players, and the alarm's id string.
+    private func audioHandler(vibrationOnly: Bool) throws
+        -> (handler: AlarmNotificationHandler, audio: AlarmAudioController, players: FakeAudioPlayerFactory, alarmId: String) {
+        let controller = PersistenceController(inMemory: true)
+        let context = controller.container.viewContext
+        let alarm = try AlarmTestSupport.makeAlarm(in: context, vibrationOnly: vibrationOnly)
+        let alarmId = try #require(context.performAndWait { alarm.id?.uuidString })
+        let players = FakeAudioPlayerFactory()
+        let audio = AlarmAudioController(session: FakeAudioSession(), players: players)
+        let handler = AlarmNotificationHandler(notificationCenter: FakeNotificationCenter(),
+                                               container: controller.container, audio: audio)
+        return (handler, audio, players, alarmId)
+    }
+
+    /// The handler starts the loop before `ActiveAlarmView` appears, and the view only adds
+    /// vibration for a vibration-only alarm. A loop started here rang until Stop.
+    @Test("A vibration-only alarm that rings in the app plays no audio")
+    func vibrationOnlyAlarmPlaysNoAudio() throws {
+        let (handler, audio, players, alarmId) = try audioHandler(vibrationOnly: true)
+
+        handler.startContinuousAudio(alarmId: alarmId)
+
+        #expect(players.attempts.isEmpty, "No sound file is even opened")
+        #expect(!audio.isPlaying)
+    }
+
+    @Test("An alarm with sound starts the in-app loop")
+    func alarmWithSoundStartsTheLoop() throws {
+        let (handler, audio, players, alarmId) = try audioHandler(vibrationOnly: false)
+
+        handler.startContinuousAudio(alarmId: alarmId)
+
+        #expect(audio.isPlaying)
+        #expect(players.players.last?.fileName == "Zeez_Long_Default.caf")
+        #expect(players.players.last?.isPlaying == true)
+        audio.stop()
+    }
+
+    /// Settings cannot be read for a deleted alarm or a malformed id; ringing is the safe side.
+    @Test("An alarm whose settings cannot be read still rings")
+    func unreadableAlarmStillRings() throws {
+        let (handler, audio, _, _) = try audioHandler(vibrationOnly: true)
+
+        handler.startContinuousAudio(alarmId: UUID().uuidString)
+
+        #expect(audio.isPlaying)
+        audio.stop()
+    }
 }

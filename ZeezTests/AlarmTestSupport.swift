@@ -106,7 +106,8 @@ enum AlarmTestSupport {
                           enabled: Bool = true,
                           heavySleeper: Bool = false,
                           smartWake: Bool = false,
-                          smartWakeWindow: Int16 = 30) throws -> AlarmConfiguration {
+                          smartWakeWindow: Int16 = 30,
+                          vibrationOnly: Bool = false) throws -> AlarmConfiguration {
         var alarm: AlarmConfiguration!
         try context.performAndWait {
             alarm = AlarmConfiguration(context: context)
@@ -118,6 +119,7 @@ enum AlarmTestSupport {
             alarm.heavySleeperMode = heavySleeper
             alarm.smartWakeEnabled = smartWake
             alarm.smartWakeWindow = smartWakeWindow
+            alarm.vibrationOnly = vibrationOnly
             alarm.snoozeEnabled = true
             alarm.snoozeDuration = 9
             alarm.createdAt = Date()

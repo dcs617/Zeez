@@ -82,12 +82,28 @@ struct AlarmSnapshot {
         }
         let context = container.newBackgroundContext()
         context.perform {
-            let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
-            // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths
-            request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
-            request.fetchLimit = 1
-            let alarm = (try? context.fetch(request))?.first
-            completion(alarm.flatMap(AlarmSnapshot.init))
+            completion(snapshot(of: uuid, in: context))
         }
+    }
+
+    /// Synchronous `fetch`, for a caller that must decide before it returns. Safe from any
+    /// queue: the read runs on a private context's queue while the caller waits.
+    static func fetchNow(idString: String,
+                         container: NSPersistentContainer = PersistenceController.shared.container) -> AlarmSnapshot? {
+        guard let uuid = UUID(uuidString: idString) else { return nil }
+        let context = container.newBackgroundContext()
+        return context.performAndWait {
+            snapshot(of: uuid, in: context)
+        }
+    }
+
+    /// Must be called on `context`'s queue.
+    private static func snapshot(of uuid: UUID, in context: NSManagedObjectContext) -> AlarmSnapshot? {
+        let request: NSFetchRequest<AlarmConfiguration> = AlarmConfiguration.fetchRequest()
+        // "id" is a UUID attribute; SQLite stores cannot evaluate uuidString keypaths
+        request.predicate = NSPredicate(format: "id == %@", uuid as CVarArg)
+        request.fetchLimit = 1
+        let alarm = (try? context.fetch(request))?.first
+        return alarm.flatMap(AlarmSnapshot.init)
     }
 }
