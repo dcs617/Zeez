@@ -38,16 +38,8 @@ struct WatchMessage {
     }
 }
 
-// MARK: - Extended Message Types
 // WatchMessageType, HapticPattern, WakePatternData and the watch display
 // models are defined once in Shared/WatchDataModels.swift (both targets).
-
-extension WatchMessageType {
-    static let heartbeat = WatchMessageType.requestData // Reuse existing for compatibility
-    static let statusUpdate = WatchMessageType.requestData
-    static let dataSync = WatchMessageType.sleepSummary
-    static let error = WatchMessageType.requestData
-}
 
 // MARK: - Message Queue
 

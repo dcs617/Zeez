@@ -295,6 +295,30 @@ struct WatchConnectivityHandlerTests {
         #expect(answered.last?.isEmpty == true)
     }
 
+    /// The watch sends a heartbeat every 15 s while reachable and counts a missing reply as a
+    /// missed beat; three in a row put it in offline mode.
+    @Test("The watch's heartbeat is answered")
+    func heartbeatIsAnswered() {
+        let handler = WatchConnectivityHandler(session: FakeWatchSession(), container: PersistenceController(inMemory: true).container)
+        let replies = Recorder<[String: Any]>()
+
+        handler.handleWatchMessage(["command": "heartbeat", "timestamp": Date().timeIntervalSince1970]) { replies.append($0) }
+
+        #expect(replies.values.first?["heartbeat"] as? String == "pong")
+    }
+
+    /// The phone read a battery level and app state under "statusUpdate", which the watch never
+    /// sent; the heartbeat that did carry them went unread, and the battery level was always -1.
+    @Test("statusUpdate, which the watch never sends, is an unknown command")
+    func statusUpdateIsUnknown() {
+        let handler = WatchConnectivityHandler(session: FakeWatchSession(), container: PersistenceController(inMemory: true).container)
+        let replies = Recorder<[String: Any]>()
+
+        handler.handleWatchMessage(["command": "statusUpdate", "batteryLevel": 0.5]) { replies.append($0) }
+
+        #expect(replies.values.first?["error"] as? String == "Unknown command")
+    }
+
     // MARK: - Pushes
 
     /// `updateApplicationContext` has a single slot: a second push replaces the first before the

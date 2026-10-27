@@ -339,13 +339,9 @@ extension WatchConnectivityHandler: WCSessionDelegate {
             handleDataRequest(message, replyHandler: replyHandler)
 
         case "heartbeat":
-            // Respond to heartbeat
+            // The watch grades its connection by whether this reply arrives.
             replyHandler?(["heartbeat": "pong", "timestamp": Date().timeIntervalSince1970])
-            
-        case "statusUpdate":
-            handleStatusUpdate(message)
-            replyHandler?(["status": "received"])
-            
+
         default:
             ZeezLogger.info(ZeezLogger.network, "Unknown watch command: \(command)")
             replyHandler?(["error": "Unknown command"])
@@ -371,17 +367,6 @@ extension WatchConnectivityHandler: WCSessionDelegate {
         ) { sleepSummary, alarmStatus in
             let envelope = WatchSyncEnvelope(sleepSummary: sleepSummary, alarmStatus: alarmStatus)
             replyHandler?(envelope.toDictionary())
-        }
-    }
-    
-    private func handleStatusUpdate(_ message: [String: Any]) {
-        // Handle status updates from watch (battery level, app state, etc.)
-        if let batteryLevel = message["batteryLevel"] as? Double {
-            ZeezLogger.debug(ZeezLogger.network, "Watch battery level: \(Int(batteryLevel * 100))%")
-        }
-        
-        if let appState = message["appState"] as? String {
-            ZeezLogger.debug(ZeezLogger.network, "Watch app state: \(appState)")
         }
     }
 }

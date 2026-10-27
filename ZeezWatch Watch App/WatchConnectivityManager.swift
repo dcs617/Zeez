@@ -1,7 +1,6 @@
 import Foundation
 import WatchConnectivity
 import SwiftUI
-import WatchKit
 
 /// Enhanced watch connectivity manager with improved reliability and offline support
 class WatchConnectivityManager: NSObject, ObservableObject {
@@ -65,12 +64,12 @@ class WatchConnectivityManager: NSObject, ObservableObject {
         }
     }
     
+    /// The phone answers with a pong and reads nothing else, so the heartbeat carries only
+    /// the command and a timestamp.
     private func sendHeartbeat() {
         let message: [String: Any] = [
             "command": "heartbeat",
-            "timestamp": Date().timeIntervalSince1970,
-            "batteryLevel": WKInterfaceDevice.current().batteryLevel,
-            "appState": getCurrentAppState()
+            "timestamp": Date().timeIntervalSince1970
         ]
         
         session.sendMessage(message, replyHandler: { [weak self] reply in
@@ -300,12 +299,6 @@ extension WatchConnectivityManager: WCSessionDelegate {
         default:
             break
         }
-    }
-    
-    // MARK: - Utility Methods
-    
-    private func getCurrentAppState() -> String {
-        return isReceivingWakePattern ? "waking" : "active"
     }
 }
 
