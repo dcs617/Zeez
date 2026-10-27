@@ -96,6 +96,38 @@ Carried over from the archived roadmap's Phase 3.
   `StatsDataProvider`, `SleepStatsRange`, `StatsComponents`, `WeeklyTrendCard` and `TrendChart` are deleted.
   Device check: `DEVICE_TEST_RUN.md` T15.2.
 
+**Completed 2026-10-27 (the no-hardware batch, `81c1cae`…`77f605d`):**
+
+- ~~D2's alarm and watch follow-ups~~, each with a test that failed against the old code:
+  - A vibration-only alarm played the long alarm sound when it rang in the app or was opened from its banner.
+    `AlarmNotificationHandler.startContinuousAudio(alarmId:)` now reads the alarm first and starts nothing for
+    one (`81c1cae`), on the same queue as before, so the off-main start still waits on T5.1.
+  - The fallback sound had no watchdog. Alarm_Classic is now a watched source with its own five restarts, then
+    the system beep (`931e1de`).
+  - Refused wake patterns stayed in `WatchMessageQueue` forever, two per ring. A `.high` message the watch
+    cannot take is dropped (`2bd998d`): a late one would buzz after Stop. Failed sends of any priority are
+    dropped too, and `RetryManager` and the retry path are deleted (`b5351d5`); on a phone without the watch
+    app every sync failed and stayed queued, and a resend would have overwritten newer context.
+  - `isWatchAvailable` and the haptics gate are gone; `sendMessage`'s live reachability is the only gate
+    (`24465b1`). A stale flag could hold back haptics from a reachable watch.
+  - The watch's heartbeat no longer sends `batteryLevel` (always -1) and `appState`; the phone's
+    `statusUpdate` branch and four misleading `WatchMessageType` aliases are deleted (`a0e2ac3`).
+  - `AlarmNotificationHandler` takes its `AlarmAudioController` and `WatchConnectivityHandler` as init
+    parameters, both allowed by D2's stopping rule (each unlocked a test that could not be written).
+- ~~Dead stubs in `SleepAnalysisTypes.swift`, `SleepInfoCard`, `SleepPositionAnalyzer`~~ (`191909f`). The
+  live goal-shortfall types moved to `SleepGoalShortfall.swift`; `PARKED_CAPABILITIES.md` §5 records the
+  personalization stubs.
+- ~~Core Data tests named for migrations and indexes they do not exercise~~ (`f040efe`). Seven deleted, wall-clock
+  limits with them; the `RespiratoryData` round trip stays, renamed.
+- ~~`LearnDailyFactView` and `LearnNoteBrowserView`~~ deleted with `LearnDailyFactPreview` and the browser's two
+  helpers (`b9bc2fd`; `PARKED_CAPABILITIES.md` §10).
+- ~~The alarm sound picker's "Import from Files" tip and button~~ removed (`a5b1b2a`; `PARKED_CAPABILITIES.md`
+  §11 records what an import needs). `DeadControlGuardTests` fails on any new button with an empty action.
+- ~~Settings → Sleep Analysis → Personalization~~, a "Coming Soon" placeholder, removed (`77f605d`;
+  `PARKED_CAPABILITIES.md` §5). Its UI test now checks Configure Alarms.
+- ZeezTests 352 → 360 in 56 suites, green after every commit with the attribution check clean; UI smoke 10/10;
+  the watch app builds.
+
 **Still open:**
 
 - **The paywall sells features that do not exist** (found 2026-10-26). `SubscriptionView` lists `PremiumFeature`
@@ -106,9 +138,6 @@ Carried over from the archived roadmap's Phase 3.
   the paywall now, and `PaywallReachabilityGuardTests` keeps it that way. **This blocks `DEVICE_TEST_RUN.md` T13**
   (StoreKit sandbox), which needs a paywall to buy from. Decide what premium actually unlocks, rewrite the feature
   list against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md`, then give it an entry point and change the guard on purpose.
-- **Learn screens left without callers** (2026-10-26): `LearnDailyFactView` and `LearnNoteBrowserView` were reachable
-  only from `LearnHomeView`, deleted in D1a. They were already unreachable. Decide with the other Learn cleanup
-  (`PARKED_CAPABILITIES.md` §10).
 - Real WidgetKit extension. The in-app `Zeez/Widgets/` tree was deleted in **B1** (it was
   unreachable and carried fabricated readings); a genuine extension target has not been built.
   Tracked as Phase **D3c**; see `PARKED_CAPABILITIES.md` §4. Its Core Data prerequisite is done:
@@ -133,72 +162,35 @@ Carried over from the archived roadmap's Phase 3.
   showed the old code lost nothing with today's single connection (closing it had already emptied the WAL), but
   with a second connection on the store — the future widget extension — the recreated store failed every read and
   save. The `-wal`/`-shm` now stay on purpose: the recreated store reuses them. Device check T11.
-- **Dead stubs in `Zeez/Sleep/SleepAnalysisTypes.swift`** (found 2026-10-25). The file's header calls them temporary
-  Phase 1A types. Every type in it except `SleepGoalPolicy`, the `SleepGoalShortfall*` types and
-  `SleepDebtCalculator` has no caller: `SessionInfo`, `CycleAnalysis`, `AnalysisResult`, `TrendDirection`,
-  `PersonalizedBaselines`, `QualityTrends`, `SleepPatternAnalysis`, `PersonalizationManager`,
-  `HistoricalAnalyzer`. The last two return hard-coded `.mock` values (a 75 consistency score, "Regular"/"Delayed"
-  patterns, 0.7–0.8 confidence). Nothing shows them today, but the first caller would put made-up numbers in front
-  of a user. Delete them. Separately, Settings → Sleep Analysis → Personalization links to a screen that only says
-  "Coming Soon"; whether that link stays is a product call (`PARKED_CAPABILITIES.md` §5).
-  Two more files belong in the same cleanup (found 2026-10-26): `Zeez/Sleep/SleepInfoCard.swift`, whose
-  "fell asleep" row is a hard-coded "25 min" (`calculateFellAsleepTime`, a TODO), and
-  `Zeez/Sleep/SleepPositionAnalyzer.swift` ("Remove or simplify when Learn module is refactored"). Neither has a caller.
-- **The alarm sound picker's "Import from Files" button does nothing** (found 2026-10-26). It is reachable today:
-  Alarm → edit an alarm → Alarm Sound. `AlarmSoundPickerView` shows a "Pro Tip" telling the user to import their own
-  sounds, above a button whose action is `// TODO: Implement custom sound import`. Remove the tip and button, or
-  build the import; a dead control is also an App Review completeness risk. The only other code TODO,
-  `ErrorManager`'s "send to analytics", is a sink nobody asserts on (D2's non-targets) and needs nothing.
-- **Tests named for what they do not test** (found 2026-10-25). Real migration coverage is
-  `CoreDataModelV2MigrationTests`, `CoreDataModelV3MigrationTests` and `StoreMigrationPathTests`; these are not it:
-  - `CoreDataMigrationTests.migrationManagerInitialization` asserts a non-optional singleton is non-nil.
-  - `dataPreservationDuringMigration`, `relationshipIntegrityAfterMigration`, `storeRecoveryAfterCorruption` and
-    `migrationPerformanceWithLargeDataset` save to and read from a fresh in-memory store. Nothing migrates and
-    nothing is corrupted.
-  - `CoreDataModelTests` says it "validates the index fix", but an in-memory store has no indexes.
-  - `respiratoryDataIndexPerformance` (`< 0.1 s`) and `migrationPerformanceWithLargeDataset` (`< 5 s`) assert
-    wall-clock limits that measure the runner, not the model, and can fail on a loaded CI machine.
-
-  Rename each to what it checks, or delete the ones the real suites cover, and drop the wall-clock limits.
-  Test-only; no product change.
 - Per-night preferred source for overlapping sleep sources — needs an amendment to
   `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first, which defines time asleep as the union across sources.
 - ~~Singleton graph → protocol injection, incrementally.~~ Done for the two seams D2's stopping rule allows:
   `WatchSessionProtocol` (`d46a2e2`, 2026-10-26) and the alarm audio session and player factory (`3b9b1fd`,
   `f6de1a1`, 2026-10-27), with 21 tests. Nothing else unlocks a test, so the rest stays as it is
   (`SECOND_AUDIT_IMPROVEMENTS.md` Phase D, D2). D2b fixed one bug: the audio watchdog's five-retry cap never tripped.
-- **Found by D2 (2026-10-26/27), recorded and not fixed.** At the D2 checkpoints Daniel chose to record these rather
-  than fix them, except the vibration-only alarm, which was found afterwards and still needs his call. The first three
-  need hardware to judge.
+- **Found by D2, waiting on the device pass** (2026-10-26/27). The other five D2 findings were fixed 2026-10-27
+  (completed above). Daniel chose to leave these two until `DEVICE_TEST_RUN.md` T5.1 has been heard on a device.
   - **The alarm's volume table never applies to bundled sounds.** `AlarmAudioController.normalizeVolume`'s keys
     carry `.caf` (`"Zeez_Long_Default.caf": 0.9`), but bundled sounds are looked up by bare name, so every bundled
     alarm plays at the requested volume unadjusted. Fixing the keys makes bundled alarms 10–20% quieter; hear that on a
     device before changing it.
   - **The alarm's audio can start on the notification delegate's queue.** `AlarmNotificationHandler`'s
-    `willPresent` and `didReceive` call `startContinuousAudio()` directly, and its own comment says those callbacks
-    arrive off the main thread. `Timer.scheduledTimer` there schedules the watchdog (and the system-sound beep timer)
-    on a run loop that may never run, and the controller's state is then touched from that queue and from
-    `ActiveAlarmView` on main. Usually `ActiveAlarmView.onAppear` restarts the loop on main, which replaces the
-    timer, though its `stop()` then invalidates a timer from a thread other than the one it was scheduled on.
+    `willPresent` and `didReceive` call `startContinuousAudio(alarmId:)` directly, and its own comment says those
+    callbacks arrive off the main thread. `Timer.scheduledTimer` there schedules the watchdog (and the
+    system-sound beep timer) on a run loop that may never run, and the controller's state is then touched from
+    that queue and from `ActiveAlarmView` on main. Usually `ActiveAlarmView.onAppear` restarts the loop on main,
+    which replaces the timer, though its `stop()` then invalidates a timer from a thread other than the one it
+    was scheduled on.
     Device check `DEVICE_TEST_RUN.md` T5.1. If it fails: hop to main in `startContinuousAudio`, or make the
     controller `@MainActor`.
-  - **A vibration-only alarm still plays audio when it rings in the app.** `startContinuousAudio()` ignores
-    `vibrationOnly`, and `ActiveAlarmView` returns early for such an alarm without stopping the loop the handler
-    started. That loop is also the one case where the off-main watchdog above survives. Found 2026-10-27 while
-    mapping D2b's call sites. Device check T5.1.
-  - **The fallback sound has no watchdog.** When the watchdog falls back to Alarm_Classic, nothing restarts that
-    player if it stops too. This was already true before D2b, which left it alone.
-  - **Refused wake patterns are never resent.** `WatchConnectivityHandler.sendMessage` refuses a `.high` message
-    (`sendWakePattern`, `stopWakePattern`) when the watch is unreachable and leaves it in `WatchMessageQueue`.
-    `retryFailedMessages` only resends messages whose `retryCount` is above 0, and neither side implements
-    `sessionReachabilityDidChange`, so the message is never sent and the queue only grows. A watch whose app is not
-    running when the alarm rings gets no haptics, which may be the right outcome for a wake pattern; the leak is not.
-    Device check T8 step 4.
-  - **`isWatchAvailable` means two things.** Activation sets it to "activated"; `sessionWatchStateDidChange` sets it
-    to "reachable". `AlarmNotificationHandler` gates the watch haptics on it, and no view observes it.
-  - **The watch's heartbeat fields go unread.** The watch sends `batteryLevel` and `appState` with every
-    `heartbeat`; the phone answers "pong" and reads those fields only under `statusUpdate`, which the watch never
-    sends, and then only to a debug log. Drop the fields or the `statusUpdate` branch.
+- **Buttons that do nothing** (found 2026-10-27 by `DeadControlGuardTests`, which holds them as known counts):
+  Learn → Learning Paths → "Start Path" (`LearnPathNavigator`'s `RecommendedPathCard`, which also shows a fixed
+  "4 Articles · 2 Quizzes"), and an article's "Start Quiz"/"Retake Quiz" (`LearnQuizStatusView`, through
+  `LearnQuizSection`) are reachable. `DreamView`'s play, pause and next are not: nothing opens it. Wire each to
+  what it promises or remove it, and lower the guard's count.
+- **Learn files without callers** (2026-10-27): `PARKED_CAPABILITIES.md` §10 lists them (glossary, references,
+  quiz browser, note list, `LearnContentManager` and others). Decide each as the daily-fact and note-browser
+  screens were.
 
 ## Sleep product roadmap (reconciled 2026-07-09, second-audit D3d)
 

@@ -323,7 +323,8 @@ double — as established by `AlarmNotificationScheduling` + `FakeNotificationCe
       replies with connection info; a malformed or unknown command is still answered; a full sync is one push;
       an alarm push with nothing to ring says disabled; the session activates only where it is supported.
     - The four `@Published` properties still have no SwiftUI observer. `AlarmNotificationHandler` reads
-      `isWatchAvailable` directly, as the watch-haptics gate. Left alone under the stopping rule.
+      `isWatchAvailable` directly, as the watch-haptics gate. Left alone under the stopping rule; removed
+      2026-10-27 (`24465b1`), when `sendMessage`'s live reachability became the only gate.
 - **D2b** `AlarmAudioController`: 18 call sites, zero tests, and it is the alarm's last mile. Seam: an
   audio-session protocol (`setCategory`/`setActive`) and a player factory. Do not fake `Timer` — call the
   health-check directly. The device pass covers the happy path; it can never cover the watchdog restart,
@@ -354,7 +355,8 @@ double — as established by `AlarmNotificationScheduling` + `FakeNotificationCe
   - **Found and recorded, not fixed** (`FUTURE_IMPROVEMENTS.md`, "Found by D2"): the volume table never applies to
     bundled sounds; the alarm's audio can start on the notification delegate's queue; a vibration-only alarm still
     plays audio when it rings in the app; the fallback sound has no watchdog; refused wake patterns are never
-    resent; `isWatchAvailable` means two things; the watch's heartbeat fields go unread.
+    resent; `isWatchAvailable` means two things; the watch's heartbeat fields go unread. The last five were fixed
+    2026-10-27 in the no-hardware batch (§7); the volume table and the off-main start wait on T5.1.
   - **D2 stops here.** No other singleton passes the stopping rule.
 - **Then stop. The stopping rule: inject a singleton only when doing so unlocks a test you cannot write
   today — never for purity.** Explicit non-targets: `ErrorManager` (13 sites) and `AnalyticsManager` (3)
@@ -507,6 +509,8 @@ Replaced 2026-10-27. Earlier prompts are in git history (`git log -p -- SECOND_A
   mock sessions are scored by `SleepQualityCalculator`.
 - D1 with Trends reconnected, delivered 2026-10-26 (`5f2d4a5`…`05c7d6a`, docs in the commit after); Phase D, D1.
 - D2a and D2b, delivered 2026-10-26/27 (`d46a2e2`…`f6de1a1`, docs in the commit after); Phase D, D2.
+- The no-hardware batch, delivered 2026-10-27 (`81c1cae`…`77f605d`, docs in the commit after): D2's five
+  follow-ups and the tracked cleanups (`FUTURE_IMPROVEMENTS.md`, completed 2026-10-27).
 - The Swift Testing attribution fix, delivered 2026-10-25 (`b7a3379`…`3dff641`, docs `5a377d3`). 112 assertions
   in 13 suites ran where a failure reached no test; they now return values from their closures, each fix proven
   by breaking an assertion. `SwiftTestingAttributionGuardTests` scans for the shapes, and the `unit-tests` job fails
@@ -520,71 +524,13 @@ four estimated nights per month before reporting an estimate change. At the D2 c
 chose to let the watchdog's cap count consecutive failed checks, and chose to record the other findings then in hand
 rather than fix them.
 
-**Next, while the account is still blocked: the no-hardware batch.** D2's alarm and watch follow-ups, then the
-tracked cleanups. The prompt:
-
-```
-Read CLAUDE.md, then SECOND_AUDIT_IMPROVEMENTS.md §7 and FUTURE_IMPROVEMENTS.md ("Still
-open", the tracked cleanups and "Found by D2"). Context: the device pass is still blocked on
-my Apple Developer Program renewal, and D1 and D2 are done. This batch is the code that needs
-neither the account nor hardware.
-
-Task:
-A. D2's alarm and watch follow-ups:
-   - a vibration-only alarm still plays audio when it rings in the app
-   - the fallback sound has no watchdog
-   - refused wake patterns stay in WatchMessageQueue and are never resent
-   - isWatchAvailable means two things
-   - the watch's heartbeat fields go unread
-B. The tracked cleanups:
-   - the dead stubs in SleepAnalysisTypes.swift, with SleepInfoCard.swift and
-     SleepPositionAnalyzer.swift
-   - the Core Data tests named for migrations and indexes they do not exercise, and their
-     wall-clock limits
-   - LearnDailyFactView and LearnNoteBrowserView (PARKED_CAPABILITIES.md §10)
-   - the alarm sound picker's "Import from Files" tip and button, which do nothing
-   - Settings → Sleep Analysis → Personalization, which only says "Coming Soon"
-
-Leave alone: the volume table and the off-main audio start (both wait on DEVICE_TEST_RUN.md
-T5.1, by my choice).
-
-Work in this order and stop at each checkpoint:
-0. CI first. Run `git log --oneline @{u}..` and
-   `gh run list --branch feature/sleep-simplification --limit 3`. If the latest run on the
-   branch failed, fix that first: Xcode 16.4-only compile errors are the usual cause
-   (CLAUDE.md, CI). Push any unpushed commits only when I say.
-1. Investigate first. For each item: the code, its callers, what a user sees today, and the
-   fix, with a recommendation wherever there is a choice. In particular:
-   - Vibration-only: where vibrationOnly should stop the audio, and the test that pins it.
-     Testing it from AlarmNotificationHandler needs the audio controller injected; say
-     whether that passes D2's stopping rule.
-   - Refused wake patterns: drop a refused .high message, or resend it once the watch is
-     reachable. A wake pattern is only worth sending while the alarm rings.
-   - isWatchAvailable: which meaning its one reader, the watch-haptics gate, needs.
-   - Each deletion: a whole-repo grep for callers, previews and tests included, and what
-     PARKED_CAPABILITIES.md should record. If a deletion needs a project.pbxproj edit,
-     stop and ask.
-   - Each Core Data test: rename it, or delete it because CoreDataModelV2MigrationTests,
-     CoreDataModelV3MigrationTests or StoreMigrationPathTests already cover it.
-   CHECKPOINT: the list with your recommendations. I make the product calls here
-   (vibration-only, the Import button, Personalization, the Learn screens).
-2. Implement, one commit per item, A before B. Every behavior change gets a test proven by
-   breaking the fix it pins. A deletion that removes a capability is registered in
-   PARKED_CAPABILITIES.md in the same commit.
-   CHECKPOINT after A, before the first deletion.
-3. After each commit run -only-testing:ZeezTests on
-   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF', saving the log and result
-   bundle, and run .github/scripts/check-swift-testing-attribution.sh over them. Build
-   "ZeezWatch Watch App" on -destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976' after
-   any commit that touches the watch target, and before the last commit; run the UI smoke
-   tests (Debug, same destination) before the last commit too.
-4. Update FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md §7, and DEVICE_TEST_RUN.md
-   where a fix changes what a check expects (T5.1, T8). Then remove this prompt from §7,
-   leaving the device-pass prompt as the next one, unless I name something else.
-
-Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start D3c,
-the paywall copy or the per-night source work without asking.
-```
+**Decisions 2026-10-27 (no-hardware batch):** at its first checkpoint Daniel ruled that a vibration-only alarm is
+vibration only in the app too, and took every other recommendation: drop refused and failed watch messages rather
+than resend them, and delete the retry path; remove `isWatchAvailable` and gate on live reachability; drop the
+heartbeat's unread fields; delete the dead stubs, the two Learn screens, the sound picker's import section and the
+Personalization placeholder, each recorded in `PARKED_CAPABILITIES.md`; delete the misnamed Core Data tests and keep
+the `RespiratoryData` round trip. The audio controller and the watch handler were injected into
+`AlarmNotificationHandler` under D2's stopping rule. The volume table and the off-main audio start stay for T5.1.
 
 **When the developer account is renewed: the device pass**, before anything else. T1 relocates the store *and* runs
 its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. The
@@ -594,7 +540,7 @@ prompt:
 Read CLAUDE.md, then DEVICE_TEST_RUN.md ("How to use this file", T0 and T1 in full) and
 SECOND_AUDIT_IMPROVEMENTS.md §5 and §7. Context: my Apple Developer Program membership is
 renewed, and I am running the device pass on an iPhone 13 Pro Max with a paired Apple Watch.
-D1 and D2 landed before it (Phase D, "Resequenced 2026-10-26"); T5.1, T8 and T15 cover them.
+D1, D2 and the no-hardware batch landed before it; T5.1, T8 and T15 cover them.
 
 Your part is preparation and triage. I run every test on the hardware.
 
@@ -614,27 +560,27 @@ Work in this order and stop at each checkpoint:
    but change no product code mid-run.
    CHECKPOINT after T5 (the alarm) and after T8 (the watch round trip).
 4. At the end, fill in the run summary. Fold every finding into SECOND_AUDIT_IMPROVEMENTS.md
-   §5 and FUTURE_IMPROVEMENTS.md, each with its test ID and log lines, and settle the "Found
-   by D2" items that waited on T5.1 and T8. Propose fixes as a list for me to order; don't
+   §5 and FUTURE_IMPROVEMENTS.md, each with its test ID and log lines, and settle the two
+   "Found by D2" items waiting on T5.1. Propose fixes as a list for me to order; don't
    start them. Delete DEVICE_TEST_RUN.md only when I say.
 
 Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine); T0's App Groups
 toggle changes it too, and I will commit that myself. T13 stays blocked until a screen opens
-the paywall. Do not start D3c, the paywall copy, the per-night source work or the tracked
-cleanups (SleepAnalysisTypes stubs, misnamed Core Data tests, the Learn orphans) without
-asking.
+the paywall. Do not start D3c, the paywall copy, the per-night source work, the dead
+buttons or the remaining Learn orphans without asking.
 ```
 
 **Open items** (none needs hardware unless marked):
-- **D2 is pushed** (`3fcdc2e..0058c7c`, 2026-10-27); step 0 of either prompt checks its CI run.
-- **D2's findings** (`FUTURE_IMPROVEMENTS.md`, "Found by D2"): the no-hardware prompt takes all but the volume table
-  and the off-main audio start, which wait on T5.1.
+- **The no-hardware batch is unpushed** (`fa6de49`…, 2026-10-27). D2 was pushed (`3fcdc2e..0058c7c`) and its CI
+  run, 40453500772, passed. Step 0 of the device-pass prompt checks the batch's run once it is pushed.
+- **D2's findings** (`FUTURE_IMPROVEMENTS.md`, "Found by D2, waiting on the device pass"): the volume table and the
+  off-main audio start wait on T5.1. The other five were fixed in the no-hardware batch.
 - **The paywall's copy** (found 2026-10-26): `SubscriptionView` sells capabilities that do not exist, so no screen
   opens it (`PaywallReachabilityGuardTests`), which blocks `DEVICE_TEST_RUN.md` T13. A product decision first.
-- **Small cleanups, tracked in `FUTURE_IMPROVEMENTS.md`** (the no-hardware prompt): delete the dead stubs in `SleepAnalysisTypes.swift`, two
-  of which return hard-coded values; rename or delete the Core Data tests named for migrations and indexes they do
-  not exercise, and drop their wall-clock limits; decide on `LearnDailyFactView` and `LearnNoteBrowserView`, which
-  lost their only caller with `LearnHomeView`.
+- **Found by the no-hardware batch** (`FUTURE_IMPROVEMENTS.md`, still open): three reachable buttons do nothing
+  (Learn's "Start Path", and an article's "Start Quiz"/"Retake Quiz"), held as known counts by
+  `DeadControlGuardTests`; and about a dozen Learn files have no callers (`PARKED_CAPABILITIES.md` §10). Product
+  calls first.
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
   which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
 - **Blocked on the renewed account:** the device pass (the prompt above), D3c WidgetKit extension (needs the App

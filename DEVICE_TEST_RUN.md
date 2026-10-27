@@ -4,8 +4,8 @@
 `SECOND_AUDIT_IMPROVEMENTS.md` §5 and `FUTURE_IMPROVEMENTS.md`.
 
 Hardware: iPhone 13 Pro Max + paired Apple Watch. Branch `feature/sleep-simplification`.
-Baseline at start of run: 352 tests / 55 suites green (2026-10-27, after D2), UI smoke 10/10, iOS + watch
-targets build.
+Baseline at start of run: 360 tests / 56 suites green (2026-10-27, after the no-hardware batch), UI smoke
+10/10, iOS + watch targets build.
 
 ---
 
@@ -324,16 +324,18 @@ Console.app open (Method 2, info messages on, category `Alarm`).
 - No watchdog line, and the alarm stays quiet: the watchdog's timer never runs. The audio can be started
   from the notification callback's queue, whose run loop may never run (`FUTURE_IMPROVEMENTS.md`, "Found
   by D2").
-- `max retries reached, falling back to system sound`, then silence: five restarts in a row failed, the
-  alarm fell back, and nothing watches the fallback sound. Note how long Siri was up.
+- `max retries reached, falling back`, then silence: five restarts in a row failed and the alarm fell back
+  to Alarm_Classic, which the watchdog restarts too (since 2026-10-27), and after five more failures to the
+  system beep. Silence after that line means the fallback's restarts are not running either. Note how long
+  Siri was up.
 
 Paste the `Alarm` lines from the Siri press onward either way. The cap, the fallbacks and the hand-back
 to other audio on Stop are unit-tested (`AlarmAudioControllerTests`); this is the only check that the
 watchdog runs on a device.
 
 **Vibration-only.** Repeat with an alarm set to vibration only. **Expected:** it vibrates and plays no
-sound. The code suggests it will also loop the long alarm sound (`FUTURE_IMPROVEMENTS.md`, "Found by
-D2"); report what you hear, and whether Stop ends it.
+sound, and Console shows `📳 Vibration-only alarm …: no in-app audio`. Until 2026-10-27 it also looped the
+long alarm sound; any sound at all is a failure.
 
 ### T5.2 — Locked screen
 Set an alarm 2 minutes out. Lock the phone. Do not force-quit.
@@ -446,9 +448,10 @@ activation, reachability and delivery. A failure in (2) or (3) is most likely th
      alarm you just disabled, is a failure.
 4. Wake-pattern haptics fire when an alarm rings. Try it twice: once with the watch app open, once with
    it closed (wrist down for a minute first). The phone sends a wake pattern only to a reachable watch
-   and never resends a refused one (`FUTURE_IMPROVEMENTS.md`, "Found by D2"), so expect haptics only the
-   first time. In Console.app (the phone, category `Network`), `Failed to send wake pattern to watch` is
-   a refusal. Report which runs buzzed.
+   and drops a refused one rather than resend it late (by design since 2026-10-27), so expect the app's
+   haptics only the first time. With the phone locked, iOS forwards the alarm's notification to the watch,
+   which taps once; that tap is not the wake pattern. In Console.app (the phone, category `Network`),
+   `Failed to send wake pattern to watch` is a refusal. Report which runs buzzed.
 5. Snooze and Stop from the watch both control the phone's alarm.
 6. **Offline cache:** put the phone in airplane mode. The watch should show the last known summary, not
    blank.
@@ -645,10 +648,12 @@ device pass, and iPad if you have one. **[SIM OK]** apart from step 6.
 
 1. **Sleep:** the dashboard shows its date header and no navigation bar. Tap the gear. **Expected:** a "Settings"
    bar with a back button, and the **tab bar still visible** (before D1 a push covered it).
-2. Settings → Sleep Analysis → **Personalization**. **Expected:** exactly **one** bar, "Sleep Personalization",
-   with a back button to Settings (before D1 two bars stacked).
-3. Without going back, switch to **Alarm**: the title reads "Rise". Switch back to **Sleep**: you are still on
-   Personalization. Back twice returns to the dashboard.
+2. Settings → Alarm Settings → **Configure Alarms**. **Expected:** exactly **one** bar, "Rise", with a back
+   button to Settings (before D1 a pushed screen with its own container stacked two bars). There is no
+   Sleep Analysis → Personalization link any more (removed 2026-10-27).
+3. Without going back, switch to **Alarm**: the title reads "Rise", with no back button. Switch back to
+   **Sleep**: you are still on the pushed alarm list, back button to Settings. Back twice returns to the
+   dashboard.
 4. **Alarm:** + (new alarm), then edit an existing alarm, then the Schedule and Alarm Sound pickers inside it. Each
    sheet has one bar with its own title and buttons; dismissing returns to where you were.
 5. **Learn:** "Learn" in the bar, Learning Path at the leading edge, the ⋯ menu at the trailing edge. Open
@@ -861,7 +866,8 @@ was looking for.
 | `🔁 Removing N stale chain entries for alarm …` | info | ❌ |
 | `📅 Pre-armed 6 follow-ups for alarm … at next fire …` | info | ❌ |
 | `⚠️ Audio watchdog: restarting audio (attempt N)` | info | ❌ |
-| `Audio watchdog: max retries reached, falling back to system sound` | error | ✅ |
+| `Audio watchdog: max retries reached, falling back` | error | ✅ |
+| `📳 Vibration-only alarm …: no in-app audio` | info | ❌ |
 | `Failed to send wake pattern to watch` | error | ✅ |
 | `Core Data store loaded successfully` | info | ❌ |
 | Anything from `ZeezLogger.debug` | debug | ❌, and Release-stripped |
