@@ -410,3 +410,35 @@ so any Learn surface that returns needs its copy reviewed by hand against
 **Definition of done.** A product decision that Learn needs a landing page distinct from
 `LearnView`'s segmented tabs. Build it inside the Learn tab's `NavigationStack` (`MainView`) with
 `navigationDestination` routes and no container of its own.
+
+---
+
+## 11. Custom alarm sound import — *never built*
+
+**Removed:** 2026-10-27 — the alarm sound picker's "Add Custom Sounds" section
+(`Zeez/Alarm/AlarmSoundPickerView.swift`), reachable from Alarm → edit an alarm → Alarm Sound. It held a
+"Pro Tip" telling the user to add audio files to their music library and import them through the Files
+app, above an "Import from Files" button whose action was `// TODO: Implement custom sound import`.
+
+**What it did.** Nothing. The app has no import. The picker's "Custom Sounds" are the bundled Zeez sounds
+(`AlarmSounds.customZeezSounds`) and any other audio file in the app bundle.
+`AlarmAudioController.startLooping(fileURL:)` can loop a file outside the bundle, but nothing calls it.
+
+**Why removed.** A dead control on a reachable screen, under instructions for a feature that does not
+exist; an App Review completeness risk (guideline 2.1). `DeadControlGuardTests` now fails on any new button
+whose action is empty.
+
+**What an import needs.** An alarm rings through two players, and an imported sound has to work in both:
+- The main notification and its follow-ups use `UNNotificationSound(named:)`. It finds files only in the
+  app bundle and in `Library/Sounds` of the app's (or an App Group's) container, plays at most 30 seconds
+  (longer files get the default sound), and takes Linear PCM, IMA4, µLaw or aLaw in an aiff, wav or caf.
+- The in-app loop, `AlarmAudioController.startLooping(fileURL:)`, plays anything `AVAudioPlayer` reads.
+
+So an import converts and trims the file into `Library/Sounds`, the picker lists those files, and
+`AlarmScheduler` and `AlarmNotificationHandler` find them by name, as they find bundled sounds now. Delete
+All Data removes them. Each ringing path (foreground, locked, force-quit) needs a device check.
+
+**Claims tier and label.** None; an alarm sound is not a sleep metric.
+
+**Definition of done.** The above, with a test that an imported file lands in `Library/Sounds` in a
+notification-playable format, and a `DEVICE_TEST_RUN.md` check.

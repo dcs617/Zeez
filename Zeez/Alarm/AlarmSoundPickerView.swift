@@ -38,23 +38,6 @@ struct AlarmSoundPickerView: View {
                         }
                     }
                 }
-                
-                Section("Add Custom Sounds") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("💡 Pro Tip")
-                            .font(.headline)
-                        
-                        Text("Add your own alarm sounds by adding audio files to your music library, then import them through the Files app.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Button("Import from Files") {
-                            // TODO: Implement custom sound import
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                    .padding(.vertical, 4)
-                }
             }
             .navigationTitle("Alarm Sound")
             .navigationBarTitleDisplayMode(.inline)
