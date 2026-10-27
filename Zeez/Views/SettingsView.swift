@@ -39,7 +39,6 @@ struct SettingsView: View {
     var body: some View {
         Form {
             sleepGoalSection
-            personalizationSection
             notificationSection
             healthKitSection
             dataImportSection
@@ -165,17 +164,6 @@ struct SettingsView: View {
         }
     }
     
-    private var personalizationSection: some View {
-        Section("Sleep Analysis") {
-            NavigationLink("Personalization") {
-                PersonalizationSettingsView()
-            }
-            .accessibilityLabel("Sleep analysis personalization")
-            .accessibilityHint("View the current availability of personalization features")
-            .accessibilityIdentifier("personalizationSettingsLink")
-        }
-    }
-
     private var notificationSection: some View {
         Section("Notifications") {
             Toggle("Enable Notifications",

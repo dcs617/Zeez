@@ -206,6 +206,14 @@ confidence. Nothing called them, but the first caller would have shown those num
 own. They went with the file's other dead types; the goal-shortfall types it also held now live in
 `SleepGoalShortfall.swift`. Personalization starts from this entry, not from those types.
 
+**Settings link removed 2026-10-27.** Settings → Sleep Analysis → Personalization opened
+`PersonalizationSettingsView`: a "not yet available" banner over a "Coming Soon" list (Sleep Patterns,
+Quality Trends, Bedtime Consistency). A placeholder screen is an App Review completeness risk (guideline
+2.1), so Daniel chose to delete the section and the screen. Trends now covers part of that list as recorded
+history, not personalization: the spread of sleep start times, and the month-to-month change in the score
+estimate. `SleepQualityScore.personalizationLevel` and `personalizedComponents` stay in the model, unused.
+A link returns with a feature that meets this entry's definition of done.
+
 ---
 
 ## 6. Session detail, monthly trends, and environmental display views

@@ -54,25 +54,29 @@ final class MainViewUITests: XCTestCase {
     }
 
     /// A pushed screen must not bring its own navigation container: inside the Sleep tab's stack
-    /// it stacked a second bar under the first and lost the way back to Settings.
-    func testPushedPersonalizationHasOneNavigationBar() throws {
+    /// it stacked a second bar under the first and lost the way back to Settings. Personalization
+    /// did (D1b) until it was removed as a "Coming Soon" placeholder; Configure Alarms pushes the
+    /// Alarm tab's root screen, which has no container of its own either.
+    func testScreenPushedFromSettingsHasOneNavigationBar() throws {
         launch()
 
         XCTAssertTrue(app.tabBars.buttons["Sleep"].waitForExistence(timeout: 5))
         app.tabBars.buttons["Sleep"].tap()
         app.buttons["settingsButton"].tap()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["personalizationSettingsLink"].exists,
+                       "Settings no longer links to the Personalization placeholder")
 
-        let personalization = app.buttons["personalizationSettingsLink"]
-        for _ in 0..<6 where !personalization.isHittable {
+        let configureAlarms = app.buttons["configureAlarmsLink"]
+        for _ in 0..<6 where !configureAlarms.isHittable {
             app.swipeUp()
         }
-        personalization.tap()
+        configureAlarms.tap()
 
-        let bar = app.navigationBars["Sleep Personalization"]
+        let bar = app.navigationBars["Rise"]
         XCTAssertTrue(bar.waitForExistence(timeout: 5))
         XCTAssertEqual(app.navigationBars.count, 1, "A nested container adds a second navigation bar")
-        XCTAssertTrue(bar.buttons.firstMatch.exists, "Personalization must offer the way back to Settings")
+        XCTAssertTrue(bar.buttons["Settings"].exists, "The pushed screen must offer the way back to Settings")
     }
 
     /// Trends had no entry point from 2025-08-19 until the Dashboard link of 2026-10-26.
