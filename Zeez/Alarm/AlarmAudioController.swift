@@ -190,13 +190,14 @@ final class AlarmAudioController {
     /// The watchdog's check, every two seconds while a loop plays. Internal so tests can run
     /// it directly rather than wait on the timer.
     ///
-    /// A loop that stopped unexpectedly is restarted. The `maxRetries` cap never trips:
-    /// each restart's `stop()` zeroes the count.
+    /// A loop that stopped unexpectedly is restarted, up to `maxRetries` failed checks in a
+    /// row; then the alarm falls back to another sound rather than keep restarting a file that
+    /// will not play. A restart's `stop()` zeroes the count, so the restart carries it across.
     func checkAudioHealth() {
         guard isPlaying, let source else { return }
 
         if let player, player.isPlaying {
-            // Audio is playing correctly
+            retryCount = 0
             return
         }
 
@@ -204,10 +205,20 @@ final class AlarmAudioController {
         retryCount += 1
         if retryCount <= maxRetries {
             ZeezLogger.info(ZeezLogger.alarm, "⚠️ Audio watchdog: restarting audio (attempt \(retryCount))")
+            let failedChecks = retryCount
             stop()
+            retryCount = failedChecks
             play(source, volume: requestedVolume)
         } else {
             ZeezLogger.error(ZeezLogger.alarm, "Audio watchdog: max retries reached, falling back to system sound")
+            // Retire the watchdog and the dead loop first. Left running, every later check
+            // would fall back again, and each fallback to the system sound would add another
+            // beep timer.
+            watchdogTimer?.invalidate()
+            watchdogTimer = nil
+            player?.stop()
+            player = nil
+            self.source = nil
             fallbackToSystemSound()
         }
     }

@@ -116,8 +116,8 @@ final class FakeAudioPlayerFactory: AlarmAudioPlayerMaking, @unchecked Sendable 
 }
 
 /// The alarm's last mile once the app is open (second-audit D2b). A device pass hears the
-/// happy path; it cannot make a loop die on cue, so the watchdog, the fallbacks and the
-/// session hand-back on stop are pinned here. The watchdog's timer is not faked: tests
+/// happy path; it cannot make a loop die on cue, so the watchdog, its cap, the fallbacks and
+/// the session hand-back on stop are pinned here. The watchdog's timer is not faked: tests
 /// call `checkAudioHealth()`, the check it runs every two seconds.
 @Suite("Alarm audio controller")
 struct AlarmAudioControllerTests {
@@ -160,6 +160,43 @@ struct AlarmAudioControllerTests {
         #expect(controller.isPlaying)
     }
 
+    /// The cap is what makes the fallback reachable. Without it a file that will not play is
+    /// restarted every two seconds for as long as the alarm rings, and the alarm stays silent.
+    @Test("After five failed restarts in a row the watchdog falls back to the classic sound")
+    func retryCapFallsBack() {
+        let factory = FakeAudioPlayerFactory(stalling: [Self.longFile])
+        let controller = start(factory)
+
+        for _ in 1...5 { controller.checkAudioHealth() }
+        #expect(factory.attempts == Array(repeating: Self.longFile, count: 6),
+                "The first start, then five restarts")
+
+        controller.checkAudioHealth()
+        #expect(factory.attempts.last == Self.classicFile)
+        #expect(factory.players.last?.isPlaying == true)
+        #expect(factory.players.last?.volume == 0.8)
+        let deadLoopsStopped = factory.players.dropLast().allSatisfy { $0.wasStopped }
+        #expect(deadLoopsStopped, "Every dead loop is stopped")
+        #expect(controller.isPlaying)
+        #expect(!controller.isUsingSystemSoundFallback)
+    }
+
+    @Test("A check that finds the loop playing resets the count of failed restarts")
+    func healthyCheckResetsTheCount() throws {
+        let factory = FakeAudioPlayerFactory(stalling: [Self.longFile])
+        let controller = start(factory)
+
+        for _ in 1...3 { controller.checkAudioHealth() }
+        try #require(factory.players.last).resume()
+        controller.checkAudioHealth()
+        try #require(factory.players.last).interrupt()
+        for _ in 1...5 { controller.checkAudioHealth() }
+
+        #expect(!factory.attempts.contains(Self.classicFile),
+                "Five failures after a healthy check are restarts, not a fallback")
+        #expect(factory.attempts.count == 9)
+    }
+
     // MARK: - Fallbacks
 
     @Test("When the chosen file will not load, the classic sound plays instead")
@@ -195,6 +232,23 @@ struct AlarmAudioControllerTests {
         #expect(factory.attempts == [Self.longFile, Self.classicFile])
         #expect(controller.isUsingSystemSoundFallback)
         #expect(controller.isPlaying)
+
+        controller.stop()  // ends the beep timer, which would otherwise outlive the test
+    }
+
+    @Test("Once the watchdog has fallen back to the system sound, it stops trying files")
+    func systemSoundFallbackEndsTheWatchdog() {
+        let factory = FakeAudioPlayerFactory(failing: [Self.classicFile], stalling: [Self.longFile])
+        let controller = start(factory)
+
+        for _ in 1...6 { controller.checkAudioHealth() }
+        #expect(controller.isUsingSystemSoundFallback)
+        let attempts = factory.attempts.count
+
+        for _ in 1...3 { controller.checkAudioHealth() }
+        #expect(factory.attempts.count == attempts,
+                "A check that falls back again starts another beep timer beside the first")
+        #expect(controller.isUsingSystemSoundFallback)
 
         controller.stop()  // ends the beep timer, which would otherwise outlive the test
     }
