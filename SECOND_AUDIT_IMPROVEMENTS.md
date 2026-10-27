@@ -520,8 +520,75 @@ four estimated nights per month before reporting an estimate change. At the D2 c
 chose to let the watchdog's cap count consecutive failed checks, and chose to record the other findings then in hand
 rather than fix them.
 
-**Next: the device pass**, once the developer account is renewed. T1 relocates the store *and* runs its first
-structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. The prompt:
+**Next, while the account is still blocked: the no-hardware batch.** D2's alarm and watch follow-ups, then the
+tracked cleanups. The prompt:
+
+```
+Read CLAUDE.md, then SECOND_AUDIT_IMPROVEMENTS.md §7 and FUTURE_IMPROVEMENTS.md ("Still
+open", the tracked cleanups and "Found by D2"). Context: the device pass is still blocked on
+my Apple Developer Program renewal, and D1 and D2 are done. This batch is the code that needs
+neither the account nor hardware.
+
+Task:
+A. D2's alarm and watch follow-ups:
+   - a vibration-only alarm still plays audio when it rings in the app
+   - the fallback sound has no watchdog
+   - refused wake patterns stay in WatchMessageQueue and are never resent
+   - isWatchAvailable means two things
+   - the watch's heartbeat fields go unread
+B. The tracked cleanups:
+   - the dead stubs in SleepAnalysisTypes.swift, with SleepInfoCard.swift and
+     SleepPositionAnalyzer.swift
+   - the Core Data tests named for migrations and indexes they do not exercise, and their
+     wall-clock limits
+   - LearnDailyFactView and LearnNoteBrowserView (PARKED_CAPABILITIES.md §10)
+   - the alarm sound picker's "Import from Files" tip and button, which do nothing
+   - Settings → Sleep Analysis → Personalization, which only says "Coming Soon"
+
+Leave alone: the volume table and the off-main audio start (both wait on DEVICE_TEST_RUN.md
+T5.1, by my choice).
+
+Work in this order and stop at each checkpoint:
+0. CI first. Run `git log --oneline @{u}..` and
+   `gh run list --branch feature/sleep-simplification --limit 3`. If the latest run on the
+   branch failed, fix that first: Xcode 16.4-only compile errors are the usual cause
+   (CLAUDE.md, CI). Push any unpushed commits only when I say.
+1. Investigate first. For each item: the code, its callers, what a user sees today, and the
+   fix, with a recommendation wherever there is a choice. In particular:
+   - Vibration-only: where vibrationOnly should stop the audio, and the test that pins it.
+     Testing it from AlarmNotificationHandler needs the audio controller injected; say
+     whether that passes D2's stopping rule.
+   - Refused wake patterns: drop a refused .high message, or resend it once the watch is
+     reachable. A wake pattern is only worth sending while the alarm rings.
+   - isWatchAvailable: which meaning its one reader, the watch-haptics gate, needs.
+   - Each deletion: a whole-repo grep for callers, previews and tests included, and what
+     PARKED_CAPABILITIES.md should record. If a deletion needs a project.pbxproj edit,
+     stop and ask.
+   - Each Core Data test: rename it, or delete it because CoreDataModelV2MigrationTests,
+     CoreDataModelV3MigrationTests or StoreMigrationPathTests already cover it.
+   CHECKPOINT: the list with your recommendations. I make the product calls here
+   (vibration-only, the Import button, Personalization, the Learn screens).
+2. Implement, one commit per item, A before B. Every behavior change gets a test proven by
+   breaking the fix it pins. A deletion that removes a capability is registered in
+   PARKED_CAPABILITIES.md in the same commit.
+   CHECKPOINT after A, before the first deletion.
+3. After each commit run -only-testing:ZeezTests on
+   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF', saving the log and result
+   bundle, and run .github/scripts/check-swift-testing-attribution.sh over them. Build
+   "ZeezWatch Watch App" on -destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976' after
+   any commit that touches the watch target, and before the last commit; run the UI smoke
+   tests (Debug, same destination) before the last commit too.
+4. Update FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md §7, and DEVICE_TEST_RUN.md
+   where a fix changes what a check expects (T5.1, T8). Then remove this prompt from §7,
+   leaving the device-pass prompt as the next one, unless I name something else.
+
+Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start D3c,
+the paywall copy or the per-night source work without asking.
+```
+
+**When the developer account is renewed: the device pass**, before anything else. T1 relocates the store *and* runs
+its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. The
+prompt:
 
 ```
 Read CLAUDE.md, then DEVICE_TEST_RUN.md ("How to use this file", T0 and T1 in full) and
@@ -559,14 +626,12 @@ asking.
 ```
 
 **Open items** (none needs hardware unless marked):
-- **Push D2.** `d46a2e2`, `3b9b1fd`, `f6de1a1` and the docs commit after them are unpushed as of 2026-10-27; Xcode
-  16.4 has compiled none of them. Step 0 of the prompt checks the run.
-- **D2's findings** (`FUTURE_IMPROVEMENTS.md`, "Found by D2"). The off-main audio start, the vibration-only alarm's
-  audio and the refused wake patterns wait on T5.1 and T8. The vibration-only alarm needs Daniel's call; the others
-  he chose to record.
+- **D2 is pushed** (`3fcdc2e..0058c7c`, 2026-10-27); step 0 of either prompt checks its CI run.
+- **D2's findings** (`FUTURE_IMPROVEMENTS.md`, "Found by D2"): the no-hardware prompt takes all but the volume table
+  and the off-main audio start, which wait on T5.1.
 - **The paywall's copy** (found 2026-10-26): `SubscriptionView` sells capabilities that do not exist, so no screen
   opens it (`PaywallReachabilityGuardTests`), which blocks `DEVICE_TEST_RUN.md` T13. A product decision first.
-- **Small cleanups, tracked in `FUTURE_IMPROVEMENTS.md`:** delete the dead stubs in `SleepAnalysisTypes.swift`, two
+- **Small cleanups, tracked in `FUTURE_IMPROVEMENTS.md`** (the no-hardware prompt): delete the dead stubs in `SleepAnalysisTypes.swift`, two
   of which return hard-coded values; rename or delete the Core Data tests named for migrations and indexes they do
   not exercise, and drop their wall-clock limits; decide on `LearnDailyFactView` and `LearnNoteBrowserView`, which
   lost their only caller with `LearnHomeView`.
