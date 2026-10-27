@@ -205,6 +205,22 @@ struct WatchConnectivityHandlerTests {
         #expect(completions.values == [false, false])
     }
 
+    /// A retried context could overwrite a newer one, and a phone with no paired watch fails
+    /// every push; kept for a retry that never came, each failure stayed in the queue.
+    @Test("A failed send is dropped on either transport, not kept for retry")
+    func failedSendsAreNotKept() {
+        let session = FakeWatchSession(reachable: true)
+        session.failMessages(with: WCError(.notReachable))
+        session.failApplicationContext(with: WCError(.deviceNotPaired))
+        let handler = WatchConnectivityHandler(session: session, container: PersistenceController(inMemory: true).container)
+
+        handler.sendMessage(message(.high))
+        handler.sendMessage(message(.medium))
+
+        #expect(session.sent.count == 2)
+        #expect(handler.queuedMessageCount == 0)
+    }
+
     // MARK: - Replies to the watch
 
     /// The watch's `requestLatestData` sends only the command, with no `requestType`.

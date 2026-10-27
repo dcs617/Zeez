@@ -1,5 +1,4 @@
 import Foundation
-import WatchConnectivity
 import os.log
 
 // MARK: - Watch Message System
@@ -20,7 +19,6 @@ struct WatchMessage {
     let data: [String: Any]
     let priority: MessagePriority
     let timestamp: Date
-    let retryCount: Int
     
     init(type: WatchMessageType, data: [String: Any], priority: MessagePriority = .medium) {
         self.id = UUID()
@@ -28,27 +26,6 @@ struct WatchMessage {
         self.data = data
         self.priority = priority
         self.timestamp = Date()
-        self.retryCount = 0
-    }
-    
-    private init(id: UUID, type: WatchMessageType, data: [String: Any], priority: MessagePriority, timestamp: Date, retryCount: Int) {
-        self.id = id
-        self.type = type
-        self.data = data
-        self.priority = priority
-        self.timestamp = timestamp
-        self.retryCount = retryCount
-    }
-    
-    func withIncrementedRetry() -> WatchMessage {
-        return WatchMessage(
-            id: self.id,
-            type: self.type,
-            data: self.data,
-            priority: self.priority,
-            timestamp: self.timestamp,
-            retryCount: self.retryCount + 1
-        )
     }
     
     func toDictionary() throws -> [String: Any] {
@@ -57,7 +34,6 @@ struct WatchMessage {
         dict["command"] = type.rawValue
         dict["priority"] = priority.rawValue
         dict["timestamp"] = timestamp.timeIntervalSince1970
-        dict["retryCount"] = retryCount
         return dict
     }
 }
@@ -115,28 +91,6 @@ class WatchMessageQueue {
         }
     }
     
-    func markForRetry(_ message: WatchMessage) {
-        queue.async(flags: .barrier) {
-            if let index = self.pendingMessages.firstIndex(where: { $0.id == message.id }) {
-                self.pendingMessages[index] = message.withIncrementedRetry()
-            }
-        }
-    }
-    
-    func retryFailedMessages(using sender: @escaping (WatchMessage) -> Void) {
-        queue.async(flags: .barrier) {
-            let messagesToRetry = self.pendingMessages.filter { message in
-                message.retryCount > 0 && Date().timeIntervalSince(message.timestamp) > 30
-            }
-            
-            for message in messagesToRetry {
-                DispatchQueue.main.async {
-                    sender(message)
-                }
-            }
-        }
-    }
-    
     func clear() {
         queue.async(flags: .barrier) {
             self.pendingMessages.removeAll()
@@ -153,35 +107,3 @@ class WatchMessageQueue {
         }
     }
 }
-
-// MARK: - Retry Manager
-
-class RetryManager {
-    private let maxRetries: Int = 3
-    private let retryDelays: [TimeInterval] = [1, 5, 15] // Progressive delays
-    
-    func shouldRetry(_ message: WatchMessage, error: Error) -> Bool {
-        // Don't retry if we've exceeded max attempts
-        guard message.retryCount < maxRetries else { return false }
-        
-        // Check if error is retryable
-        if let wcError = error as? WCError {
-            switch wcError.code {
-            case .sessionNotActivated, .watchAppNotInstalled, .notReachable:
-                return true // These might be temporary
-            case .invalidParameter, .payloadTooLarge:
-                return false // These won't resolve with retries
-            default:
-                return true
-            }
-        }
-        
-        return true // Retry unknown errors
-    }
-    
-    func getRetryDelay(for retryCount: Int) -> TimeInterval {
-        let index = min(retryCount, retryDelays.count - 1)
-        return retryDelays[index]
-    }
-}
-

@@ -36,7 +36,6 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
     /// (resolved lazily so constructing the handler never touches the store).
     private let container: NSPersistentContainer?
     private let messageQueue = WatchMessageQueue()
-    private var retryManager = RetryManager()
 
     /// Reachability-derived only. The old phone-side heartbeat machinery sent
     /// low-priority userInfo transfers the watch never read and reported
@@ -137,17 +136,14 @@ class WatchConnectivityHandler: NSObject, ObservableObject {
         ZeezLogger.debug(ZeezLogger.network, "Watch message sent successfully: \(message.type.rawValue)")
     }
     
+    /// A failed send is dropped, never retried. A late wake pattern buzzes the wrist after the
+    /// alarm, and an old application context would overwrite a newer one; the next push, or
+    /// the sync when the watch activates, carries the current state. A phone with no paired
+    /// watch or no watch app fails every push, so these are expected, not errors.
     private func handleMessageFailure(_ message: WatchMessage, error: Error) {
-        let shouldRetry = retryManager.shouldRetry(message, error: error)
-        
-        if shouldRetry {
-            ZeezLogger.info(ZeezLogger.network, "Will retry watch message: \(message.type.rawValue)")
-            messageQueue.markForRetry(message)
-        } else {
-            ZeezLogger.error(ZeezLogger.network, "Watch message failed permanently: \(message.type.rawValue)", error: error)
-            messageQueue.markAsFailed(message)
-        }
-        
+        ZeezLogger.info(ZeezLogger.network, "Watch message not delivered: \(message.type.rawValue) (\(error.localizedDescription))")
+        messageQueue.markAsFailed(message)
+
         DispatchQueue.main.async {
             self.pendingMessages = self.messageQueue.pendingCount
         }
@@ -306,13 +302,6 @@ extension WatchConnectivityHandler: WCSessionDelegate {
         DispatchQueue.main.async {
             self.isWatchAvailable = session.isReachable
             self.updateConnectionQuality()
-            
-            if session.isReachable {
-                // Resend any queued messages
-                self.messageQueue.retryFailedMessages { [weak self] message in
-                    self?.sendMessage(message, completion: nil)
-                }
-            }
         }
         
         ZeezLogger.info(ZeezLogger.network, "Watch state changed - reachable: \(session.isReachable)")
