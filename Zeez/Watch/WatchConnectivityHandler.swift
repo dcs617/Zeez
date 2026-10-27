@@ -26,7 +26,6 @@ func watchSleepSummary(for session: SleepSession) -> WatchSleepSummary? {
 class WatchConnectivityHandler: NSObject, ObservableObject {
     static let shared = WatchConnectivityHandler()
     
-    @Published var isWatchAvailable = false
     @Published var connectionQuality: ConnectionQuality = .none
     @Published var lastSyncTime: Date?
     @Published var pendingMessages: Int = 0
@@ -265,8 +264,6 @@ extension WatchConnectivityHandler: WCSessionDelegate {
         error: Error?
     ) {
         DispatchQueue.main.async {
-            self.isWatchAvailable = activationState == .activated
-            
             if activationState == .activated {
                 ZeezLogger.info(ZeezLogger.network, "Watch connectivity activated")
                 self.updateConnectionQuality()
@@ -281,7 +278,6 @@ extension WatchConnectivityHandler: WCSessionDelegate {
     
     func sessionDidBecomeInactive(_ session: WCSession) {
         DispatchQueue.main.async {
-            self.isWatchAvailable = false
             self.connectionQuality = .none
         }
         ZeezLogger.info(ZeezLogger.network, "Watch session became inactive")
@@ -289,7 +285,6 @@ extension WatchConnectivityHandler: WCSessionDelegate {
     
     func sessionDidDeactivate(_ session: WCSession) {
         DispatchQueue.main.async {
-            self.isWatchAvailable = false
             self.connectionQuality = .none
         }
         
@@ -300,7 +295,6 @@ extension WatchConnectivityHandler: WCSessionDelegate {
     #if os(iOS)
     func sessionWatchStateDidChange(_ session: WCSession) {
         DispatchQueue.main.async {
-            self.isWatchAvailable = session.isReachable
             self.updateConnectionQuality()
         }
         

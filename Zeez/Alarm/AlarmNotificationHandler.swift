@@ -16,22 +16,31 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     /// (resolved lazily so constructing the singleton never touches the store).
     private let container: NSPersistentContainer?
     private let audio: AlarmAudioController
+    /// Tests pass a handler on a fake session; nil means WatchConnectivityHandler.shared
+    /// (resolved lazily so constructing the singleton never activates WCSession).
+    private let watch: WatchConnectivityHandler?
     /// Prevent double follow-up scheduling if multiple notifications present nearly at once.
     private var followupsGuard: [String: Date] = [:]
 
-    /// Tests inject an in-memory fake center + container and a controller with fake players;
-    /// production uses the real ones.
+    /// Tests inject an in-memory fake center + container, a controller with fake players and
+    /// a watch handler on a fake session; production uses the real ones.
     init(notificationCenter: AlarmNotificationScheduling = UNUserNotificationCenter.current(),
          container: NSPersistentContainer? = nil,
-         audio: AlarmAudioController = .shared) {
+         audio: AlarmAudioController = .shared,
+         watch: WatchConnectivityHandler? = nil) {
         self.center = notificationCenter
         self.container = container
         self.audio = audio
+        self.watch = watch
         super.init()
     }
 
     private var resolvedContainer: NSPersistentContainer {
         container ?? PersistenceController.shared.container
+    }
+
+    private var resolvedWatch: WatchConnectivityHandler {
+        watch ?? .shared
     }
 
     // MARK: Presentation while foregrounded
@@ -283,27 +292,21 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     }
     
     // MARK: - Watch Haptics Integration
-    
+
+    // No gate here: `sendMessage` reads the session's reachability when it sends and drops a
+    // pattern the watch cannot take. The cached flag that used to gate this went stale, and
+    // could hold back haptics from a watch that had since become reachable.
     private func startWatchHaptics() {
-        guard WatchConnectivityHandler.shared.isWatchAvailable else {
-            ZeezLogger.debug(ZeezLogger.alarm, "Watch not available for haptics")
-            return
-        }
-        
         // Use moderate pattern for "still ringing" haptics
         // Duration will continue until stopWatchHaptics is called
         let pattern: HapticPattern = .moderate
         let intensity: Double = 0.7
         let duration: TimeInterval = 300 // 5 minutes max, but will be stopped earlier
-        
-        WatchConnectivityHandler.shared.sendWakePattern(pattern, intensity: intensity, duration: duration)
-        ZeezLogger.info(ZeezLogger.alarm, "📱 Started Watch haptics for continuing alarm")
+
+        resolvedWatch.sendWakePattern(pattern, intensity: intensity, duration: duration)
     }
-    
+
     private func stopWatchHaptics() {
-        guard WatchConnectivityHandler.shared.isWatchAvailable else { return }
-        
-        WatchConnectivityHandler.shared.stopWakePattern()
-        ZeezLogger.info(ZeezLogger.alarm, "📱 Stopped Watch haptics")
+        resolvedWatch.stopWakePattern()
     }
 }

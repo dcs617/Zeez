@@ -201,4 +201,49 @@ struct AlarmSnoozeAndHandlerTests {
         #expect(audio.isPlaying)
         audio.stop()
     }
+
+    // MARK: - Watch haptics (AlarmNotificationHandler)
+
+    /// A handler whose watch messages go to a fake session, and a watch-haptics alarm's snapshot.
+    private func hapticsHandler(reachable: Bool) throws
+        -> (handler: AlarmNotificationHandler, watch: WatchConnectivityHandler, session: FakeWatchSession, snapshot: AlarmSnapshot) {
+        let controller = PersistenceController(inMemory: true)
+        let context = controller.container.viewContext
+        let alarm = try AlarmTestSupport.makeAlarm(in: context, watchHaptics: true)
+        let snapshot = try #require(context.performAndWait { AlarmSnapshot(alarm) })
+        let session = FakeWatchSession(reachable: reachable)
+        let watch = WatchConnectivityHandler(session: session, container: controller.container)
+        let handler = AlarmNotificationHandler(notificationCenter: FakeNotificationCenter(),
+                                               container: controller.container, watch: watch)
+        return (handler, watch, session, snapshot)
+    }
+
+    private func commands(_ session: FakeWatchSession) -> [String?] {
+        session.sent.map { $0.payload["command"] as? String }
+    }
+
+    /// The gate was a cached flag: "activated" after activation, then "reachable" after a
+    /// watch-state change, and never updated when the watch app opened. A fresh handler's
+    /// flag was false, and a stale one held back haptics from a reachable watch.
+    @Test("A ringing alarm with watch haptics buzzes a reachable watch, and Stop stops it")
+    func watchHapticsReachAReachableWatch() throws {
+        let (handler, _, session, snapshot) = try hapticsHandler(reachable: true)
+
+        handler.scheduleFollowUps(alarmId: snapshot.idString, cadence: 60, maxCount: 1, snapshot: snapshot)
+        #expect(commands(session) == [WatchMessageType.wakePattern.rawValue])
+
+        handler.cancelFollowUps(for: snapshot.idString)
+        #expect(commands(session) == [WatchMessageType.wakePattern.rawValue, WatchMessageType.stopPattern.rawValue])
+    }
+
+    @Test("A ringing alarm sends nothing to an unreachable watch, and queues nothing")
+    func watchHapticsSkipAnUnreachableWatch() throws {
+        let (handler, watch, session, snapshot) = try hapticsHandler(reachable: false)
+
+        handler.scheduleFollowUps(alarmId: snapshot.idString, cadence: 60, maxCount: 1, snapshot: snapshot)
+        handler.cancelFollowUps(for: snapshot.idString)
+
+        #expect(session.sent.isEmpty)
+        #expect(watch.queuedMessageCount == 0)
+    }
 }
