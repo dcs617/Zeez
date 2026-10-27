@@ -11,7 +11,8 @@ work is complete and verified in-simulator.
 
 - **Alarm end-to-end on a physical device (1.1):** set an alarm, force-quit the app, lock
   the phone → follow-ups fire at cadence; Stop re-arms the next chain. (Also covers the
-  delegate-callback threading paths noted in the roadmap's 1.6/2.8 row.)
+  delegate-callback threading paths noted in the roadmap's 1.6/2.8 row, and since D2b whether the
+  audio watchdog runs: `DEVICE_TEST_RUN.md` T5.1.)
 - **Phone↔watch message round-trip (1.5)** (no paired simulators were scriptable in the
   dev environment).
 - **Notification-budget banner visual check (1.4)** with ~5 smart-wake alarms creating
@@ -162,9 +163,42 @@ Carried over from the archived roadmap's Phase 3.
   Test-only; no product change.
 - Per-night preferred source for overlapping sleep sources — needs an amendment to
   `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first, which defines time asleep as the union across sources.
-- Singleton graph → protocol injection, incrementally, following the
-  `SleepAnalyzer.analyzeSleepSession(objectID:container:)` pattern. Phase D2. Approved 2026-10-26 to run before the
-  device pass; D1 is done and the prompt is in `SECOND_AUDIT_IMPROVEMENTS.md` §7.
+- ~~Singleton graph → protocol injection, incrementally.~~ Done for the two seams D2's stopping rule allows:
+  `WatchSessionProtocol` (`d46a2e2`, 2026-10-26) and the alarm audio session and player factory (`3b9b1fd`,
+  `f6de1a1`, 2026-10-27), with 21 tests. Nothing else unlocks a test, so the rest stays as it is
+  (`SECOND_AUDIT_IMPROVEMENTS.md` Phase D, D2). D2b fixed one bug: the audio watchdog's five-retry cap never tripped.
+- **Found by D2 (2026-10-26/27), recorded and not fixed.** At the D2 checkpoints Daniel chose to record these rather
+  than fix them, except the vibration-only alarm, which was found afterwards and still needs his call. The first three
+  need hardware to judge.
+  - **The alarm's volume table never applies to bundled sounds.** `AlarmAudioController.normalizeVolume`'s keys
+    carry `.caf` (`"Zeez_Long_Default.caf": 0.9`), but bundled sounds are looked up by bare name, so every bundled
+    alarm plays at the requested volume unadjusted. Fixing the keys makes bundled alarms 10–20% quieter; hear that on a
+    device before changing it.
+  - **The alarm's audio can start on the notification delegate's queue.** `AlarmNotificationHandler`'s
+    `willPresent` and `didReceive` call `startContinuousAudio()` directly, and its own comment says those callbacks
+    arrive off the main thread. `Timer.scheduledTimer` there schedules the watchdog (and the system-sound beep timer)
+    on a run loop that may never run, and the controller's state is then touched from that queue and from
+    `ActiveAlarmView` on main. Usually `ActiveAlarmView.onAppear` restarts the loop on main, which replaces the
+    timer, though its `stop()` then invalidates a timer from a thread other than the one it was scheduled on.
+    Device check `DEVICE_TEST_RUN.md` T5.1. If it fails: hop to main in `startContinuousAudio`, or make the
+    controller `@MainActor`.
+  - **A vibration-only alarm still plays audio when it rings in the app.** `startContinuousAudio()` ignores
+    `vibrationOnly`, and `ActiveAlarmView` returns early for such an alarm without stopping the loop the handler
+    started. That loop is also the one case where the off-main watchdog above survives. Found 2026-10-27 while
+    mapping D2b's call sites. Device check T5.1.
+  - **The fallback sound has no watchdog.** When the watchdog falls back to Alarm_Classic, nothing restarts that
+    player if it stops too. This was already true before D2b, which left it alone.
+  - **Refused wake patterns are never resent.** `WatchConnectivityHandler.sendMessage` refuses a `.high` message
+    (`sendWakePattern`, `stopWakePattern`) when the watch is unreachable and leaves it in `WatchMessageQueue`.
+    `retryFailedMessages` only resends messages whose `retryCount` is above 0, and neither side implements
+    `sessionReachabilityDidChange`, so the message is never sent and the queue only grows. A watch whose app is not
+    running when the alarm rings gets no haptics, which may be the right outcome for a wake pattern; the leak is not.
+    Device check T8 step 4.
+  - **`isWatchAvailable` means two things.** Activation sets it to "activated"; `sessionWatchStateDidChange` sets it
+    to "reachable". `AlarmNotificationHandler` gates the watch haptics on it, and no view observes it.
+  - **The watch's heartbeat fields go unread.** The watch sends `batteryLevel` and `appState` with every
+    `heartbeat`; the phone answers "pong" and reads those fields only under `statusUpdate`, which the watch never
+    sends, and then only to a debug log. Drop the fields or the `statusUpdate` branch.
 
 ## Sleep product roadmap (reconciled 2026-07-09, second-audit D3d)
 

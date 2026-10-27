@@ -256,7 +256,8 @@ and TestFlight* → D2a → D2b → D1a → D1b → D1c → D3c.
 **Resequenced 2026-10-26.** With the device pass blocked on the account renewal, Daniel lifted the wait: D1 and D2
 now run before it, and the device pass will cover the new navigation too. D1 goes first, because reconnecting
 Trends (decided the same day) puts its entry point on D1a's per-tab stacks. D2 follows under its stopping rule. D3c
-still waits for the device pass and the App Group toggle.
+still waits for the device pass and the App Group toggle. D1 was done 2026-10-26 and D2 2026-10-27; next is the
+device pass.
 
 **D1. NavigationView → NavigationStack.** 88 occurrences in 67 files. Split by behavior, not file count.
 - **D1a** (~4 files, the only part with observable behavior): `MainView.swift:6` wraps a `NavigationView`
@@ -310,12 +311,51 @@ double — as established by `AlarmNotificationScheduling` + `FakeNotificationCe
     hid the watch's countdown. It now sends the earliest `AlarmSnapshot.nextFireDate()`, and an explicit
     disabled status when nothing can ring. `updateAlarmContext` also used to forward whichever alarm was
     just saved (even a disabled one); it now re-reads the next alarm, deletions included.
-  - **Still open:** the `WatchSessionProtocol` seam. It would unlock tests of `handleDataRequest`'s reply
-    path and `sendMessage`'s priority→transport mapping, which still have none.
+  - ✅ **Seam done 2026-10-26** (`d46a2e2`). `WatchSessionProtocol` (`Zeez/Watch/WatchSessionProtocol.swift`) is
+    exactly the eight members above, with `isSupported` as an instance property over `WCSession.isSupported()`.
+    The handler takes `init(session: = WCSession.default, container: NSPersistentContainer? = nil)`. The
+    `PersistenceController` injection became that container, passed to `WatchPayloadBuilder.fetch` and resolved
+    at fetch time as `AlarmNotificationHandler` does, so building the handler opens no store.
+    `handleWatchMessage` is internal, because the delegate methods that call it need a real `WCSession`.
+    - `WatchConnectivityHandlerTests` (11), each proven by breaking what it pins: `.high` goes by `sendMessage`
+      and is refused when unreachable, `.medium`/`.low` by `updateApplicationContext`; a failed send reports
+      failure; `requestData` replies with both payloads, or the one `requestType` names; a status request
+      replies with connection info; a malformed or unknown command is still answered; a full sync is one push;
+      an alarm push with nothing to ring says disabled; the session activates only where it is supported.
+    - The four `@Published` properties still have no SwiftUI observer. `AlarmNotificationHandler` reads
+      `isWatchAvailable` directly, as the watch-haptics gate. Left alone under the stopping rule.
 - **D2b** `AlarmAudioController`: 18 call sites, zero tests, and it is the alarm's last mile. Seam: an
   audio-session protocol (`setCategory`/`setActive`) and a player factory. Do not fake `Timer` — call the
   health-check directly. The device pass covers the happy path; it can never cover the watchdog restart,
   the five-retry cap, the system-sound fallback, or `.notifyOthersOnDeactivation` on stop.
+  - ✅ **Done 2026-10-27** (`3b9b1fd` seam, `f6de1a1` fix). `Zeez/Alarm/AlarmAudioSessioning.swift` holds
+    `AlarmAudioSessioning` (`setCategory`, `setActive`), `AlarmAudioPlaying` (the six `AVAudioPlayer` members the
+    controller uses) and `AlarmAudioPlayerMaking` with its production `AVAudioPlayerMaker`. `AVAudioSession` and
+    `AVAudioPlayer` conform with empty extensions. The controller takes
+    `init(session: = AVAudioSession.sharedInstance(), players: = AVAudioPlayerMaker())`. The two `startLooping`
+    overloads now share one play path that records what is playing, so the watchdog's check takes no arguments and
+    is internal as `checkAudioHealth()`; tests call it, and `Timer` is not faked. The 18 call sites are unchanged,
+    and `canPlay` goes through the factory.
+    - **The five-retry cap was dead.** Each restart went through `startLooping`, whose `stop()` zeroed
+      `retryCount`. A file that loaded but would not play was restarted every two seconds for as long as the alarm
+      rang, and the fallback sounds were unreachable. At the checkpoint Daniel chose to count consecutive failed
+      checks, reset by a healthy one. On the sixth failed check the watchdog and the dead loop are retired first, so
+      a later check cannot fall back again and stack a second system-sound beep timer. Visible change: such a loop
+      now falls back after about 10–12 s, to Alarm_Classic or else the system beep.
+    - `AlarmAudioControllerTests` (10), each proven by breaking what it pins: the watchdog leaves a playing loop
+      alone and restarts a stopped one on the same file; five failed restarts in a row fall back to Alarm_Classic
+      at 0.8 (fails against the shipped count); a healthy check resets the count; an unloadable file, and one
+      missing from the bundle, fall back to Alarm_Classic, and nothing playable to the system sound; after that
+      fallback the watchdog stops trying files; `stop()` deactivates with `.notifyOthersOnDeactivation` and ends
+      the system sound.
+- **D2 results.** ZeezTests 331 → 352 in 55 suites, green after each commit with the attribution check clean; UI
+  smoke 10/10 and the watch app builds. Device checks: `DEVICE_TEST_RUN.md` T5.1 (the watchdog runs at all) and T8
+  step 4 (wake patterns reach the watch).
+  - **Found and recorded, not fixed** (`FUTURE_IMPROVEMENTS.md`, "Found by D2"): the volume table never applies to
+    bundled sounds; the alarm's audio can start on the notification delegate's queue; a vibration-only alarm still
+    plays audio when it rings in the app; the fallback sound has no watchdog; refused wake patterns are never
+    resent; `isWatchAvailable` means two things; the watch's heartbeat fields go unread.
+  - **D2 stops here.** No other singleton passes the stopping rule.
 - **Then stop. The stopping rule: inject a singleton only when doing so unlocks a test you cannot write
   today — never for purity.** Explicit non-targets: `ErrorManager` (13 sites) and `AnalyticsManager` (3)
   are sinks whose behavior nobody asserts; `ModalCoordinator`, `OnboardingManager`, and `StoreKitManager`
@@ -458,7 +498,7 @@ If `StoreKitTests` fails, uninstall the app from the simulator and re-run before
 
 ## 7. Prompt for the next implementation chat
 
-Replaced 2026-10-26. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`):
+Replaced 2026-10-27. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`):
 - Phase A, replaced 2026-10-20.
 - §8a durable HealthKit import identity, delivered in code 2026-10-22 (`2244e20`…`6b15519`).
 - The data-safety + claims batch, delivered 2026-10-22 (`9d5b3b7`…`77a11db`, docs in the commit after):
@@ -466,78 +506,64 @@ Replaced 2026-10-26. Earlier prompts are in git history (`git log -p -- SECOND_A
   data off, the unused `WatchSleepSummary.init(from:)` is gone, Trends lost its duplicate Days range, and debug
   mock sessions are scored by `SleepQualityCalculator`.
 - D1 with Trends reconnected, delivered 2026-10-26 (`5f2d4a5`…`05c7d6a`, docs in the commit after); Phase D, D1.
+- D2a and D2b, delivered 2026-10-26/27 (`d46a2e2`…`f6de1a1`, docs in the commit after); Phase D, D2.
 - The Swift Testing attribution fix, delivered 2026-10-25 (`b7a3379`…`3dff641`, docs `5a377d3`). 112 assertions
   in 13 suites ran where a failure reached no test; they now return values from their closures, each fix proven
   by breaking an assertion. `SwiftTestingAttributionGuardTests` scans for the shapes, and the `unit-tests` job fails
   on an unattributed issue in its log or result bundle.
 
 **Decisions 2026-10-26:** reconnect Trends, rather than park it; do D1 and D2 before the device pass (Phase D,
-"Resequenced 2026-10-26"). D1 is done; Trends is reached through a dashboard link. Daniel also chose, at the D1
+"Resequenced 2026-10-26"). Both are done; Trends is reached through a dashboard link. Daniel also chose, at the D1
 checkpoint: remove Trends' premium cards; describe schedule regularity as a start-time spread in minutes; rebuild
 the schedule chart; label durations as recorded session duration; trend only current-version estimates; and require
-four estimated nights per month before reporting an estimate change.
+four estimated nights per month before reporting an estimate change. At the D2 checkpoints he approved both seams,
+chose to let the watchdog's cap count consecutive failed checks, and chose to record the other findings then in hand
+rather than fix them.
 
-**When the developer account is renewed, the device pass still comes first**: T1 relocates the store *and* runs
-its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. Until
-then:
+**Next: the device pass**, once the developer account is renewed. T1 relocates the store *and* runs its first
+structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. The prompt:
 
 ```
-Read CLAUDE.md, then SECOND_AUDIT_IMPROVEMENTS.md Phase D (D2 and its stopping rule,
-"Resequenced 2026-10-26") and §7. Context: the device pass is still blocked on my Apple
-Developer Program renewal. On 2026-10-26 I decided to do D1 and D2 before it; D1 is done
-(each tab owns a NavigationStack, and Trends is reconnected through a dashboard link).
+Read CLAUDE.md, then DEVICE_TEST_RUN.md ("How to use this file", T0 and T1 in full) and
+SECOND_AUDIT_IMPROVEMENTS.md §5 and §7. Context: my Apple Developer Program membership is
+renewed, and I am running the device pass on an iPhone 13 Pro Max with a paired Apple Watch.
+D1 and D2 landed before it (Phase D, "Resequenced 2026-10-26"); T5.1, T8 and T15 cover them.
 
-Task: D2a (the WatchSessionProtocol seam), then D2b (the AlarmAudioController seam), under
-D2's stopping rule: inject a singleton only when that unlocks a test you cannot write today.
+Your part is preparation and triage. I run every test on the hardware.
 
 Work in this order and stop at each checkpoint:
 0. CI first. Run `git log --oneline @{u}..` and
-   `gh run list --branch feature/sleep-simplification --limit 3`. The D1 batch is the first
-   code since 3a59775 that only Xcode 26 has compiled. If the latest run on the branch
-   failed, fix that before D2: Xcode 16.4-only compile errors are the usual cause (CLAUDE.md,
-   CI). Push any unpushed commits only when I say.
-1. Investigate first.
-   - D2a: list every WCSession member WatchConnectivityHandler uses and check it against
-     Phase D's set (isSupported, delegate, activate, isReachable, isPaired,
-     isWatchAppInstalled, sendMessage, updateApplicationContext; not transferUserInfo).
-     Say whether the PersistenceController injection Phase D lists is still needed, now
-     that WatchPayloadBuilder takes a container (2026-10-20). Name the tests the seam
-     unlocks: at least handleDataRequest's reply path and sendMessage's priority→transport
-     mapping. Say who observes its four @Published properties (2026-07-09: nobody).
-   - D2b: map AlarmAudioController's call sites (18 as of 2026-07-09) and its
-     AVAudioSession, AVAudioPlayer and Timer uses. For each behavior the device pass can
-     never cover (the watchdog restart, the five-retry cap, the system-sound fallback,
-     .notifyOthersOnDeactivation on stop), name the test the seam unlocks. Do not fake
-     Timer; call the health check directly.
-   CHECKPOINT: report both seams' protocol surfaces, the tests each unlocks, and anything
-   the stopping rule says to leave alone.
-2. D2a: the protocol, faked by a lock-guarded @unchecked Sendable double with a `= .shared`
-   or `= .current()` default parameter (the AlarmNotificationScheduling +
-   FakeNotificationCenter pattern). Write the unlocked tests and prove each by breaking
-   the behavior it pins.
-3. D2b: an audio-session protocol (setCategory/setActive) and a player factory, same
-   pattern; tests for the four behaviors above, each proven by breaking it.
-   CHECKPOINT before D2b's first commit: the seam's surface and the test list.
-4. Then stop. No ErrorManager, AnalyticsManager, ModalCoordinator, OnboardingManager,
-   StoreKitManager, Learn or Environment singletons, and no repo-wide .shared sweep.
-5. After each commit run -only-testing:ZeezTests on
-   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF', saving the log and result
-   bundle, and run .github/scripts/check-swift-testing-attribution.sh over them. Before the
-   last commit, also run the UI smoke tests (Debug, same destination) and build
-   "ZeezWatch Watch App" on -destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976'.
-6. Update FUTURE_IMPROVEMENTS.md, SECOND_AUDIT_IMPROVEMENTS.md (D2 and §7), and
-   DEVICE_TEST_RUN.md where D2 changes what the device pass checks (T5, T8). Replace the
-   §7 prompt with one for the device pass, unless I name something else.
+   `gh run list --branch feature/sleep-simplification --limit 3`. If the latest run on the
+   branch failed, fix that before I build. Push any unpushed commits only when I say.
+1. Baseline. Run -only-testing:ZeezTests on
+   -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF', saving the log and result bundle,
+   run .github/scripts/check-swift-testing-attribution.sh over them, and build
+   "ZeezWatch Watch App". Correct DEVICE_TEST_RUN.md's baseline line if it is out of date.
+2. T0 and T1 with me. T1 must be the first launch of the new build, and an install gets one
+   try, so walk me through T1.1's "old install" setup before I press Run.
+   CHECKPOINT: T0 and T1 results, with their log lines, before T2.
+3. Then the rest in the file's order. For each result I report, fill in its Result and
+   Notes. For a failure, name the likely cause from my log lines and what to capture next,
+   but change no product code mid-run.
+   CHECKPOINT after T5 (the alarm) and after T8 (the watch round trip).
+4. At the end, fill in the run summary. Fold every finding into SECOND_AUDIT_IMPROVEMENTS.md
+   §5 and FUTURE_IMPROVEMENTS.md, each with its test ID and log lines, and settle the "Found
+   by D2" items that waited on T5.1 and T8. Propose fixes as a list for me to order; don't
+   start them. Delete DEVICE_TEST_RUN.md only when I say.
 
-Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). Do not start D3c,
-the paywall copy, the per-night source work or the tracked cleanups (SleepAnalysisTypes
-stubs, misnamed Core Data tests, the Learn orphans) without asking.
+Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine); T0's App Groups
+toggle changes it too, and I will commit that myself. T13 stays blocked until a screen opens
+the paywall. Do not start D3c, the paywall copy, the per-night source work or the tracked
+cleanups (SleepAnalysisTypes stubs, misnamed Core Data tests, the Learn orphans) without
+asking.
 ```
 
-**Open items** (none needs hardware):
-- **Push the D1 batch.** 24 commits after `3a59775`, docs included, are unpushed as of 2026-10-26; Xcode 16.4 has compiled none of
-  them. Step 0 of the prompt checks the run.
-- **D2a** `WatchSessionProtocol` seam and **D2b** `AlarmAudioController` seam: the prompt above.
+**Open items** (none needs hardware unless marked):
+- **Push D2.** `d46a2e2`, `3b9b1fd`, `f6de1a1` and the docs commit after them are unpushed as of 2026-10-27; Xcode
+  16.4 has compiled none of them. Step 0 of the prompt checks the run.
+- **D2's findings** (`FUTURE_IMPROVEMENTS.md`, "Found by D2"). The off-main audio start, the vibration-only alarm's
+  audio and the refused wake patterns wait on T5.1 and T8. The vibration-only alarm needs Daniel's call; the others
+  he chose to record.
 - **The paywall's copy** (found 2026-10-26): `SubscriptionView` sells capabilities that do not exist, so no screen
   opens it (`PaywallReachabilityGuardTests`), which blocks `DEVICE_TEST_RUN.md` T13. A product decision first.
 - **Small cleanups, tracked in `FUTURE_IMPROVEMENTS.md`:** delete the dead stubs in `SleepAnalysisTypes.swift`, two
@@ -546,6 +572,6 @@ stubs, misnamed Core Data tests, the Learn orphans) without asking.
   lost their only caller with `LearnHomeView`.
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
   which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
-- **Blocked on the renewed account:** the device pass (T1 and T3.1 first), D3c WidgetKit extension (needs the App
+- **Blocked on the renewed account:** the device pass (the prompt above), D3c WidgetKit extension (needs the App
   Group), D3b critical-alerts application, App Store Connect products, StoreKit sandbox, TestFlight.
 - **Not code, not blocked:** the privacy policy at `AppConstants.Legal` is still a placeholder URL and needs real content published.

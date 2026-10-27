@@ -4,7 +4,8 @@
 `SECOND_AUDIT_IMPROVEMENTS.md` §5 and `FUTURE_IMPROVEMENTS.md`.
 
 Hardware: iPhone 13 Pro Max + paired Apple Watch. Branch `feature/sleep-simplification`.
-Baseline at start of run: 225 tests / 37 suites green, iOS + watch targets build.
+Baseline at start of run: 352 tests / 55 suites green (2026-10-27, after D2), UI smoke 10/10, iOS + watch
+targets build.
 
 ---
 
@@ -313,6 +314,27 @@ Set alarms a few minutes out so you're not waiting. Default cadence is **60 s** 
 Set an alarm 2 minutes out. Leave the app open.
 **Expected:** alarm fires, `ActiveAlarmView` appears full-screen, audio loops.
 
+**Then the watchdog (D2b).** While it loops, hold the side button for Siri, then dismiss Siri within about
+5 s without asking anything. Siri should interrupt the audio, and only the watchdog, which checks every
+2 s, starts it again. If the audio never stops while Siri is up, the check didn't happen; say so. Have
+Console.app open (Method 2, info messages on, category `Alarm`).
+**Expected:** the audio comes back within a few seconds of Siri closing, and Console shows
+`⚠️ Audio watchdog: restarting audio (attempt 1)`.
+**Silent failures:**
+- No watchdog line, and the alarm stays quiet: the watchdog's timer never runs. The audio can be started
+  from the notification callback's queue, whose run loop may never run (`FUTURE_IMPROVEMENTS.md`, "Found
+  by D2").
+- `max retries reached, falling back to system sound`, then silence: five restarts in a row failed, the
+  alarm fell back, and nothing watches the fallback sound. Note how long Siri was up.
+
+Paste the `Alarm` lines from the Siri press onward either way. The cap, the fallbacks and the hand-back
+to other audio on Stop are unit-tested (`AlarmAudioControllerTests`); this is the only check that the
+watchdog runs on a device.
+
+**Vibration-only.** Repeat with an alarm set to vibration only. **Expected:** it vibrates and plays no
+sound. The code suggests it will also loop the long alarm sound (`FUTURE_IMPROVEMENTS.md`, "Found by
+D2"); report what you hear, and whether Stop ends it.
+
 ### T5.2 — Locked screen
 Set an alarm 2 minutes out. Lock the phone. Do not force-quit.
 **Expected:** notification fires with sound. Tapping it opens the full-screen alarm UI.
@@ -409,8 +431,10 @@ Test with **Do Not Disturb on**. Alarm should still arrive.
 
 ## T8 — Paired Apple Watch round trip (A5)
 
-**Goal:** phone→watch pushes have **never** been verified on hardware. A5 rewrote the wire contract; the
-unit tests cover the envelope shape, not the transport.
+**Goal:** phone→watch pushes have **never** been verified on hardware. A5 rewrote the wire contract. The
+unit tests cover the envelope shape and, since D2a (`WatchConnectivityHandlerTests`), the phone's reply to
+the watch's request and its choice of transport. What they cannot cover is the transport itself:
+activation, reachability and delivery. A failure in (2) or (3) is most likely there.
 
 1. Install the watch app. Open it.
 2. **Watch-initiated:** pull to refresh / open the summary. Expect current sleep + next alarm.
@@ -420,7 +444,11 @@ unit tests cover the envelope shape, not the transport.
      *next*, with an "in Xh Ym" countdown under it. Turn that alarm off on the phone: the watch moves to the
      other one. Turn both off: the watch shows no next alarm. A missing countdown, or the watch showing an
      alarm you just disabled, is a failure.
-4. Wake-pattern haptics fire when an alarm rings.
+4. Wake-pattern haptics fire when an alarm rings. Try it twice: once with the watch app open, once with
+   it closed (wrist down for a minute first). The phone sends a wake pattern only to a reachable watch
+   and never resends a refused one (`FUTURE_IMPROVEMENTS.md`, "Found by D2"), so expect haptics only the
+   first time. In Console.app (the phone, category `Network`), `Failed to send wake pattern to watch` is
+   a refusal. Report which runs buzzed.
 5. Snooze and Stop from the watch both control the phone's alarm.
 6. **Offline cache:** put the phone in airplane mode. The watch should show the last known summary, not
    blank.
@@ -832,5 +860,8 @@ was looking for.
 | `Notification budget: … total N/64` | info | ❌ |
 | `🔁 Removing N stale chain entries for alarm …` | info | ❌ |
 | `📅 Pre-armed 6 follow-ups for alarm … at next fire …` | info | ❌ |
+| `⚠️ Audio watchdog: restarting audio (attempt N)` | info | ❌ |
+| `Audio watchdog: max retries reached, falling back to system sound` | error | ✅ |
+| `Failed to send wake pattern to watch` | error | ✅ |
 | `Core Data store loaded successfully` | info | ❌ |
 | Anything from `ZeezLogger.debug` | debug | ❌, and Release-stripped |
