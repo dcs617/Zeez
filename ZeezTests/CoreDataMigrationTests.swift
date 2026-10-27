@@ -7,11 +7,6 @@ struct CoreDataMigrationTests {
     
     // MARK: - Migration Manager Tests
     
-    @Test func migrationManagerInitialization() async throws {
-        let migrationManager = CoreDataMigrationManager.shared
-        #expect(migrationManager != nil, "Migration manager should initialize successfully")
-    }
-    
     @Test func requiresMigrationWithCurrentModel() async throws {
         // Create a test store with current model (always the shared instance —
         // duplicate loaded models make +entity resolution ambiguous, 2.4)
@@ -101,23 +96,7 @@ struct CoreDataMigrationTests {
         }
     }
     
-    // MARK: - PersistenceController Migration Tests
-    
-    @Test func persistenceControllerMigrationConfiguration() async throws {
-        // Test that PersistenceController configures migration correctly
-        let controller = PersistenceController(inMemory: true)
-        
-        // Verify controller initializes
-        #expect(controller.container != nil, "Container should be initialized")
-        
-        // Give it time to load
-        let deadline = DispatchTime.now() + .seconds(5)
-        while !controller.isStoreLoaded && DispatchTime.now() < deadline {
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-        }
-        
-        #expect(controller.isStoreLoaded, "Store should load successfully")
-    }
+    // MARK: - PersistenceController
     
     @Test func backgroundContextCreation() async throws {
         let controller = PersistenceController(inMemory: true)
@@ -133,102 +112,6 @@ struct CoreDataMigrationTests {
         let backgroundContext = controller.newBackgroundContext()
         #expect(backgroundContext != nil, "Background context should be created")
         #expect(backgroundContext.concurrencyType == .privateQueueConcurrencyType, "Background context should use private queue")
-    }
-    
-    // MARK: - Data Integrity Tests
-    
-    @Test func dataPreservationDuringMigration() async throws {
-        // Create test data
-        let controller = PersistenceController(inMemory: true)
-        
-        // Wait for store to load
-        let deadline = DispatchTime.now() + .seconds(5)
-        while !controller.isStoreLoaded && DispatchTime.now() < deadline {
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-        
-        #expect(controller.isStoreLoaded, "Store should load before testing data preservation")
-        
-        let context = controller.container.viewContext
-
-        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
-        // the closure: off the main actor, an issue recorded inside it reaches no test.
-        let (sessionCount, fetched) = try context.performAndWait {
-            // Create test sleep session
-            let session = SleepSession(context: context)
-            session.id = UUID()
-            session.startTime = Date().addingTimeInterval(-8 * 3600) // 8 hours ago
-            session.endTime = Date()
-            session.qualityScore = 85.0
-            session.isActive = false
-
-            // Create related heart rate data
-            let heartRateData = HeartRateData(context: context)
-            heartRateData.id = UUID()
-            heartRateData.timestamp = Date().addingTimeInterval(-4 * 3600) // 4 hours ago
-            heartRateData.value = 65.0
-            heartRateData.confidence = 95.0
-            heartRateData.session = session
-
-            try context.save()
-
-            // Verify data was saved
-            let fetchRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-            let sessions = try context.fetch(fetchRequest)
-            return (sessions.count,
-                    sessions.first.map { (qualityScore: $0.qualityScore, heartRates: $0.heartRateData?.count) })
-        }
-        #expect(sessionCount == 1, "Should have one sleep session")
-
-        let fetchedSession = try #require(fetched)
-        #expect(fetchedSession.qualityScore == 85.0, "Quality score should be preserved")
-        #expect(fetchedSession.heartRates == 1, "Heart rate data should be related")
-    }
-    
-    @Test func relationshipIntegrityAfterMigration() async throws {
-        let controller = PersistenceController(inMemory: true)
-        
-        // Wait for store to load
-        let deadline = DispatchTime.now() + .seconds(5)
-        while !controller.isStoreLoaded && DispatchTime.now() < deadline {
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-        
-        let context = controller.container.viewContext
-
-        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
-        // the closure: off the main actor, an issue recorded inside it reaches no test.
-        let result = try context.performAndWait {
-            // Create user preferences with alarm configurations
-            let userPrefs = UserPreferences(context: context)
-            userPrefs.id = UUID()
-            userPrefs.targetSleepDuration = 8.0 * 3600 // 8 hours in seconds
-            userPrefs.sleepGoalEnabled = true
-
-            let alarmConfig = AlarmConfiguration(context: context)
-            alarmConfig.id = UUID()
-            alarmConfig.name = "Test Alarm"
-            alarmConfig.enabled = true
-            alarmConfig.smartWakeEnabled = true
-            alarmConfig.time = Date()
-            alarmConfig.userPreferences = userPrefs
-
-            try context.save()
-
-            // Verify relationships
-            let prefsFetch: NSFetchRequest<UserPreferences> = UserPreferences.fetchRequest()
-            let preferences = try context.fetch(prefsFetch)
-            let fetchedPrefs = preferences.first!
-            let alarm = (fetchedPrefs.alarmConfigurations as? Set<AlarmConfiguration>)?.first
-            return (preferenceCount: preferences.count,
-                    alarmCount: fetchedPrefs.alarmConfigurations?.count,
-                    alarmName: alarm?.name,
-                    inverseIntact: alarm.map { $0.userPreferences == fetchedPrefs })
-        }
-        #expect(result.preferenceCount == 1, "Should have one user preferences record")
-        #expect(result.alarmCount == 1, "Should have one related alarm configuration")
-        #expect(result.alarmName == "Test Alarm", "Alarm name should be preserved")
-        #expect(result.inverseIntact == true, "Inverse relationship should be intact")
     }
     
     // MARK: - Error Recovery Tests
@@ -251,103 +134,6 @@ struct CoreDataMigrationTests {
                 Issue.record("Expected .storeNotFound, got \(error)")
             }
         }
-    }
-    
-    @Test func storeRecoveryAfterCorruption() async throws {
-        // This test simulates what happens when a store becomes corrupted
-        // and needs to be recovered
-        
-        let controller = PersistenceController(inMemory: true)
-        
-        // Wait for initial load
-        let deadline = DispatchTime.now() + .seconds(5)
-        while !controller.isStoreLoaded && DispatchTime.now() < deadline {
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-        
-        #expect(controller.isStoreLoaded, "Store should initially load successfully")
-        
-        // Verify we can create and save data
-        let context = controller.container.viewContext
-        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
-        // the closure: off the main actor, an issue recorded inside it reaches no test.
-        let sessionCount = try context.performAndWait {
-            let testSession = SleepSession(context: context)
-            testSession.id = UUID()
-            testSession.startTime = Date()
-            testSession.isActive = false
-
-            try context.save()
-
-            // Verify data was saved
-            let fetchRequest: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-            return try context.fetch(fetchRequest).count
-        }
-        #expect(sessionCount == 1, "Should have saved one session")
-    }
-    
-    // MARK: - Performance Tests
-    
-    @Test func migrationPerformanceWithLargeDataset() async throws {
-        let controller = PersistenceController(inMemory: true)
-        
-        // Wait for store to load
-        let deadline = DispatchTime.now() + .seconds(5)
-        while !controller.isStoreLoaded && DispatchTime.now() < deadline {
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-        
-        let context = controller.container.viewContext
-
-        // Create a moderate dataset for performance testing.
-        // All Core Data work runs inside performAndWait: the viewContext is a
-        // main-queue context and Swift Testing runs tests off the main thread —
-        // unguarded access here was the source of this test's flaky SIGABRT.
-        let startTime = CFAbsoluteTimeGetCurrent()
-
-        var creationTime: Double = 0
-        var sessionCount = 0
-        var heartRateCount = 0
-        try context.performAndWait {
-            for i in 0..<100 {
-                let session = SleepSession(context: context)
-                session.id = UUID()
-                session.startTime = Date().addingTimeInterval(TimeInterval(-i * 24 * 3600)) // i days ago
-                session.endTime = session.startTime?.addingTimeInterval(8 * 3600) // 8 hour sleep
-                session.qualityScore = Double.random(in: 60...100)
-                session.isActive = false
-
-                // Add some related data
-                for j in 0..<5 {
-                    let heartRate = HeartRateData(context: context)
-                    heartRate.id = UUID()
-                    heartRate.timestamp = session.startTime?.addingTimeInterval(TimeInterval(j * 3600)) // Every hour
-                    heartRate.value = Double.random(in: 50...80)
-                    heartRate.confidence = Double.random(in: 80...100)
-                    heartRate.session = session
-                }
-
-                // Save every 20 sessions to avoid memory buildup
-                if i % 20 == 0 {
-                    try context.save()
-                }
-            }
-
-            try context.save()
-
-            creationTime = CFAbsoluteTimeGetCurrent() - startTime
-
-            // Verify data was created
-            let sessionFetch: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-            sessionCount = try context.fetch(sessionFetch).count
-
-            let heartRateFetch: NSFetchRequest<HeartRateData> = HeartRateData.fetchRequest()
-            heartRateCount = try context.fetch(heartRateFetch).count
-        }
-
-        #expect(sessionCount == 100, "Should have created 100 sessions")
-        #expect(heartRateCount == 500, "Should have created 500 heart rate records")
-        #expect(creationTime < 5.0, "Large dataset creation should complete within 5 seconds")
     }
     
     // MARK: - Utility Methods

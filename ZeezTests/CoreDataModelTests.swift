@@ -4,9 +4,10 @@ import CoreData
 
 struct CoreDataModelTests {
     
-    /// Test that RespiratoryData entity can be created and queried
-    /// This validates the index fix for the Core Data model
-    @Test func respiratoryDataEntityCreationAndQuery() async throws {
+    /// RespiratoryData's attributes survive a save and a fetch by id. Its only coverage: the
+    /// importer writes these rows, and no other suite reads one back. (An in-memory store has
+    /// no indexes, so this says nothing about the model's.)
+    @Test func respiratoryDataRoundTripsThroughTheStore() async throws {
         // Create in-memory persistent store for testing
         let container = NSPersistentContainer(name: "Zeez", managedObjectModel: PersistenceController.model)
         let description = NSPersistentStoreDescription()
@@ -52,48 +53,5 @@ struct CoreDataModelTests {
         #expect(fetchedData.respiratoryRate == 16.5)
         #expect(fetchedData.confidence == 95.0)
         #expect(fetchedData.deviceType == "AppleWatch")
-    }
-    
-    /// Test that the index actually works for performance
-    @Test func respiratoryDataIndexPerformance() async throws {
-        let container = NSPersistentContainer(name: "Zeez", managedObjectModel: PersistenceController.model)
-        let description = NSPersistentStoreDescription()
-        description.type = NSInMemoryStoreType
-        container.persistentStoreDescriptions = [description]
-        
-        await withCheckedContinuation { continuation in
-            container.loadPersistentStores { _, _ in continuation.resume() }
-        }
-        
-        let context = container.viewContext
-
-        // viewContext is main-queue-confined; tests run off main (2.4). Assert outside
-        // the closure: off the main actor, an issue recorded inside it reaches no test.
-        let (resultCount, queryTime) = try context.performAndWait {
-            // Create multiple RespiratoryData entries
-            for i in 0..<100 {
-                let data = RespiratoryData(context: context)
-                data.id = UUID()
-                data.timestamp = Date().addingTimeInterval(TimeInterval(i * -60)) // 1 minute intervals
-                data.respiratoryRate = Double.random(in: 12...20)
-                data.confidence = Double.random(in: 80...100)
-            }
-
-            try context.save()
-
-            // Perform indexed query and measure time
-            let startTime = CFAbsoluteTimeGetCurrent()
-
-            let fetchRequest: NSFetchRequest<RespiratoryData> = RespiratoryData.fetchRequest()
-            fetchRequest.predicate = NSPredicate(format: "confidence > 90.0")
-            fetchRequest.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
-
-            let results = try context.fetch(fetchRequest)
-
-            return (results.count, CFAbsoluteTimeGetCurrent() - startTime)
-        }
-
-        #expect(resultCount > 0, "Should find some high-confidence respiratory data")
-        #expect(queryTime < 0.1, "Query should complete quickly with proper indexing")
     }
 }
