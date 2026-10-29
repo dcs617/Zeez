@@ -266,6 +266,13 @@ from these.
   (`5b0ee40`) to `EnhancedSleepDetailsView`, whose stage chart (`SleepCyclesChart.swift`) lists every
   `SleepStageType` with `displayName(reportedByAppleHealth:)`, so on 2026-10-29 he reversed the keep.
   `SleepStageNormalizationTests` still pins the stage names.
+- `Environment/EnvironmentalDetailView.swift` with `EnvironmentalDataManager.swift`: a per-factor history
+  screen and its data source, orphaned in `5b0ee40`. It already read the `measured*` accessors, so it is
+  the closest thing to a correct environmental history view; a rebuild can start from its shape.
+- `Environment/EnvironmentMetricView.swift`: a one-metric tile whose last user was the in-app Widgets tree
+  (§4, B1).
+- `Learn/LearnEnvironmentalDetailView.swift`: a Learn screen for one environmental factor, never opened
+  since it was added (`c933950`, v0.3). §7's parked files are untouched.
 
 **Claims tier and label.** Whatever they display. A rebuilt session-detail screen showing a Zeez
 score must carry the "Experimental Zeez Estimate" label in text *and* `accessibilityValue`
