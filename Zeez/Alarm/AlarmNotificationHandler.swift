@@ -96,6 +96,11 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
         case AlarmNotificationRegistrar.contId,
              UNNotificationDefaultActionIdentifier: // tapped the banner
             ZeezLogger.info(ZeezLogger.alarm, "   User chose CONTINUE or tapped notification")
+            // Every banner tap lands here, including a Learn reminder's, which has no alarm.
+            guard !alarmId.isEmpty else {
+                ZeezLogger.info(ZeezLogger.alarm, "   Not an alarm notification: nothing to ring")
+                break
+            }
             // Prewarm audio for instant start, then foreground UI and start looped audio
             prewarmAudio()
             presentActiveAlarmUI(alarmId: alarmId)
@@ -224,10 +229,16 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     
     /// Starts the in-app loop, unless the alarm is vibration-only: `ActiveAlarmView` vibrates
     /// for those and plays nothing, so a loop started here would ring until Stop. An alarm
-    /// that cannot be read still rings. The settings are read synchronously so the loop starts
-    /// on the same queue as before. Internal for tests: the delegate callbacks that call it
-    /// need a real UNNotification.
+    /// that cannot be read still rings, but an empty id is no alarm at all: nothing would
+    /// present `ActiveAlarmView` to stop it. The settings are read synchronously so the loop
+    /// starts on the same queue as before. Internal for tests: the delegate callbacks that
+    /// call it need a real UNNotification.
     func startContinuousAudio(alarmId: String) {
+        guard !alarmId.isEmpty else {
+            ZeezLogger.info(ZeezLogger.alarm, "🔕 No alarm ID: no in-app audio")
+            return
+        }
+
         if AlarmSnapshot.fetchNow(idString: alarmId, container: resolvedContainer)?.vibrationOnly == true {
             ZeezLogger.info(ZeezLogger.alarm, "📳 Vibration-only alarm \(alarmId): no in-app audio")
             return

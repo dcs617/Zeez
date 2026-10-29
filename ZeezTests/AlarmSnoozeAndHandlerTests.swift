@@ -202,6 +202,20 @@ struct AlarmSnoozeAndHandlerTests {
         audio.stop()
     }
 
+    /// A banner tap on any notification reaches the handler, and one that is not an alarm (a
+    /// Learn reminder) carries no `alarmID`. The empty id could not be read, so the long sound
+    /// looped with no alarm screen to stop it. `didReceive` needs a real response, so this
+    /// pins the guard inside the audio start.
+    @Test("A notification without an alarm ID plays no audio")
+    func notificationWithoutAlarmIDPlaysNoAudio() throws {
+        let (handler, audio, players, _) = try audioHandler(vibrationOnly: false)
+
+        handler.startContinuousAudio(alarmId: "")
+
+        #expect(players.attempts.isEmpty, "No sound file is even opened")
+        #expect(!audio.isPlaying)
+    }
+
     // MARK: - Watch haptics (AlarmNotificationHandler)
 
     /// A handler whose watch messages go to a fake session, and a watch-haptics alarm's snapshot.
