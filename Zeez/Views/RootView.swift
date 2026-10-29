@@ -178,6 +178,12 @@ struct RootView: View {
     private func handleDismiss(_ alarm: AlarmConfiguration) {
         showingActiveAlarm = false
         activeAlarm = nil // Clear the active alarm reference
+
+        // The same Stop as the notification's action: without it the follow-ups armed when
+        // the alarm fired kept ringing after the alarm screen's Stop.
+        if let alarmId = alarm.id?.uuidString {
+            AlarmNotificationHandler.shared.stopAlarm(alarmId: alarmId)
+        }
         
         // Ensure we're on the main thread and the UI is responsive
         DispatchQueue.main.async {

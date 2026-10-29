@@ -151,6 +151,46 @@ struct AlarmSnoozeAndHandlerTests {
         }
     }
 
+    // MARK: - Stop (AlarmNotificationHandler)
+
+    /// The alarm screen's Stop used to stop only the audio. A main alarm that fires with the
+    /// app open arms a dynamic follow-up chain, and nothing cancelled it, so the follow-ups
+    /// kept ringing as banners with sound after Stop (found 2026-10-29).
+    @Test("Stop cancels the follow-ups armed when the alarm fired, and stops the audio")
+    func stopCancelsTheDynamicChain() async throws {
+        let fake = FakeNotificationCenter()
+        let controller = PersistenceController(inMemory: true)
+        let audio = AlarmAudioController(session: FakeAudioSession(), players: FakeAudioPlayerFactory())
+        let handler = AlarmNotificationHandler(notificationCenter: fake, container: controller.container,
+                                               audio: audio, scheduler: AlarmScheduler(notificationCenter: fake))
+        let id = UUID().uuidString
+
+        handler.scheduleFollowUps(alarmId: id, cadence: 60, maxCount: 6, snapshot: nil)
+        try await AlarmTestSupport.waitUntil("the dynamic chain") {
+            fake.pending.filter { $0.identifier.hasPrefix("alarm-\(id)-fu-") }.count == 6
+        }
+        audio.startLooping(bundledName: AlarmNotificationUtils.longInAppBundledName)
+        #expect(audio.isPlaying)
+
+        handler.stopAlarm(alarmId: id)
+
+        try await AlarmTestSupport.waitUntil("the follow-ups cancelled") {
+            fake.pending.filter { $0.identifier.hasPrefix("alarm-\(id)-fu-") }.isEmpty
+        }
+        #expect(!audio.isPlaying)
+    }
+
+    @Test("The alarm screen's Stop goes through the handler's Stop")
+    func alarmScreenStopUsesTheHandler() throws {
+        let rootView = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Zeez/Views/RootView.swift")
+        let source = try String(contentsOf: rootView, encoding: .utf8)
+        #expect(source.contains("AlarmNotificationHandler.shared.stopAlarm(alarmId:"),
+                "RootView's handleDismiss must cancel the follow-up chain, not just close the alarm screen")
+    }
+
     // MARK: - In-app audio (AlarmNotificationHandler)
 
     /// A handler whose audio goes to fake players, and the alarm's id string.

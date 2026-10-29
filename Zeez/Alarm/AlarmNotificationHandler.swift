@@ -19,6 +19,8 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     /// Tests pass a handler on a fake session; nil means WatchConnectivityHandler.shared
     /// (resolved lazily so constructing the singleton never activates WCSession).
     private let watch: WatchConnectivityHandler?
+    /// Tests pass a scheduler on the fake center; nil means AlarmScheduler.shared.
+    private let scheduler: AlarmScheduler?
     /// Prevent double follow-up scheduling if multiple notifications present nearly at once.
     private var followupsGuard: [String: Date] = [:]
 
@@ -27,11 +29,13 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
     init(notificationCenter: AlarmNotificationScheduling = UNUserNotificationCenter.current(),
          container: NSPersistentContainer? = nil,
          audio: AlarmAudioController = .shared,
-         watch: WatchConnectivityHandler? = nil) {
+         watch: WatchConnectivityHandler? = nil,
+         scheduler: AlarmScheduler? = nil) {
         self.center = notificationCenter
         self.container = container
         self.audio = audio
         self.watch = watch
+        self.scheduler = scheduler
         super.init()
     }
 
@@ -84,14 +88,7 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
 
         case AlarmNotificationRegistrar.stopId:
             ZeezLogger.info(ZeezLogger.alarm, "   User chose STOP")
-            cancelFollowUps(for: alarmId)
-            resetFollowUpGuard(for: alarmId)
-            audio.stop()
-            // The cancel above consumed the pre-scheduled chain — re-arm it
-            // for the alarm's NEXT firing (runs fine from a background
-            // activation, which is how action handlers execute when the app
-            // is killed).
-            AlarmScheduler.shared.rearmFollowUpChain(alarmId: alarmId)
+            stopAlarm(alarmId: alarmId)
 
         case AlarmNotificationRegistrar.contId,
              UNNotificationDefaultActionIdentifier: // tapped the banner
@@ -113,6 +110,22 @@ final class AlarmNotificationHandler: NSObject, UNUserNotificationCenterDelegate
             break
         }
         completion()
+    }
+
+    /// Stop, whether from the notification's action or the alarm screen's button: the
+    /// follow-ups are cancelled, the audio stops, and the alarm's next firing gets its chain.
+    ///
+    /// The alarm screen used to stop only the audio. A main alarm that fires with the app open
+    /// arms a dynamic follow-up chain (`handleNotificationArrived`), and nothing cancelled it,
+    /// so after Stop the follow-ups kept ringing as banners with sound (found 2026-10-29).
+    func stopAlarm(alarmId: String) {
+        cancelFollowUps(for: alarmId)
+        resetFollowUpGuard(for: alarmId)
+        audio.stop()
+        // The cancel above consumed the chain — re-arm it for the alarm's NEXT firing (runs
+        // fine from a background activation, which is how action handlers execute when the
+        // app is killed).
+        (scheduler ?? .shared).rearmFollowUpChain(alarmId: alarmId, container: resolvedContainer)
     }
 
     // MARK: Internal

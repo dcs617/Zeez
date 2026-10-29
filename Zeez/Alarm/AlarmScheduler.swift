@@ -288,8 +288,9 @@ final class AlarmScheduler: NSObject, @unchecked Sendable {
 
     /// Re-arms the chain for an alarm's next firing from a notification
     /// action handler (the Stop action consumes the current chain).
-    func rearmFollowUpChain(alarmId: String) {
-        AlarmSnapshot.fetch(idString: alarmId) { [weak self] snapshot in
+    func rearmFollowUpChain(alarmId: String,
+                            container: NSPersistentContainer = PersistenceController.shared.container) {
+        AlarmSnapshot.fetch(idString: alarmId, container: container) { [weak self] snapshot in
             guard let snapshot = snapshot else { return }
             self?.schedulingQueue.async {
                 self?.scheduleFollowUpChain(for: snapshot)
