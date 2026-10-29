@@ -465,6 +465,13 @@ All paths are under `Zeez/Learn/` unless shown.
 - `Sleep/LearnSleepCycleAnimation.swift`: an animated cycle diagram, orphaned with this screen in D1a.
 - `LearnContentLoader.swift`: `MockLearnContentLoader` and `PersistenceController.previewWithLearnContent`,
   which nothing used.
+- `LearnOfflineManager.swift`, with Learn Settings' "Offline Access" and "Content" sections (removed after
+  the batch, the same day). Saving an article "offline" was simulated: a progress timer, then a JSON copy of
+  Core Data rows already on the device, and only the never-shown `OfflineButton` started it. The Auto
+  Download, Auto-play Videos and Data Saver toggles were read by nothing; the app has no server, videos or
+  remote images. The same pass removed `SleepPosition`'s `icon`, `benefits`, `drawbacks` and `impactScore`,
+  whose only users were deleted: the benefits and drawbacks were health claims ("best for digestion and heart
+  health") that a Learn review would have had to clear.
 
 **Learn content was never seeded.** `LearnContentManager.ensureDefaultContent` has had no caller since it
 was written (`c933950`, v0.3), so Articles and Challenges have always shown their empty states. Nothing
@@ -475,11 +482,12 @@ Science", "Challenges"), so every path would be empty even with content; and `Le
 as a sheet, has no `NavigationStack`, so its article links could not push. The daily "Time to Learn"
 reminder opens this empty tab. `LearnNotificationManager`'s challenge reminders
 (`scheduleChallengeReminder`, `scheduleCompletionReminder`, `removeChallengeNotifications`) have no
-callers; the first schedules every day's reminder for the same moment, non-repeating.
+callers; the first schedules every day's reminder for the same moment, non-repeating. Learn Settings'
+"Show Completed Challenges" toggle is read by nothing yet.
 `LearnContentManager` and `LearnContentManager+DefaultContent` stay in the tree, parked like §7: the
 seeder holds six articles and three challenges whose copy has not been reviewed against
 `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` §4. **Definition of done:** reviewed copy; a seeding call, with a
-test; a path-to-category mapping; quiz content; and the challenge reminders fixed or removed.
+test; a path-to-category mapping; quiz content; the challenge reminders fixed or removed; and the completed-challenges toggle wired.
 
 **Claims tier and label.** Educational content. `ClinicalVocabularyGuardTests` exempts `Zeez/Learn`,
 so any Learn surface that returns needs its copy reviewed by hand against

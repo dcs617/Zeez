@@ -223,7 +223,8 @@ Carried over from the archived roadmap's Phase 3.
   2026-10-29 cannot appear. Learning Paths' IDs (`basics`, `cycles`, …) never match `LearnArticle.category`'s
   `LearnCategory` values, so every path would stay empty, and `LearnPathDetail`, shown as a sheet, has no
   `NavigationStack` for its article links. `LearnNotificationManager`'s challenge reminders have no callers, and
-  the first schedules every day's reminder for the same moment. The parked seeder's six articles and three
+  the first schedules every day's reminder for the same moment. Learn Settings' "Show Completed Challenges" toggle is
+  read by nothing yet. The parked seeder's six articles and three
   challenges need a review against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` §4 first.
 - **Learn reminders pile up** (2026-10-29). Each change of Learn → Settings → Reminder Time schedules another
   repeating daily reminder under a new identifier and leaves the earlier ones, so dragging the picker can leave
@@ -242,11 +243,12 @@ Carried over from the archived roadmap's Phase 3.
   `displayableStageDurations`, `asleepStageDurations` and `hasRecordedAwakeInterval` are called only by
   `SleepStageNormalizationTests`, which pin their contract. Use them where stage totals are computed, or retire
   them with their tests.
-- **Left without callers by the dead-code batch** (2026-10-29; not on its list, so recorded rather than deleted):
-  `AppConstants.SleepCycle` (the whole struct) and `AppConstants.Sleep.chartMaxHours`;
-  `LearnOfflineManager.isAvailableOffline` and `markForOffline`, so nothing can mark an article for offline any more
-  and Learn Settings' clear-offline-content row never appears; `SleepPosition.drawbacks` and `impactScore`; and
-  `AlarmScheduler.getAlarmSound(for:)`.
+- ~~**Left without callers by the dead-code batch**~~ (2026-10-29). Deleted the same day at Daniel's call:
+  `AppConstants.SleepCycle` and `Sleep.chartMaxHours`, `AlarmScheduler.getAlarmSound(for:)`, `SleepPosition`'s
+  `icon`, `benefits`, `drawbacks` and `impactScore`, and the simulated Learn offline feature
+  (`LearnOfflineManager`) with Learn Settings' Auto Download, Auto-play Videos and Data Saver toggles, which nothing
+  read (`PARKED_CAPABILITIES.md` §10). `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` no longer cites the deleted
+  `SleepInformationView` as evidence.
 
 ## Sleep product roadmap (reconciled 2026-07-09, second-audit D3d)
 

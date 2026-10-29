@@ -602,7 +602,7 @@ in-app recording or seeding Learn content without asking.
   quiz, and Learning Paths' IDs match no category. Its copy needs a claims review before anything is seeded.
 - **Found by the dead-code batch** (`FUTURE_IMPROVEMENTS.md`, still open): `ErrorManager`'s errors reach no screen;
   `StoreKitManager`'s transaction listener never starts (with the paywall item); Learn reminders pile up on each time
-  change; stage-duration helpers only tests use; and a few declarations the deletions left without callers.
+  change; and stage-duration helpers only tests use.
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
   which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
 - **Blocked on the renewed account:** the device pass (the prompt above), D3c WidgetKit extension (needs the App

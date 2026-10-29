@@ -61,46 +61,8 @@ struct AppConstants {
         /// Target sleep duration for analysis (8 * 3600 = 8 hours)
         static let targetDuration: TimeInterval = 8 * 3600
         
-        /// Recommended sleep hours for chart scaling (12 * 3600 = 12 hours)
-        static let chartMaxHours: TimeInterval = 12 * 3600
-        
         /// Minimum sleep time for quality warnings (7 * 3600 = 7 hours)
         static let qualityWarningThreshold: TimeInterval = 7 * 3600
-    }
-    
-    // MARK: - Sleep Cycle Constants
-    
-    /// Sleep cycle analysis parameters
-    struct SleepCycle {
-        /// Standard sleep cycle length (90 * 60 = 90 minutes)
-        static let standardLength: TimeInterval = 90 * 60
-        
-        /// Maximum allowed cycle deviation (30 * 60 = 30 minutes)
-        static let maxDeviation: TimeInterval = 30 * 60
-        
-        /// Sleep stage analysis interval (30 * 60 = 30 minutes)
-        static let stageAnalysisInterval: TimeInterval = 30 * 60
-        
-        /// Sleep analysis epoch duration (30 * 60 = 30 minutes)
-        static let epochDuration: TimeInterval = 30 * 60
-        
-        /// Chart axis stride interval (3600 * 3 = 3 hours)
-        static let chartAxisStride: TimeInterval = 3600 * 3
-        
-        // Ideal cycle timing for pattern analysis
-        struct IdealTiming {
-            /// Deep sleep onset after sleep start (20 * 60 = 20 minutes)
-            static let deepSleepOnset: TimeInterval = 20 * 60
-            
-            /// Return to light sleep (45 * 60 = 45 minutes)
-            static let lightSleepReturn: TimeInterval = 45 * 60
-            
-            /// REM sleep onset (60 * 60 = 60 minutes)
-            static let remOnset: TimeInterval = 60 * 60
-            
-            /// Cycle completion time (85 * 60 = 85 minutes)
-            static let cycleCompletion: TimeInterval = 85 * 60
-        }
     }
     
     // MARK: - Health Data Validation Constants

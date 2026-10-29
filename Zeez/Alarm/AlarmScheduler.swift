@@ -578,9 +578,4 @@ final class AlarmScheduler: NSObject, @unchecked Sendable {
             }
         }
     }
-    
-    /// Get the appropriate alarm sound for the given sound name (legacy method for compatibility)
-    func getAlarmSound(for soundName: String) -> UNNotificationSound {
-        return getAlarmSoundForNotification(soundName, criticalEnabled: true) // Default to critical for backward compatibility
-    }
 }

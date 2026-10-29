@@ -9,23 +9,15 @@ struct LearnSettingsView: View {
     @AppStorage("learnReminderTime") private var reminderTime = Calendar.current.date(from: DateComponents(hour: 20, minute: 0)) ?? Date()
     @AppStorage("learnStreakEnabled") private var streakEnabled = true
     @AppStorage("showCompletedChallenges") private var showCompletedChallenges = true
-    @AppStorage("autoPlayVideos") private var autoPlayVideos = true
-    @AppStorage("useDataSaver") private var useDataSaver = false
-    @AppStorage("autoDownloadContent") private var autoDownloadContent = false
     
     @State private var showingNotificationsDenied = false
     @State private var showingResetConfirmation = false
     @State private var showingDataClearedAlert = false
-    @State private var showingCacheClearedAlert = false
-    
-    @StateObject private var offlineManager = LearnOfflineManager.shared
     
     var body: some View {
         Form {
             notificationSection
             trackingSection
-            contentSection
-            offlineSection
             dataSection
         }
         .navigationTitle("Learn Settings")
@@ -48,11 +40,6 @@ struct LearnSettingsView: View {
             .accessibilityHint("Keep current progress and close alert")
         } message: {
             Text("This will reset all your learning progress, including completed articles, challenges, and achievements. This action cannot be undone.")
-        }
-        .alert("Cache Cleared", isPresented: $showingCacheClearedAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("All offline content has been cleared.")
         }
     }
     
@@ -139,70 +126,6 @@ struct LearnSettingsView: View {
             .accessibilityIdentifier("statisticsNavigationLink")
         } header: {
             Text("Progress Tracking")
-        }
-    }
-    
-    private var contentSection: some View {
-        Section {
-            Toggle(isOn: $autoPlayVideos) {
-                Label {
-                    Text("Auto-play Videos")
-                } icon: {
-                    Image(systemName: "play.circle")
-                }
-            }
-            .accessibilityLabel("Auto-play videos")
-            .accessibilityHint(autoPlayVideos ? "Disable automatic video playback" : "Enable automatic video playback")
-            .accessibilityIdentifier("autoPlayVideosToggle")
-            
-            Toggle(isOn: $useDataSaver) {
-                Label {
-                    Text("Data Saver")
-                } icon: {
-                    Image(systemName: "speedometer")
-                }
-            }
-            .accessibilityLabel("Data saver mode")
-            .accessibilityHint(useDataSaver ? "Disable data saver to load full quality content" : "Enable data saver to reduce data usage")
-            .accessibilityIdentifier("dataSaverToggle")
-        } header: {
-            Text("Content")
-        } footer: {
-            Text("Data saver mode will load lower quality images and disable auto-play")
-        }
-    }
-    
-    private var offlineSection: some View {
-        Section {
-            Toggle(isOn: $autoDownloadContent) {
-                Label {
-                    Text("Auto Download")
-                } icon: {
-                    Image(systemName: "arrow.down.circle")
-                }
-            }
-            .accessibilityLabel("Auto download content")
-            .accessibilityHint(autoDownloadContent ? "Disable automatic content downloads" : "Enable automatic content downloads on WiFi")
-            .accessibilityIdentifier("autoDownloadToggle")
-            
-            if !offlineManager.offlineArticles.isEmpty {
-                Button(role: .destructive) {
-                    clearOfflineContent()
-                } label: {
-                    Label {
-                        Text("Clear Offline Content")
-                    } icon: {
-                        Image(systemName: "trash")
-                    }
-                }
-                .accessibilityLabel("Clear offline content")
-                .accessibilityHint("Remove all downloaded content from device")
-                .accessibilityIdentifier("clearOfflineContentButton")
-            }
-        } header: {
-            Text("Offline Access")
-        } footer: {
-            Text("Auto download will save articles for offline reading when on WiFi")
         }
     }
     
@@ -300,20 +223,6 @@ struct LearnSettingsView: View {
                 ZeezLogger.error(ZeezLogger.learning, "Error resetting progress", error: error)
             }
         }
-    }
-    
-    private func clearOfflineContent() {
-        // Get all offline articles and remove them
-        let fetchRequest: NSFetchRequest<LearnArticle> = LearnArticle.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "objectID IN %@", offlineManager.offlineArticles)
-        
-        if let articles = try? viewContext.fetch(fetchRequest) {
-            articles.forEach { article in
-                offlineManager.removeFromOffline(article: article)
-            }
-        }
-        
-        showingCacheClearedAlert = true
     }
     
     private func openSettings() {
