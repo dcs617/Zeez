@@ -197,10 +197,10 @@ struct SleepGoalSettingsView: View {
         
         do {
             try context.save()
-            ErrorManager.shared.showStatus("Sleep goals updated")
             dismiss()
         } catch {
-            ErrorManager.shared.reportError(error)
+            ZeezLogger.error(ZeezLogger.ui, "Failed to save sleep goal", error: error)
+            ErrorManager.shared.report(.saveFailed)
         }
     }
     

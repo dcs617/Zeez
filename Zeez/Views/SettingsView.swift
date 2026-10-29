@@ -485,7 +485,7 @@ struct SettingsView: View {
                         try viewContext.save()
                     } catch {
                         ZeezLogger.error(ZeezLogger.ui, "Failed to save preference", error: error)
-                        // Could revert the change and show error to user
+                        ErrorManager.shared.report(.saveFailed)
                     }
                 }
             }
@@ -501,6 +501,7 @@ struct SettingsView: View {
             try viewContext.save()
         } catch {
             ZeezLogger.error(ZeezLogger.ui, "Failed to save sleep goal duration", error: error)
+            ErrorManager.shared.report(.saveFailed)
         }
     }
     

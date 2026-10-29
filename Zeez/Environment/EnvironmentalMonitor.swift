@@ -47,7 +47,6 @@ final class EnvironmentalMonitor {
                     self?.captureEnvironmentalData(for: session)
                 }
                 self.monitoringTimer?.fire()
-                self.errorManager.showStatus("Environmental monitoring started — samples while Zeez is open")
             }
         }
     }

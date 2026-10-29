@@ -24,7 +24,7 @@ final class SleepSessionManager {
         let context = persistenceController.container.viewContext
         
         guard HKHealthStore.isHealthDataAvailable() else {
-            errorManager.showError(.healthKitNotAvailable)
+            errorManager.report(.healthKitNotAvailable)
             completion(.failure(AppError.healthKitNotAvailable))
             return
         }
@@ -44,7 +44,6 @@ final class SleepSessionManager {
             
             // Save if validation passes
             try context.save()
-            errorManager.showStatus("Sleep session started")
             completion(.success(session))
             
             // Start monitoring systems
@@ -81,7 +80,6 @@ final class SleepSessionManager {
             EnvironmentalMonitor.shared.stopMonitoring()
             MovementDataManager.shared.stopMonitoring()
             
-            errorManager.showStatus("Sleep session saved")
             completion(.success(session))
 
             // Sync heart-rate data from HealthKit, THEN analyze — the
@@ -114,14 +112,14 @@ final class SleepSessionManager {
     
     func requestHealthKitAuthorization(completion: @escaping (Bool, Error?) -> Void) {
         guard HealthKitAuthorization.isAvailable else {
-            errorManager.showError(.healthKitNotAvailable)
+            errorManager.report(.healthKitNotAvailable)
             completion(false, AppError.healthKitNotAvailable)
             return
         }
 
         HealthKitAuthorization.request(using: healthStore) { success, error in
             if !success {
-                self.errorManager.showError(.healthKitPermissionDenied)
+                self.errorManager.report(.healthKitPermissionDenied)
             }
             completion(success, error)
         }

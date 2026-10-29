@@ -6,6 +6,7 @@ struct RootView: View {
     @StateObject private var onboardingManager = OnboardingManager.shared
     @StateObject private var modalCoordinator = ModalCoordinator.shared
     @StateObject private var permissionManager = AlarmPermissionManager.shared
+    @StateObject private var errorManager = ErrorManager.shared
     @State private var activeAlarm: AlarmConfiguration?
     @State private var showingActiveAlarm = false
     @State private var showingPermissionDenied = false
@@ -115,6 +116,37 @@ struct RootView: View {
                 showingMigrationDataLossNotice = true
             }
         }
+        // The app's one error alert (ErrorManager decides which errors reach it). It is held
+        // while the alarm screen is up: a presented alert would stop the cover from showing.
+        .alert(
+            errorManager.currentAlert?.errorDescription ?? "",
+            isPresented: Binding(
+                get: { errorManager.currentAlert != nil },
+                set: { if !$0 { errorManager.dismissAlert() } }
+            ),
+            presenting: errorManager.currentAlert
+        ) { error in
+            if error.opensSettings {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                .accessibilityHint("Opens Zeez's page in Settings")
+                Button("Not Now", role: .cancel) {}
+                    .accessibilityHint("Closes this message")
+            } else {
+                Button("OK", role: .cancel) {}
+                    .accessibilityHint("Closes this message")
+            }
+        } message: { error in
+            Text(error.recoverySuggestion ?? "")
+        }
+        .onChange(of: showingActiveAlarm) { _, isShowing in
+            if !isShowing {
+                errorManager.releaseAlerts()
+            }
+        }
         .alert("Sleep History Unavailable", isPresented: $showingMigrationDataLossNotice) {
             Button("OK") {
                 UserDefaults.standard.removeObject(forKey: PersistenceController.migrationDataLossNoticeKey)
@@ -172,6 +204,9 @@ struct RootView: View {
         
         // Dismiss any modal coordinator sheets
         modalCoordinator.activeModal = nil
+
+        // Take down any error alert, and keep new ones back until the alarm screen closes
+        errorManager.holdAlerts()
         
         ZeezLogger.debug(ZeezLogger.alarm, "🔄 Dismissed active modals for alarm display")
     }

@@ -509,15 +509,22 @@ final class BackgroundTaskManager {
     
     func checkBatteryAndStorage() {
         guard let resourceMonitor = resourceMonitor else { return }
-        
-        let status = resourceMonitor.getCurrentResourceStatus()
-        
-        if status.batteryLevel <= AppConstants.Background.criticalBatteryLevel {
-            errorManager.showError(.lowBatteryWarning)
+        Self.reportResources(resourceMonitor.getCurrentResourceStatus(), to: errorManager)
+    }
+
+    /// Runs on every foreground. Low battery is a log line (decision 2026-10-29): an alert each
+    /// time the app opens only nagged, and a recording suggests the charger itself. Low storage
+    /// alerts once per occurrence, and clears when a later check finds space again. A battery
+    /// level of -1 means unknown (the simulator), not empty.
+    static func reportResources(_ status: ResourceMonitor.ResourceStatus, to errors: ErrorManager) {
+        if status.batteryLevel >= 0, status.batteryLevel <= AppConstants.Background.criticalBatteryLevel {
+            ZeezLogger.info(ZeezLogger.background, "Battery low on foreground: \(Int(status.batteryLevel * 100))%")
         }
-        
+
         if status.availableStorage < UInt64(AppConstants.Background.minimumStorageBytes) {
-            errorManager.showError(.storageSpaceLow)
+            errors.report(.storageSpaceLow)
+        } else {
+            errors.clearCondition(.storageSpaceLow)
         }
     }
     

@@ -25,7 +25,7 @@ final class MovementDataManager {
     
     func startMonitoring(for session: SleepSession) {
         guard motionManager.isAccelerometerAvailable else {
-            errorManager.showError(.sensorDataUnavailable)
+            errorManager.report(.sensorDataUnavailable)
             return
         }
 
@@ -41,14 +41,11 @@ final class MovementDataManager {
             guard let self, let accelerometerData = data else { return }
             self.processAccelerometerData(accelerometerData, sessionID: sessionID)
         }
-
-        errorManager.showStatus("Movement tracking started")
     }
     
     func stopMonitoring() {
         if motionManager.isAccelerometerActive {
             motionManager.stopAccelerometerUpdates()
-            errorManager.showStatus("Movement tracking stopped")
         }
     }
     

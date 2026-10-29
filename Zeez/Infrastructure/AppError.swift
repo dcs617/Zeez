@@ -14,6 +14,9 @@ enum AppError: LocalizedError, Equatable {
     case lowBatteryWarning
     case storageSpaceLow
     case insufficientData
+    case saveFailed
+    case microphonePermissionDenied
+    case recordingEndedEarly(savedUntil: Date)
     case generic(Error)
     case coreData(Error)
     case network(Error)
@@ -31,8 +34,12 @@ enum AppError: LocalizedError, Equatable {
              (.watchConnectionLost, .watchConnectionLost),
              (.lowBatteryWarning, .lowBatteryWarning),
              (.storageSpaceLow, .storageSpaceLow),
-             (.insufficientData, .insufficientData):
+             (.insufficientData, .insufficientData),
+             (.saveFailed, .saveFailed),
+             (.microphonePermissionDenied, .microphonePermissionDenied):
             return true
+        case (.recordingEndedEarly(let date1), .recordingEndedEarly(let date2)):
+            return date1 == date2
         case (.generic(let error1), .generic(let error2)):
             return error1.localizedDescription == error2.localizedDescription
         case (.coreData(let error1), .coreData(let error2)):
@@ -53,9 +60,9 @@ enum AppError: LocalizedError, Equatable {
         case .healthKitNotAvailable:
             return "HealthKit is not available on this device"
         case .sleepSessionCreationFailed:
-            return "Unable to create sleep session"
+            return "Zeez couldn't start the recording"
         case .sleepSessionUpdateFailed:
-            return "Unable to update sleep session"
+            return "Zeez couldn't end the recording"
         case .dataProcessingFailed:
             return "Error processing sleep data"
         case .backgroundTaskFailed:
@@ -70,6 +77,12 @@ enum AppError: LocalizedError, Equatable {
             return "Storage space is running low"
         case .insufficientData:
             return "Insufficient analytical data"
+        case .saveFailed:
+            return "Zeez couldn't save your changes"
+        case .microphonePermissionDenied:
+            return "Microphone access is off"
+        case .recordingEndedEarly:
+            return "Your recording stopped early"
         case .generic(let error):
             return error.localizedDescription
         case .coreData(let error):
@@ -88,9 +101,9 @@ enum AppError: LocalizedError, Equatable {
         case .healthKitNotAvailable:
             return "Sleep tracking requires an iPhone with HealthKit support"
         case .sleepSessionCreationFailed:
-            return "Please try starting a new sleep session"
+            return "Please try again."
         case .sleepSessionUpdateFailed:
-            return "Please try saving your session again"
+            return "The recording is still running. Please try ending it again."
         case .dataProcessingFailed:
             return "Try closing and reopening the app"
         case .backgroundTaskFailed:
@@ -102,9 +115,16 @@ enum AppError: LocalizedError, Equatable {
         case .lowBatteryWarning:
             return "Connect your device to a power source"
         case .storageSpaceLow:
-            return "Free up storage space to continue tracking sleep"
+            return "Free up storage space so Zeez can keep saving your nights."
         case .insufficientData:
             return "Try closing and reopening the app"
+        case .saveFailed:
+            return "Your last change may not have been saved. Try again, and restart Zeez if it keeps happening."
+        case .microphonePermissionDenied:
+            return "Zeez needs the microphone to record a night. It measures how loud the room is, and never stores or uploads audio. Turn on Microphone for Zeez in Settings."
+        case .recordingEndedEarly(let savedUntil):
+            let time = savedUntil.formatted(date: .omitted, time: .shortened)
+            return "Zeez was closed during the night, so the recording was saved up to \(time)."
         case .generic:
             return "Try again or contact support if the issue persists"
         case .coreData:
@@ -116,13 +136,42 @@ enum AppError: LocalizedError, Equatable {
         }
     }
     
-    var isWarning: Bool {
+    /// How the user hears about this error (decision 2026-10-29, `CLAUDE.md` "Error alerts").
+    enum Presentation {
+        /// `RootView`'s alert, at most once per occurrence.
+        case alert
+        /// A log line only.
+        case log
+    }
+
+    /// Alert for a failed save, low storage, a recording that fails to start or end (or ended
+    /// early), and the microphone denied when one starts. Everything else — background
+    /// scheduling, the badge reset, low battery on foreground, HealthKit and sensor hiccups —
+    /// is logged only: nothing the user can act on, or an alert on every foreground.
+    var presentation: Presentation {
         switch self {
-        case .lowBatteryWarning, .storageSpaceLow:
+        case .saveFailed, .storageSpaceLow, .sleepSessionCreationFailed, .sleepSessionUpdateFailed,
+             .recordingEndedEarly, .microphonePermissionDenied:
+            return .alert
+        default:
+            return .log
+        }
+    }
+
+    /// A condition holds until it clears (storage freed, access granted), so one occurrence
+    /// spans every check that finds it; an event is an occurrence by itself.
+    var isCondition: Bool {
+        switch self {
+        case .storageSpaceLow, .microphonePermissionDenied:
             return true
         default:
             return false
         }
+    }
+
+    /// The alert offers Open Settings: the fix is a switch in Zeez's page in Settings.
+    var opensSettings: Bool {
+        self == .microphonePermissionDenied
     }
     
     var code: String {
@@ -138,6 +187,9 @@ enum AppError: LocalizedError, Equatable {
         case .lowBatteryWarning: return "WARN_LOW_BATTERY"
         case .storageSpaceLow: return "WARN_STORAGE_LOW"
         case .insufficientData: return "ERR_INSUFFICIENT_DATA"
+        case .saveFailed: return "ERR_SAVE"
+        case .microphonePermissionDenied: return "ERR_MICROPHONE_PERMISSION"
+        case .recordingEndedEarly: return "WARN_RECORDING_ENDED_EARLY"
         case .generic: return "ERR_GENERIC"
         case .coreData: return "ERR_CORE_DATA"
         case .network: return "ERR_NETWORK"
@@ -158,6 +210,9 @@ enum AppError: LocalizedError, Equatable {
         case .lowBatteryWarning: return "low_battery_warning"
         case .storageSpaceLow: return "storage_space_low"
         case .insufficientData: return "insufficient_data"
+        case .saveFailed: return "save_failed"
+        case .microphonePermissionDenied: return "microphone_permission_denied"
+        case .recordingEndedEarly: return "recording_ended_early"
         case .generic: return "generic_error"
         case .coreData: return "core_data_error"
         case .network: return "network_error"

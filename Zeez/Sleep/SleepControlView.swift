@@ -236,7 +236,7 @@ struct SleepControlView: View {
 
                 case .failure(let error):
                     ZeezLogger.error(ZeezLogger.error, "Failed to create sleep session", error: error)
-                    ErrorManager.shared.showError(.sleepSessionCreationFailed)
+                    ErrorManager.shared.report(.sleepSessionCreationFailed)
                 }
                 isPreparingSession = false
             }
@@ -254,7 +254,7 @@ struct SleepControlView: View {
                 
             case .failure(let error):
                 ZeezLogger.error(ZeezLogger.error, "Failed to end sleep session", error: error)
-                ErrorManager.shared.showError(.sleepSessionUpdateFailed)
+                ErrorManager.shared.report(.sleepSessionUpdateFailed)
             }
         }
     }
