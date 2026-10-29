@@ -11,11 +11,10 @@ import Testing
 /// correct.
 struct DeadControlGuardTests {
 
-    /// Dead buttons that were already there when this guard was written (2026-10-27). They are
-    /// tracked in `FUTURE_IMPROVEMENTS.md`, not fixed here. Lower a count when you fix one.
-    private static let known: [String: Int] = [
-        "Zeez/Views/DreamView.swift": 3,                 // play, pause, next; no screen opens it
-    ]
+    /// Dead buttons allowed per file. The guard started (2026-10-27) with six in three files;
+    /// the dead-code batch (2026-10-29) wired the quiz button and deleted the rest, so none is
+    /// allowed now. Add an entry only for a dead button you track in `FUTURE_IMPROVEMENTS.md`.
+    private static let known: [String: Int] = [:]
 
     private static let comments = #"(?://[^\n]*\n\s*)*"#
 

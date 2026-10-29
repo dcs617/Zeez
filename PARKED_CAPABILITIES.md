@@ -450,3 +450,29 @@ All Data removes them. Each ringing path (foreground, locked, force-quit) needs 
 
 **Definition of done.** The above, with a test that an imported file lands in `Library/Sounds` in a
 notification-playable format, and a `DEVICE_TEST_RUN.md` check.
+
+---
+
+## 12. Sleep sounds — *never built*
+
+**Removed:** 2026-10-29 (the dead-code batch) — `Zeez/Views/DreamView.swift`.
+
+**What it did.** Nothing playable. It was the "Dream" tab, titled "Discover", until `ac140c2`
+(2025-08-19) dropped the tab; no screen opened it after that. It listed four invented items ("Holiday
+Recover, 7 videos • 60min", "Relax from stress, 7 Songs • 34min", and two more) under All / Ambient /
+For Kids filters, above a now-playing bar. Play was a comment, and pause and next were empty actions.
+The app has no sleep-sound or relaxation audio, bundled or streamed.
+
+**Why removed.** Dead UI with fabricated content and three dead controls (`DeadControlGuardTests`).
+
+**What sounds need.** Licensed audio with its sources recorded; a player that coexists with the alarm,
+which owns `AVAudioSession` while it rings (`AlarmAudioController`), so the two must not fight over the
+session's category; a sleep timer; and a decision on whether playback continues into a recorded session,
+where it would reach the microphone (`EnvironmentalMonitor`'s noise index).
+
+**Claims tier and label.** Audio content is not a metric. Copy describing what a sound does for sleep
+("helps you fall asleep faster") is a claim and needs the review `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md`
+§4 sets for Learn copy.
+
+**Definition of done.** The above, a route from a tab, and a `DEVICE_TEST_RUN.md` check that a playing
+sound does not stop an alarm from ringing.
