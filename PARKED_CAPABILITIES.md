@@ -512,3 +512,30 @@ where it would reach the microphone (`EnvironmentalMonitor`'s noise index).
 
 **Definition of done.** The above, a route from a tab, and a `DEVICE_TEST_RUN.md` check that a playing
 sound does not stop an alarm from ringing.
+
+---
+
+## 13. Local analytics — *never called*
+
+**Removed:** 2026-10-29 (the dead-code batch) — `Zeez/Infrastructure/AnalyticsManager.swift`,
+`Zeez/Infrastructure/ErrorTracker.swift`, `Zeez/Infrastructure/PerformanceTracker.swift`.
+
+**What it did.** Nothing reachable. `AnalyticsManager` wrote screen, sleep-metric, premium-feature, error
+and performance events as `AnalyticsEvent` rows. `ErrorTracker` computed error rates from those rows and
+logged a warning above ten an hour, and `PerformanceTracker` timed operations and sampled memory use every
+five minutes. Nothing uploaded anything, and the three called only each other: no other file has called
+`AnalyticsManager.shared` since v0.3 (`c933950`).
+
+**Why removed.** Dead, and a privacy liability the moment it gained a caller. `PrivacyInfo.xcprivacy`
+declares no collected data types and the App Privacy answers are "no data collected"; product analytics
+recorded on device are still data the app collects about use.
+
+**What stays.** The `AnalyticsEvent` entity (no model change). `BackgroundTaskManager` still prunes its rows
+older than `AppConstants.Background.analyticsRetention`, of which there are none. `ErrorManager` stays: it
+is the app's error sink, though nothing presents its errors (`FUTURE_IMPROVEMENTS.md`).
+
+**Claims tier and label.** None; analytics are not shown to the user.
+
+**Definition of done.** A decision on what to learn from usage and whether it leaves the device; the App
+Privacy questionnaire and `PrivacyInfo.xcprivacy` updated to match, with a privacy-policy change at
+`AppConstants.Legal`; and events recorded at the call sites that answer that question, not everywhere.
