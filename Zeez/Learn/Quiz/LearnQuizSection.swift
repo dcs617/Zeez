@@ -13,10 +13,9 @@ struct LearnQuizSection: View {
                 .font(.headline)
             
             if let quiz = article.quiz {
-                LearnQuizStatusView(quiz: quiz)
-                    .onTapGesture {
-                        showingQuiz = true
-                    }
+                LearnQuizStatusView(quiz: quiz) {
+                    showingQuiz = true
+                }
             } else {
                 noQuizAvailable
             }
@@ -42,55 +41,6 @@ struct LearnQuizSection: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemGray6))
         .cornerRadius(12)
-    }
-}
-
-// For Articles List View
-struct LearnQuizIndicator: View {
-    let quiz: Quiz?
-    @FetchRequest private var progress: FetchedResults<QuizProgress>
-    
-    init(quiz: Quiz?) {
-        self.quiz = quiz
-        if let quiz = quiz {
-            _progress = FetchRequest(
-                sortDescriptors: [NSSortDescriptor(keyPath: \QuizProgress.completedAt, ascending: false)],
-                predicate: NSPredicate(format: "quiz == %@", quiz)
-            )
-        } else {
-            _progress = FetchRequest(
-                sortDescriptors: [],
-                predicate: NSPredicate(value: false)
-            )
-        }
-    }
-    
-    private var bestScore: Int16 {
-        progress.map(\.score).max() ?? 0
-    }
-    
-    private var hasPassed: Bool {
-        bestScore >= (quiz?.passingScore ?? 0)
-    }
-    
-    var body: some View {
-        if quiz != nil {
-            HStack(spacing: 4) {
-                Image(systemName: hasPassed ? "checkmark.seal.fill" : "seal")
-                    .foregroundColor(hasPassed ? .green : .gray)
-                    .font(.caption)
-                
-                if !progress.isEmpty {
-                    Text("\(bestScore)%")
-                        .font(.caption)
-                        .foregroundColor(hasPassed ? .green : .secondary)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color(.systemGray6))
-            .cornerRadius(8)
-        }
     }
 }
 

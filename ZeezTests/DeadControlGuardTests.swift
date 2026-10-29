@@ -15,7 +15,6 @@ struct DeadControlGuardTests {
     /// tracked in `FUTURE_IMPROVEMENTS.md`, not fixed here. Lower a count when you fix one.
     private static let known: [String: Int] = [
         "Zeez/Learn/LearnPathNavigator.swift": 1,        // "Start Path"
-        "Zeez/Learn/Quiz/LearnQuizStatusView.swift": 2,  // "Start Quiz" / "Retake Quiz"
         "Zeez/Views/DreamView.swift": 3,                 // play, pause, next; no screen opens it
     ]
 

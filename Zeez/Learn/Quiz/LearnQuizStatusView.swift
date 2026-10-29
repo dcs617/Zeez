@@ -4,10 +4,13 @@ import os.log
 
 struct LearnQuizStatusView: View {
     let quiz: Quiz
+    /// Opens the quiz; `LearnQuizSection` presents it.
+    let onStart: () -> Void
     @FetchRequest private var progress: FetchedResults<QuizProgress>
     
-    init(quiz: Quiz) {
+    init(quiz: Quiz, onStart: @escaping () -> Void) {
         self.quiz = quiz
+        self.onStart = onStart
         _progress = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \QuizProgress.completedAt, ascending: false)],
             predicate: NSPredicate(format: "quiz == %@", quiz)
@@ -61,7 +64,7 @@ struct LearnQuizStatusView: View {
                     .accessibilityLabel("Quiz not started, test your knowledge")
             }
             
-            Button(action: {}) {
+            Button(action: onStart) {
                 Text(hasAttempted ? "Retake Quiz" : "Start Quiz")
                     .font(.subheadline)
                     .foregroundColor(.white)
@@ -80,65 +83,12 @@ struct LearnQuizStatusView: View {
     }
 }
 
-struct LearnQuizPreviewCard: View {
-    let quiz: Quiz
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "graduationcap.fill")
-                    .foregroundColor(.blue)
-                    .accessibilityLabel("Quiz")
-                Text(quiz.title ?? "")
-                    .font(.headline)
-                Spacer()
-                Text("\(quiz.questions?.count ?? 0) Questions")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .accessibilityLabel("\(quiz.questions?.count ?? 0) questions")
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Quiz: \(quiz.title ?? "Unknown"), \(quiz.questions?.count ?? 0) questions")
-            .accessibilityIdentifier("quizPreviewHeader")
-            
-            Text(quiz.quizDescription ?? "")
-            .font(.subheadline)
-            .foregroundColor(.secondary)
-            .lineLimit(2)
-
-            HStack {
-                    Text("Pass: \(quiz.passingScore)%")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .accessibilityLabel("Passing score: \(quiz.passingScore) percent")
-                }
-                
-                Spacer()
-                
-                Button(action: {}) {
-                    Text("Start Quiz")
-                        .font(.subheadline)
-                        .foregroundColor(.blue)
-                }
-                .accessibilityLabel("Start quiz")
-                .accessibilityHint("Begin taking this quiz")
-                .accessibilityIdentifier("startQuizButton")
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-    }
-}
-
 #Preview {
     let context = PersistenceController.preview.container.viewContext
     let quiz = Quiz(context: context)
     quiz.title = "Sleep Basics"
     quiz.passingScore = 70
-    return VStack {
-        LearnQuizStatusView(quiz: quiz)
-        LearnQuizPreviewCard(quiz: quiz)
-    }
-    .padding()
-    .environment(\.managedObjectContext, context)
+    return LearnQuizStatusView(quiz: quiz, onStart: {})
+        .padding()
+        .environment(\.managedObjectContext, context)
 }
