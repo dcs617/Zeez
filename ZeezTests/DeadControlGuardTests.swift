@@ -14,7 +14,6 @@ struct DeadControlGuardTests {
     /// Dead buttons that were already there when this guard was written (2026-10-27). They are
     /// tracked in `FUTURE_IMPROVEMENTS.md`, not fixed here. Lower a count when you fix one.
     private static let known: [String: Int] = [
-        "Zeez/Learn/LearnPathNavigator.swift": 1,        // "Start Path"
         "Zeez/Views/DreamView.swift": 3,                 // play, pause, next; no screen opens it
     ]
 

@@ -54,14 +54,8 @@ struct LearnPathDetail: View {
                     .font(.largeTitle)
                     .foregroundColor(path.color)
                 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(path.description)
-                        .font(.headline)
-                    
-                    Text("Estimated completion: 2-3 hours")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
+                Text(path.description)
+                    .font(.headline)
             }
             
             PathProgressView(pathId: path.id)

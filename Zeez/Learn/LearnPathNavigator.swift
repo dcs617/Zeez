@@ -20,9 +20,6 @@ struct LearnPathNavigator: View {
                     .opacity(isAnimating ? 1 : 0)
                 
                 learningPaths
-                
-                recommendedPath
-                    .fadeInTransition(active: !isAnimating)
             }
             .padding()
         }
@@ -63,8 +60,6 @@ struct LearnPathNavigator: View {
                         .cornerRadius(8)
                 }
             }
-            
-            ProgressGrid()
         }
         .padding()
         .background(Color(.systemGray6))
@@ -99,15 +94,6 @@ struct LearnPathNavigator: View {
                 .fadeInTransition(active: !isAnimating)
                 .animation(.easeInOut.delay(Double(index) * 0.15), value: isAnimating)
             }
-        }
-    }
-    
-    private var recommendedPath: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recommended Next")
-                .font(.headline)
-            
-            RecommendedPathCard(path: PathTheme.advanced)
         }
     }
 }
@@ -159,122 +145,6 @@ struct PathRow: View {
         .cornerRadius(12)
         .offset(x: isHovered ? 5 : 0)
         .animation(.spring(), value: isHovered)
-    }
-}
-
-struct RecommendedPathCard: View {
-    let path: LearningPath
-    @State private var isHovered = false
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(path.name, systemImage: path.systemIcon)
-                .font(.headline)
-                .foregroundColor(path.color)
-            
-            Text(path.description)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            HStack {
-                Label("4 Articles", systemImage: "doc.text")
-                Label("2 Quizzes", systemImage: "checkmark.circle")
-            }
-            .font(.caption)
-            .foregroundColor(.secondary)
-            
-            Button(action: {}) {
-                Text("Start Path")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(path.color)
-                    .cornerRadius(12)
-            }
-            .scaleEffect(isHovered ? 1.02 : 1.0)
-            .animation(.spring(), value: isHovered)
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-    }
-}
-
-struct ProgressGrid: View {
-    @State private var isAnimating = false
-    
-    let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-    
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 16) {
-            StatCard(
-                title: "Articles", 
-                value: "12", 
-                subtitle: "Read",
-                delay: 0.0
-            )
-            StatCard(
-                title: "Quizzes", 
-                value: "8", 
-                subtitle: "Completed",
-                delay: 0.1
-            )
-            StatCard(
-                title: "Streak", 
-                value: "5", 
-                subtitle: "Days",
-                delay: 0.2
-            )
-        }
-    }
-}
-
-struct StatCard: View {
-    let title: String
-    let value: String
-    let subtitle: String
-    let delay: Double
-    
-    @State private var isAnimating = false
-    @State private var isHovered = false
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Text(value)
-                .font(.title2)
-                .fontWeight(.bold)
-                .scaleEffect(isHovered ? 1.1 : 1.0)
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(Color(.systemBackground))
-        .cornerRadius(8)
-        .onHover { hovering in
-            withAnimation(.spring()) {
-                isHovered = hovering
-            }
-        }
-        .scaleEffect(isAnimating ? 1 : 0.8)
-        .opacity(isAnimating ? 1 : 0)
-        .onAppear {
-            withAnimation(.spring().delay(delay)) {
-                isAnimating = true
-            }
-        }
     }
 }
 
