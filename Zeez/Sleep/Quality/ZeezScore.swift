@@ -70,12 +70,6 @@ enum ComponentResult: Equatable {
     }
 }
 
-/// Why the whole estimate is unavailable for a session.
-enum ScoreUnavailableReason: String, Equatable {
-    case missingRequiredComponent
-    case insufficientCoverage
-}
-
 struct QualityMetrics: Equatable {
     /// Weighted mean over the *available* components, renormalized by their weights.
     let overallScore: Double

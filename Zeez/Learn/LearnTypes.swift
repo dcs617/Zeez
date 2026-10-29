@@ -1,5 +1,4 @@
 import Foundation
-import CoreData
 import os.log
 
 /// Represents the main categories in the Learn section
@@ -40,13 +39,4 @@ enum LearnCategory: String, CaseIterable {
 enum LearnChallengeType: String {
     case educational = "Educational"
     case behavioral = "Behavioral"
-}
-
-/// Represents the view state for the Learn tab
-enum LearnViewState: Equatable {
-    case categoryList
-    case articleList(LearnCategory)
-    case articleDetail(NSManagedObjectID)
-    case challengeList
-    case challengeDetail(NSManagedObjectID)
 }

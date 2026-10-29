@@ -432,18 +432,3 @@ class MockDataGenerator {
         }
     }
 }
-
-// MARK: - Preview Helper
-extension MockDataGenerator {
-    static func generatePreviewData() {
-        let context = PersistenceController.preview.container.viewContext
-        let generator = MockDataGenerator(context: context)
-        generator.generateMockData(for: 90)
-        
-        do {
-            try context.save()
-        } catch {
-            ZeezLogger.error(ZeezLogger.mockData, "Error saving preview data", error: error)
-        }
-    }
-}
