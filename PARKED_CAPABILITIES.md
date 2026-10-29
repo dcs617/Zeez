@@ -257,6 +257,12 @@ from these.
 - Unused pieces: `Sleep/SleepInfoComponents.swift`, `Sleep/SleepTimelineComponents.swift`,
   `Sleep/SleepComparisonComponents.swift`, `Sleep/RecommendationRow.swift`, `Sleep/SleepTrendRange.swift`,
   `Views/Dashboard/DataSourceIndicator.swift` and `Views/GlossaryTermDetailView.swift`.
+- `Sleep/SleepInformationView.swift` and `Sleep/SleepInfoGuideView.swift`, the session information screen
+  and its guide, with `SleepInformationViewTests`. On 2026-07-09 Daniel chose to keep it: B6 had made its
+  stage composition correct and the tests pinned it. But it had lost its only link on 2026-07-05
+  (`5b0ee40`) to `EnhancedSleepDetailsView`, whose stage chart (`SleepCyclesChart.swift`) lists every
+  `SleepStageType` with `displayName(reportedByAppleHealth:)`, so on 2026-10-29 he reversed the keep.
+  `SleepStageNormalizationTests` still pins the stage names.
 
 **Claims tier and label.** Whatever they display. A rebuilt session-detail screen showing a Zeez
 score must carry the "Experimental Zeez Estimate" label in text *and* `accessibilityValue`
