@@ -196,7 +196,9 @@ real data (folded into C6 — see its note). Phase D not started — awaiting ex
 
 **Scope decisions taken with Daniel before implementation (2026-07-09):** `SleepInformationView`
 is **kept** (B6 made it correct and `SleepInformationViewTests` pins its stage-composition
-contract), the environmental cluster (`EnvironmentalAnalyzer`, `EnvironmentalInsightsView`,
+contract; *deleted 2026-10-29 with its tests: it had lost its only link on 2026-07-05, `5b0ee40`, to
+`EnhancedSleepDetailsView`, whose stage chart already lists every stage with its source's name;
+`PARKED_CAPABILITIES.md` §6*), the environmental cluster (`EnvironmentalAnalyzer`, `EnvironmentalInsightsView`,
 `EnhancedEnvironmentalScoring`, `EnvironmentalRecommendationTracker`) is **left in tree** as a
 deliberately parked subsystem, and **C5 stays deferred**. Everything C2 deletes is registered in
 `PARKED_CAPABILITIES.md` first (C0).
@@ -359,8 +361,8 @@ double — as established by `AlarmNotificationScheduling` + `FakeNotificationCe
     2026-10-27 in the no-hardware batch (§7); the volume table and the off-main start wait on T5.1.
   - **D2 stops here.** No other singleton passes the stopping rule.
 - **Then stop. The stopping rule: inject a singleton only when doing so unlocks a test you cannot write
-  today — never for purity.** Explicit non-targets: `ErrorManager` (13 sites) and `AnalyticsManager` (3)
-  are sinks whose behavior nobody asserts; `ModalCoordinator`, `OnboardingManager`, and `StoreKitManager`
+  today — never for purity.** Explicit non-targets: `ErrorManager` (13 sites) and `AnalyticsManager` (3; deleted 2026-10-29,
+  it had no caller outside its own trio, `PARKED_CAPABILITIES.md` §13) are sinks whose behavior nobody asserts; `ModalCoordinator`, `OnboardingManager`, and `StoreKitManager`
   are `@MainActor ObservableObject`s already observable by construction; `PersistenceController`'s
   remaining ~20 sites are app-lifecycle or already carry the default-parameter idiom; the ~30 Learn and
   Environment singletons are out of scope. **No repo-wide `.shared` sweep.**
@@ -511,6 +513,9 @@ Replaced 2026-10-27. Earlier prompts are in git history (`git log -p -- SECOND_A
 - D2a and D2b, delivered 2026-10-26/27 (`d46a2e2`…`f6de1a1`, docs in the commit after); Phase D, D2.
 - The no-hardware batch, delivered 2026-10-27 (`81c1cae`…`77f605d`, docs in the commit after): D2's five
   follow-ups and the tracked cleanups (`FUTURE_IMPROVEMENTS.md`, completed 2026-10-27).
+- The dead-code batch, delivered 2026-10-29 (`9c64ecc`…`c256d66`, docs in the commit after): two live alarm bugs,
+  the dead buttons, and the dead code the no-hardware batch turned up (`FUTURE_IMPROVEMENTS.md`, completed
+  2026-10-29).
 - The Swift Testing attribution fix, delivered 2026-10-25 (`b7a3379`…`3dff641`, docs `5a377d3`). 112 assertions
   in 13 suites ran where a failure reached no test; they now return values from their closures, each fix proven
   by breaking an assertion. `SwiftTestingAttributionGuardTests` scans for the shapes, and the `unit-tests` job fails
@@ -532,6 +537,17 @@ Personalization placeholder, each recorded in `PARKED_CAPABILITIES.md`; delete t
 the `RespiratoryData` round trip. The audio controller and the watch handler were injected into
 `AlarmNotificationHandler` under D2's stopping rule. The volume table and the off-main audio start stay for T5.1.
 
+**Decisions 2026-10-29 (dead-code batch):** Daniel took every recommendation of the investigation that turned up
+the dead code. Fix the two live alarm bugs first (a non-alarm notification tap rang the alarm; Learn's settings
+replaced the alarm's notification actions). Park in-app recording (`SleepControlView`, `SleepGoalSettingsView`)
+in the tree without a route, which blocks T4's scored-session checks and T9 (`PARKED_CAPABILITIES.md` §14). Park
+`LearnContentManager` and its default content until their articles are reviewed, and do not seed them. Keep
+Learning Paths, without its recommended card and made-up numbers. Wire the article quiz button. Delete
+`DreamView`, `ErrorView`, and `SleepInformationView` with its tests, reversing the 2026-07-09 keep. Delete the rest
+of the investigated list. Leave Commerce and §7's environmental cluster untouched. At the checkpoint Daniel chose
+to mark all of T4 blocked, since an imported night is never scored, and to record the uncalled challenge reminders
+rather than delete them.
+
 **When the developer account is renewed: the device pass**, before anything else. T1 relocates the store *and* runs
 its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. The
 prompt:
@@ -540,7 +556,9 @@ prompt:
 Read CLAUDE.md, then DEVICE_TEST_RUN.md ("How to use this file", T0 and T1 in full) and
 SECOND_AUDIT_IMPROVEMENTS.md §5 and §7. Context: my Apple Developer Program membership is
 renewed, and I am running the device pass on an iPhone 13 Pro Max with a paired Apple Watch.
-D1, D2 and the no-hardware batch landed before it; T5.1, T8 and T15 cover them.
+D1, D2, the no-hardware batch and the dead-code batch landed before it; T5.1, T5.9,
+T8 and T15 cover them. T4 and T9 are blocked: the app cannot record a session
+(PARKED_CAPABILITIES.md §14).
 
 Your part is preparation and triage. I run every test on the hardware.
 
@@ -566,21 +584,25 @@ Work in this order and stop at each checkpoint:
 
 Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine); T0's App Groups
 toggle changes it too, and I will commit that myself. T13 stays blocked until a screen opens
-the paywall. Do not start D3c, the paywall copy, the per-night source work, the dead
-buttons or the remaining Learn orphans without asking.
+the paywall. Do not start D3c, the paywall copy, the per-night source work, reconnecting
+in-app recording or seeding Learn content without asking.
 ```
 
 **Open items** (none needs hardware unless marked):
-- **The no-hardware batch is unpushed** (`fa6de49`…, 2026-10-27). D2 was pushed (`3fcdc2e..0058c7c`) and its CI
-  run, 40453500772, passed. Step 0 of the device-pass prompt checks the batch's run once it is pushed.
+- **The dead-code batch is unpushed** (`9c64ecc`…, 2026-10-29). The no-hardware batch was pushed and its CI run,
+  40459850793, passed. Step 0 of the device-pass prompt checks this batch's run once it is pushed.
 - **D2's findings** (`FUTURE_IMPROVEMENTS.md`, "Found by D2, waiting on the device pass"): the volume table and the
   off-main audio start wait on T5.1. The other five were fixed in the no-hardware batch.
 - **The paywall's copy** (found 2026-10-26): `SubscriptionView` sells capabilities that do not exist, so no screen
   opens it (`PaywallReachabilityGuardTests`), which blocks `DEVICE_TEST_RUN.md` T13. A product decision first.
-- **Found by the no-hardware batch** (`FUTURE_IMPROVEMENTS.md`, still open): three reachable buttons do nothing
-  (Learn's "Start Path", and an article's "Start Quiz"/"Retake Quiz"), held as known counts by
-  `DeadControlGuardTests`; and about a dozen Learn files have no callers (`PARKED_CAPABILITIES.md` §10). Product
-  calls first.
+- **In-app recording is parked** (2026-10-29, `PARKED_CAPABILITIES.md` §14): no screen starts a session, so a
+  release build cannot show a Zeez score, and `DEVICE_TEST_RUN.md` T4's scored-session checks and T9 are blocked.
+  Reconnecting it is a product decision.
+- **Learn has no content** (2026-10-29, `PARKED_CAPABILITIES.md` §10): the seeder has never run, nothing creates a
+  quiz, and Learning Paths' IDs match no category. Its copy needs a claims review before anything is seeded.
+- **Found by the dead-code batch** (`FUTURE_IMPROVEMENTS.md`, still open): `ErrorManager`'s errors reach no screen;
+  `StoreKitManager`'s transaction listener never starts (with the paywall item); Learn reminders pile up on each time
+  change; stage-duration helpers only tests use; and a few declarations the deletions left without callers.
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
   which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
 - **Blocked on the renewed account:** the device pass (the prompt above), D3c WidgetKit extension (needs the App

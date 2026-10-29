@@ -4,7 +4,7 @@
 `SECOND_AUDIT_IMPROVEMENTS.md` §5 and `FUTURE_IMPROVEMENTS.md`.
 
 Hardware: iPhone 13 Pro Max + paired Apple Watch. Branch `feature/sleep-simplification`.
-Baseline at start of run: 360 tests / 56 suites green (2026-10-27, after the no-hardware batch), UI smoke
+Baseline at start of run: 359 tests / 57 suites green (2026-10-29, after the dead-code batch), UI smoke
 10/10, iOS + watch targets build.
 
 ---
@@ -269,9 +269,16 @@ must never be treated as deletion); "No sleep data found" in step 1.
 
 **Goal:** the "Experimental Zeez Estimate" only appears when it's earned, and says so.
 
-1. Record a session in the app: Sleep tab → start → wait **≥ 30 minutes** → end. (Under 30 min is
-   deliberately never scored.)
-2. Reopen it.
+⚠️ **Blocked in this build: the app cannot record a session.** The Sleep tab has no start control.
+`SleepControlView`, the only screen that starts one, has never been routed, and it stays parked
+(`PARKED_CAPABILITIES.md` §14, decided 2026-10-29). Apple Health nights are never scored
+(`ZEEZ_SCORE_SPECIFICATION.md` §2), so no session in this build can carry a Zeez score, and every
+expectation below needs a recorded one. The other half, no score on an Apple-reported night, is T3 step 4
+on your imported Apple Watch night. Mark T4 **Blocked** and move on; run it once §14 is reconnected.
+
+1. *Blocked (§14).* Record a session in the app: Sleep tab → start → wait **≥ 30 minutes** → end. (Under
+   30 min is deliberately never scored.)
+2. *Blocked.* Reopen it.
 
 **Expected — a scored session:**
 - Screen titled **Experimental Zeez Estimate**.
@@ -382,6 +389,28 @@ off", and **Open Settings** goes to Zeez's page. Turn them back on.
 **Silent variant:** an orange "isn't scheduled" card on an alarm you just created that doesn't clear
 within a few seconds — report it with the alarm's settings. Tap **Reschedule Alarms** and note whether it clears.
 
+### T5.9 — Learn reminders don't ring, and don't take the alarm's actions (2026-10-29)
+Two bugs fixed without hardware; this is the check that they are gone on a device. Have Console.app open
+(Method 2, info messages on, category `Alarm`).
+
+**(a) A Learn reminder plays nothing.** Learn → ⋯ → Settings → turn **Learning Reminders** on, and set
+**Reminder Time** 2 minutes out. When "Time to Learn" arrives, tap its banner.
+**Expected:** the app opens, and nothing rings and no alarm screen appears. Console shows
+`Alarm notification response: com.apple.UNNotificationDefaultActionIdentifier for alarm ` (an empty id)
+followed by `Not an alarm notification: nothing to ring`.
+**Silent failure:** the long alarm sound starts with no screen to stop it. Until 2026-10-29 that was what
+happened.
+
+**(b) The alarm keeps Snooze, Continue and Stop.** Without relaunching the app after (a), turn Learning
+Reminders off and on again. Set an alarm 2 minutes out and lock the phone. When it fires, long-press the
+notification on the lock screen.
+**Expected:** Snooze, Continue and Stop. Tap **Stop** and confirm the follow-ups stop.
+**Silent failure:** no actions, only the banner: Learn's settings replaced the alarm's notification
+category. Until 2026-10-29 that lasted until the next launch.
+
+Afterwards turn Learning Reminders off: every time change adds another daily reminder and leaves the old
+ones scheduled (`FUTURE_IMPROVEMENTS.md`), and turning them off removes them all.
+
 **Result:** ☐ Pass ☐ Fail ☐ Blocked
 **Notes:**
 ```
@@ -470,6 +499,10 @@ too (Console.app → select the Watch).
 ---
 
 ## T9 — Environmental: mic denied, and the noise index (B5)
+
+⚠️ **Blocked in this build: it needs a recorded session, and the app cannot record one**
+(`PARKED_CAPABILITIES.md` §14; see T4). Nothing in this build starts the microphone either, so the
+permission prompt never appears. Mark T9 **Blocked**; run it once §14 is reconnected.
 
 **Goal:** noise is a **relative index 0–100**, explicitly *not* decibels. And a denied mic must read
 *unavailable*, never `0` and never "quiet".
@@ -713,6 +746,8 @@ swinging across the whole chart for a small change (the old scaling).
 | T3.1 re-import (§8a) | | | | |
 | T4 score behaviour | | | | |
 | T5 alarm E2E | | | | |
+| T5.9a Learn reminder tap plays nothing | | | | |
+| T5.9b alarm actions survive a Learn toggle | | | | |
 | T6 notification budget | | | | |
 | T7 critical alerts | | | | |
 | T8 watch round trip | | | | |

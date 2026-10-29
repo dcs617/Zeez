@@ -73,17 +73,17 @@ The score is a Tier-3 "Experimental Zeez Estimate" governed by **`ZEEZ_SCORE_SPE
 ```
 Zeez/
 ├── App/             # Entry point: ZeezApp, ApplicationDelegate, SceneDelegate, AppConstants
-├── Infrastructure/  # ZeezLogger, ErrorManager, BackgroundTaskManager, AnalyticsManager, ResourceMonitor
-├── Utilities/       # Extensions and helpers: Array+Statistics, DateHelper, FormatterUtils, CollectionExtensions
+├── Infrastructure/  # ZeezLogger, ErrorManager, BackgroundTaskManager, ResourceMonitor
+├── Utilities/       # Extensions and helpers: Array+Statistics, FormatterUtils, CollectionExtensions, ShareSheet
 ├── Commerce/        # PremiumFeatures, PremiumFeatureGating, StoreKitManager, SubscriptionEvents
 ├── DataImport/      # HealthKitDataImporter, RealDataManager
 ├── CoreData/        # Core Data entity class files (paired +CoreDataClass / +CoreDataProperties)
 ├── Shared/          # ModalCoordinator and other cross-cutting components
 ├── Watch/           # WatchConnectivityHandler (incl. watchSleepSummary(for:)), WatchPayloadBuilder, WatchCommunicationSupport
-├── Development/     # DeveloperSettings
+├── Development/
 │   └── Mocks/       # MockDataGenerator, MockSleepPatternGenerator
 ├── Sleep/           # Sleep analysis and views
-│   ├── Cycle/       # Cycle chart and info views (visualization only)
+│   ├── Cycle/       # SleepCyclesChart, the session stage chart (visualization only)
 │   ├── Quality/     # SleepQualityCalculator, SleepQualityView
 │   └── Stage/       # SleepStageAnalyzer, SleepStageTypes, SleepStageView
 ├── Alarm/           # AlarmScheduler, AlarmObserver, AlarmAudioController, all alarm views
@@ -93,21 +93,19 @@ Zeez/
 │   └── Sleep/       # Sleep-specific educational content
 ├── Environment/     # EnvironmentalMonitor, EnvironmentalAnalyzer, views
 ├── Onboarding/      # OnboardingManager, OnboardingView, OnboardingTypes, OnboardingModifiers
-├── Views/           # Screen-level views and shared UI
-│   ├── Dashboard/   # DashboardView components (metric cards, session rows, banners)
-│   ├── HeartRate/   # HeartRateView components and helpers
-│   └── Trends/      # TrendsView components (charts, stats, monthly data)
-└── Documentation/   # Internal documentation files
+└── Views/           # Screen-level views and shared UI
+    ├── Dashboard/   # DashboardView components (metric cards, session rows, banners)
+    ├── HeartRate/   # HeartRateView components and helpers
+    └── Trends/      # TrendsView components (charts, stats, monthly data)
 ```
 
 ### Key Singletons and Managers
 - `PersistenceController.shared` — Core Data stack
 - `AlarmObserver.shared` — notification and alarm lifecycle management
 - `BackgroundTaskManager.shared` — BGTask registration and execution for sleep data processing
-- `StoreKitManager.shared` — StoreKit 2 subscription handling (async/await, transaction listener)
+- `StoreKitManager.shared` — StoreKit 2 subscription handling (async/await, transaction listener). Only `SubscriptionView` touches it, and no screen opens that, so it is never created and its transaction listener does not run until the paywall gets an entry point
 - `RealDataManager.shared` (`DataImport/`) — coordinates HealthKit data import
-- `ErrorManager.shared` — centralized error tracking
-- `AnalyticsManager.shared` — analytics events
+- `ErrorManager.shared` — centralized error tracking. Nothing presents its errors (`ErrorView` was never applied, and is deleted)
 - `ModalCoordinator.shared` — global sheet presentation from `RootView`
 
 ### Premium Features
@@ -128,6 +126,9 @@ Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImp
 - **EnvironmentalReading**: numeric attributes use the sentinel `EnvironmentalReading.notMeasured` (-1) for metrics the hardware can't measure — always read via the `measured*` optional accessors (`Environment/EnvironmentalReading+Measured.swift`), never the raw attributes, or absent sensors read as freezing/pitch-dark rooms.
 - **Threading**: never touch a managed object or context off its queue. The alarm stack uses the snapshot pattern — `AlarmSnapshot` (`Zeez/Alarm/AlarmSnapshot.swift`) is built inside `context.perform` and only plain values cross onto dispatch queues or `UNUserNotificationCenter` callbacks. Verify threading changes by launching with `-com.apple.CoreData.ConcurrencyDebug 1`.
 
+### Alarm notifications
+- Only `AlarmNotificationRegistrar.registerCategories` calls `setNotificationCategories`. The call replaces the app's whole set, so a second caller drops the alarm's Snooze / Continue / Stop (Learn's did, until 2026-10-29). Add a category to the registrar's one call; `NotificationCategoryGuardTests` enforces it.
+
 ### Testing
 Uses Swift Testing (`import Testing`, `@testable import Zeez`); `ZeezUITests` is XCTest. ~50 suites live in `ZeezTests/` — read the directory rather than trusting a list here. Established patterns:
 
@@ -143,7 +144,7 @@ Uses Swift Testing (`import Testing`, `@testable import Zeez`); `ZeezUITests` is
 
   Return plain values out of the closure and assert outside it. `SwiftTestingAttributionGuardTests` enforces this. It cannot tell a private context from the viewContext by reading source, so it holds private contexts to the same rule, and `@MainActor` exempts only `performAndWait`. The `unit-tests` CI job also fails on the `«unknown»` line, which catches what the scan misses once that assertion fails.
 - **Fixtures**: `SleepSessionValidator` needs `EnvironmentalReading` timestamps covering ≥80% of a session, so any test that ends a session must seed readings or it throws `.incompleteSensorData`.
-- **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests`, `SwiftTestingAttributionGuardTests`, `PaywallReachabilityGuardTests` — no screen opens `SubscriptionView` until its copy is reviewed — `ExperimentalLabelGuardTests` — no chart names a score series "Quality" — and `DeadControlGuardTests` — no `Button` has an empty action beyond its known, tracked counts) locate sources via `#filePath` so they work in CI. Use them to pin an invariant a refactor establishes.
+- **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests`, `SwiftTestingAttributionGuardTests`, `PaywallReachabilityGuardTests` — no screen opens `SubscriptionView` until its copy is reviewed — `ExperimentalLabelGuardTests` — no chart names a score series "Quality" — `DeadControlGuardTests` — no `Button` has an empty action; its `known` list has been empty since 2026-10-29 — `NotificationCategoryGuardTests` — only the alarm registers notification categories — and `LearningPathNumbersGuardTests` — Learning Paths shows no fixed counts or estimates) locate sources via `#filePath` so they work in CI. Use them to pin an invariant a refactor establishes.
 - **A regression test that passes against the unfixed code pins nothing** — temporarily revert the fix and confirm the test fails before trusting it.
 - **UI tests** read `#if DEBUG` launch arguments: `-uiTestCompletedOnboarding` / `-uiTestResetOnboarding` (`OnboardingManager`), `-uiTestResetStore` (`ZeezApp.init`, clears the store before `RootView` exists) and `-uiTestSeedMockData [days]` (seeds mock sessions after any reset; Trends' tests need recorded nights). A Release UI-test run hangs on onboarding. Learn opens a first-visit cover; pass `-hasShownLearnOnboarding YES`, which sets the `@AppStorage` key through the launch-argument defaults domain.
 - `StoreKitTests`' four `SKTestSession` tests flake under simulator contention when a live app instance is present. If they fail, uninstall the app from the simulator and re-run before investigating.

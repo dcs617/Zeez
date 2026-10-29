@@ -264,7 +264,7 @@ from these.
   and its guide, with `SleepInformationViewTests`. On 2026-07-09 Daniel chose to keep it: B6 had made its
   stage composition correct and the tests pinned it. But it had lost its only link on 2026-07-05
   (`5b0ee40`) to `EnhancedSleepDetailsView`, whose stage chart (`SleepCyclesChart.swift`) lists every
-  `SleepStageType` with `displayName(reportedByAppleHealth:)`, so on 2026-10-29 he reversed the keep.
+  `SleepStageType` with `displayName(reportedByAppleHealth:)`, so on 2026-10-29 Daniel reversed the keep.
   `SleepStageNormalizationTests` still pins the stage names.
 - `Environment/EnvironmentalDetailView.swift` with `EnvironmentalDataManager.swift`: a per-factor history
   screen and its data source, orphaned in `5b0ee40`. It already read the `measured*` accessors, so it is
@@ -573,3 +573,43 @@ is the app's error sink, though nothing presents its errors (`FUTURE_IMPROVEMENT
 **Definition of done.** A decision on what to learn from usage and whether it leaves the device; the App
 Privacy questionnaire and `PrivacyInfo.xcprivacy` updated to match, with a privacy-policy change at
 `AppConstants.Legal`; and events recorded at the call sites that answer that question, not everywhere.
+
+---
+
+## 14. In-app recording UI — *built, never routed; parked in tree, not deleted*
+
+**Status:** Present in the codebase, deliberately dormant (Daniel, 2026-10-29). Not scheduled.
+
+**Files:** `Zeez/Sleep/SleepControlView.swift`, `Zeez/Sleep/SleepGoalSettingsView.swift`.
+
+**Why it is unreachable.** No other file in the repo's history has ever created `SleepControlView`. It is the
+only caller of `SleepSessionManager.startSession`, which is the only thing that starts
+`EnvironmentalMonitor` (microphone noise sampling) and `MovementDataManager` (motion), as
+`SessionMonitorLifecycleGuardTests` pins. So recording a night, sampling the microphone and monitoring
+movement cannot be reached, and `Info.plist` still carries `NSMicrophoneUsageDescription` for a prompt no
+user can trigger.
+
+**What follows from that.** Outside previews, only three things create a `SleepSession`: this path, the
+HealthKit importer and the DEBUG mock generator. Apple Health nights are never scored
+(`ZEEZ_SCORE_SPECIFICATION.md` §2), so **a release build cannot show a Zeez score**, and §9's owned-sensor
+stage inference runs only on mock sessions. `DEVICE_TEST_RUN.md` T4's scored-session checks and T9 are
+blocked on this entry.
+
+**What reconnecting needs.**
+- A route: a control on the Sleep tab, inside its `NavigationStack` (`MainView`).
+- A working **Add Note**: its action calls `addSleepNote()`, whose body is `// To be implemented`.
+  `DeadControlGuardTests` cannot see an empty function behind a named action.
+- The session summary it promises: ending a session sets `showingSessionSummary`, and no sheet reads it.
+- An error surface. Its failures go to `ErrorManager.showError`, and nothing presents `ErrorManager`'s errors
+  since `ErrorView` was deleted (it was never applied either).
+- A decision on its gear, which opens `SleepGoalSettingsView`. That screen duplicates Settings' Sleep Goal
+  section; one of the two should go.
+- A device pass of T4 and T9, and the microphone and motion prompts' copy reviewed against what is stored.
+
+**Claims tier and label.** Whatever it records: a Zeez score is Tier 3 and carries the "Experimental Zeez
+Estimate" label in text and `accessibilityValue` (rule 10); noise is the relative index, never dB (§7, B5).
+
+**Missing-input policy.** A session recorded with the microphone denied has no noise reading and renders it
+unavailable, never `0` or "quiet" (T9).
+
+**Definition of done.** The list above, with T4 and T9 passing on a device.

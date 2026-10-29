@@ -128,6 +128,32 @@ Carried over from the archived roadmap's Phase 3.
 - ZeezTests 352 → 360 in 56 suites, green after every commit with the attribution check clean; UI smoke 10/10;
   the watch app builds.
 
+**Completed 2026-10-29 (the dead-code batch, `9c64ecc`…`c256d66`):**
+
+- ~~Two live alarm bugs~~, each with a test that failed against the old code:
+  - Tapping any notification that is not an alarm (a Learn reminder) started the long alarm sound with no
+    screen to stop it: the banner tap shares Continue's branch, and the empty `alarmID` read as an alarm that
+    "cannot be read", which rings. `startContinuousAudio` and the tap branch now do nothing without an id
+    (`9c64ecc`). Device check `DEVICE_TEST_RUN.md` T5.9a.
+  - Turning Learn reminders on or off dropped the alarm's Snooze, Continue and Stop until the next launch:
+    `LearnNotificationManager`'s init replaced the app's notification categories with its own two, whose actions
+    never had a handler. Only `AlarmNotificationRegistrar` registers categories now, and
+    `NotificationCategoryGuardTests` keeps it that way (`d2a3f53`). Device check T5.9b.
+- ~~Buttons that do nothing~~. An article's Start/Retake Quiz opens the quiz (`8681b68`); Learning Paths lost its
+  "Start Path" card and its made-up counts, with `LearningPathNumbersGuardTests` against their return (`de3f043`);
+  `DreamView` is deleted (`4410983`; `PARKED_CAPABILITIES.md` §12). `DeadControlGuardTests`' known list is empty.
+- ~~Learn files without callers~~ deleted (`131e325`; `PARKED_CAPABILITIES.md` §10), except `LearnContentManager`
+  and its default content, parked until their copy is reviewed (still open, below).
+- ~~Other dead code~~, each in `PARKED_CAPABILITIES.md`: superseded sleep and alarm UI, several pieces showing
+  numbers nobody measured (`417c5e5`, §6); `SleepInformationView` and its five tests, reversing the 2026-07-09
+  keep (`084b1d9`, §6); `SleepMetricsCalculator`, the only release writer of `DailyMetrics` (`2d87b92`, §3); the
+  environmental detail views (`554cb23`, §6); local analytics, `ErrorView`, `DeveloperSettings`, `DateHelper` and
+  three stale docs-as-code files (`4808115`, §13); and dead declarations inside live files (`c256d66`).
+- In-app recording (`SleepControlView`, `SleepGoalSettingsView`) is parked in the tree, not deleted
+  (`PARKED_CAPABILITIES.md` §14).
+- ZeezTests 360 → 359 in 57 suites (5 new, 6 deleted), green after every commit with the attribution check clean;
+  UI smoke 10/10; the watch app builds.
+
 **Still open:**
 
 - **The paywall sells features that do not exist** (found 2026-10-26). `SubscriptionView` lists `PremiumFeature`
@@ -183,14 +209,44 @@ Carried over from the archived roadmap's Phase 3.
     was scheduled on.
     Device check `DEVICE_TEST_RUN.md` T5.1. If it fails: hop to main in `startContinuousAudio`, or make the
     controller `@MainActor`.
-- **Buttons that do nothing** (found 2026-10-27 by `DeadControlGuardTests`, which holds them as known counts):
-  Learn → Learning Paths → "Start Path" (`LearnPathNavigator`'s `RecommendedPathCard`, which also shows a fixed
-  "4 Articles · 2 Quizzes"), and an article's "Start Quiz"/"Retake Quiz" (`LearnQuizStatusView`, through
-  `LearnQuizSection`) are reachable. `DreamView`'s play, pause and next are not: nothing opens it. Wire each to
-  what it promises or remove it, and lower the guard's count.
-- **Learn files without callers** (2026-10-27): `PARKED_CAPABILITIES.md` §10 lists them (glossary, references,
-  quiz browser, note list, `LearnContentManager` and others). Decide each as the daily-fact and note-browser
-  screens were.
+- ~~**Buttons that do nothing**~~ (found 2026-10-27). Done 2026-10-29, above.
+- ~~**Learn files without callers**~~ (2026-10-27). Done 2026-10-29, above; `LearnContentManager` is the item below.
+- **In-app recording is unreachable** (2026-10-29; `PARKED_CAPABILITIES.md` §14). No screen opens
+  `SleepControlView`, the only caller of `SleepSessionManager.startSession`, so nothing records a night or starts
+  the microphone and motion monitors, and a release build cannot show a Zeez score (Apple Health nights are never
+  scored). Daniel chose to park it. **Blocks `DEVICE_TEST_RUN.md` T4's scored-session checks and T9.** Reconnecting
+  needs a route, a working Add Note, the promised session summary, an error surface, and a decision on
+  `SleepGoalSettingsView`, which duplicates Settings' Sleep Goal section.
+- **Learn has no content** (2026-10-29; `PARKED_CAPABILITIES.md` §10, "Learn content was never seeded").
+  `LearnContentManager.ensureDefaultContent` has never had a caller, so Articles and Challenges are always empty,
+  and the daily "Time to Learn" reminder opens that empty tab. Nothing creates a `Quiz`, so the quiz card wired
+  2026-10-29 cannot appear. Learning Paths' IDs (`basics`, `cycles`, …) never match `LearnArticle.category`'s
+  `LearnCategory` values, so every path would stay empty, and `LearnPathDetail`, shown as a sheet, has no
+  `NavigationStack` for its article links. `LearnNotificationManager`'s challenge reminders have no callers, and
+  the first schedules every day's reminder for the same moment. The parked seeder's six articles and three
+  challenges need a review against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` §4 first.
+- **Learn reminders pile up** (2026-10-29). Each change of Learn → Settings → Reminder Time schedules another
+  repeating daily reminder under a new identifier and leaves the earlier ones, so dragging the picker can leave
+  dozens. They count against iOS's 64 pending notifications, which the alarm's follow-up chains also need
+  (`DEVICE_TEST_RUN.md` T6). Turning reminders off removes them all. Fix with the Learn content decision, or
+  sooner if T6 shows pressure.
+- **`ErrorManager`'s errors reach no screen** (2026-10-29). `ErrorView` was its only presenter and was never
+  applied; it is deleted. Live reports therefore go nowhere: `SceneDelegate`'s failed viewContext save and badge
+  reset, `BackgroundTaskManager`'s scheduling failures and its low-battery and low-storage warnings (checked on every
+  foreground), and `TrendsView.swift:230`. The rest come from the parked recording path. Giving it a presenter is
+  a product decision; don't start it without asking.
+- **`StoreKitManager`'s transaction listener never starts** (2026-10-29). It starts in `StoreKitManager`'s init,
+  and only `SubscriptionView`, which no screen opens, touches `StoreKitManager.shared`. Purchases made elsewhere
+  (another device, Ask to Buy, a refund) are not observed. Belongs with the paywall item above.
+- **Stage-duration helpers only tests use** (2026-10-29). `SleepStageTypes.swift`'s `StoredSleepStageDuration`,
+  `displayableStageDurations`, `asleepStageDurations` and `hasRecordedAwakeInterval` are called only by
+  `SleepStageNormalizationTests`, which pin their contract. Use them where stage totals are computed, or retire
+  them with their tests.
+- **Left without callers by the dead-code batch** (2026-10-29; not on its list, so recorded rather than deleted):
+  `AppConstants.SleepCycle` (the whole struct) and `AppConstants.Sleep.chartMaxHours`;
+  `LearnOfflineManager.isAvailableOffline` and `markForOffline`, so nothing can mark an article for offline any more
+  and Learn Settings' clear-offline-content row never appears; `SleepPosition.drawbacks` and `impactScore`; and
+  `AlarmScheduler.getAlarmSound(for:)`.
 
 ## Sleep product roadmap (reconciled 2026-07-09, second-audit D3d)
 
