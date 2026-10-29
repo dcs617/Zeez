@@ -238,6 +238,26 @@ all four. `MonthlyTrendsDataProvider`, `TrendInsightsSection`, and `MonthlyChart
 **Reconnected 2026-10-26** through the dashboard's Sleep Trends link, after a claims pass over everything it
 shows (`FUTURE_IMPROVEMENTS.md`, completed 2026-10-26). The monthly views are now live.
 
+**Also deleted 2026-10-29 (the dead-code batch).** None had a caller. Rebuild from the note above, not
+from these.
+- `Views/WakeUpView.swift` and `Alarm/AlarmStateManager.swift`: an older ringing screen and its state,
+  superseded by `ActiveAlarmView`. Its Stop ended the active session by writing `isActive = false` and
+  `endTime` directly, skipping `SleepSessionManager` and the validator.
+- `Views/Dashboard/LastNightCard.swift`: showed `Int(qualityScore)` as "Sleep Score" with no Experimental
+  label, so the `1.0` no-score sentinel would have read "1".
+- `Views/Dashboard/ActiveSessionCard.swift`: an active-session card with End Session. Never linked.
+- `Views/MovementDataView.swift`: a placeholder "Movement Chart" box and a "Movement Score" of
+  100 − average activity × 20. Fabricated.
+- `Sleep/SleepInfoAnalyzer.swift`: "efficiency" as hours ÷ 7 × 100, and a constant consistency of 75.
+- `Sleep/MovementAnalyzer.swift`: a sleep position guessed from accelerometer axes, and a "positional
+  score" from fixed per-position weights (`SleepPosition.impactScore`, which nothing reads now).
+- `Sleep/Cycle/SleepCycleInfoView.swift`: a sleep-cycle explainer, orphaned in `5b0ee40` (2026-07-05)
+  when `EnhancedSleepDetailsView` took over session details. `Sleep/Cycle/SleepCycleCard.swift`, a cycle
+  card, had no caller from the day it was added (`c933950`, v0.3).
+- Unused pieces: `Sleep/SleepInfoComponents.swift`, `Sleep/SleepTimelineComponents.swift`,
+  `Sleep/SleepComparisonComponents.swift`, `Sleep/RecommendationRow.swift`, `Sleep/SleepTrendRange.swift`,
+  `Views/Dashboard/DataSourceIndicator.swift` and `Views/GlossaryTermDetailView.swift`.
+
 **Claims tier and label.** Whatever they display. A rebuilt session-detail screen showing a Zeez
 score must carry the "Experimental Zeez Estimate" label in text *and* `accessibilityValue`
 (rule 10), and must respect the `qualityScore <= 1.0` no-score sentinel.
