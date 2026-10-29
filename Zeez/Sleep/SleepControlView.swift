@@ -5,7 +5,7 @@ import os.log
 /// Primary interface for controlling sleep sessions and viewing current status
 struct SleepControlView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @StateObject private var batteryMonitor = BatteryMonitor()
+    @StateObject private var batteryAdvice = RecordingBatteryAdviceMonitor()
 
     @FetchRequest(sortDescriptors: []) private var preferences: FetchedResults<UserPreferences>
 
@@ -18,18 +18,8 @@ struct SleepControlView: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            // Status indicators for device readiness
+            // Status indicators while recording
             HStack(spacing: 16) {
-                StatusIndicator(
-                    icon: "battery.75",
-                    label: "\(Int(batteryMonitor.batteryLevel * 100))%",
-                    color: batteryMonitor.statusColor
-                )
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Battery level \(Int(batteryMonitor.batteryLevel * 100)) percent")
-                .accessibilityHint("Device battery status for sleep tracking")
-                .accessibilityIdentifier("batteryIndicator")
-                
                 if session != nil {
                     StatusIndicator(
                         icon: "sensors",
@@ -50,6 +40,14 @@ struct SleepControlView: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("statusIndicators")
+
+            // A suggestion, never a gate: the recording runs whatever the battery says.
+            if session != nil, let advice = batteryAdvice.message {
+                Label(advice, systemImage: "battery.25")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .accessibilityIdentifier("batteryAdvice")
+            }
             
             // Session controls
             if let activeSession = session {
@@ -310,33 +308,5 @@ struct ElapsedTimeView: View {
         let hourText = hours == 1 ? "hour" : "hours"
         let minuteText = minutes == 1 ? "minute" : "minutes"
         return "\(hours) \(hourText) and \(minutes) \(minuteText)"
-    }
-}
-
-class BatteryMonitor: ObservableObject {
-    @Published var batteryLevel: Double = 1.0
-    
-    var statusColor: Color {
-        switch batteryLevel {
-        case 0.0...0.2: return .red
-        case 0.2...0.4: return .orange
-        default: return .green
-        }
-    }
-    
-    init() {
-        UIDevice.current.isBatteryMonitoringEnabled = true
-        batteryLevel = Double(UIDevice.current.batteryLevel)
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(batteryLevelDidChange),
-            name: UIDevice.batteryLevelDidChangeNotification,
-            object: nil
-        )
-    }
-    
-    @objc private func batteryLevelDidChange() {
-        batteryLevel = Double(UIDevice.current.batteryLevel)
     }
 }
