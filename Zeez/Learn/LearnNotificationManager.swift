@@ -6,53 +6,14 @@ class LearnNotificationManager {
     static let shared = LearnNotificationManager()
 
     private let notificationCenter = UNUserNotificationCenter.current()
-    private let challengeCategory = "com.zeez.notifications.challenge"
-    private let learningCategory = "com.zeez.notifications.learning"
     /// Every Learn-owned request identifier starts with this prefix so bulk
     /// removal can target Learn notifications without touching alarms.
     private static let identifierPrefix = "learn-"
     
-    private init() {
-        setupNotificationCategories()
-    }
-    
-    // MARK: - Setup
-    
-    private func setupNotificationCategories() {
-        let markCompleteAction = UNNotificationAction(
-            identifier: "MARK_COMPLETE",
-            title: "Mark Complete",
-            options: .foreground
-        )
-        
-        let snoozeAction = UNNotificationAction(
-            identifier: "SNOOZE",
-            title: "Remind Later",
-            options: .foreground
-        )
-        
-        let viewAction = UNNotificationAction(
-            identifier: "VIEW",
-            title: "View",
-            options: .foreground
-        )
-        
-        let challengeCategory = UNNotificationCategory(
-            identifier: self.challengeCategory,
-            actions: [markCompleteAction, snoozeAction],
-            intentIdentifiers: [],
-            options: .customDismissAction
-        )
-        
-        let learningCategory = UNNotificationCategory(
-            identifier: self.learningCategory,
-            actions: [viewAction, snoozeAction],
-            intentIdentifiers: [],
-            options: .customDismissAction
-        )
-        
-        notificationCenter.setNotificationCategories([challengeCategory, learningCategory])
-    }
+    /// Learn registers no notification categories: `setNotificationCategories` replaces the
+    /// whole set, so only `AlarmNotificationRegistrar` calls it, and the alarm keeps Snooze,
+    /// Continue and Stop. Learn notifications carry no actions; a tap only opens the app.
+    private init() {}
     
     // MARK: - Challenge Notifications
     
@@ -64,7 +25,6 @@ class LearnNotificationManager {
         content.title = "Challenge Reminder"
         content.body = "Don't forget to work on your '\(challenge.title ?? "")' challenge!"
         content.sound = .default
-        content.categoryIdentifier = challengeCategory
         content.userInfo = ["challengeId": challenge.id?.uuidString ?? ""]
         
         // Schedule daily reminders for the duration of the challenge
@@ -98,7 +58,6 @@ class LearnNotificationManager {
         content.title = "Challenge Ending Soon"
         content.body = "Your '\(challenge.title ?? "")' challenge ends tomorrow. Make sure to complete all requirements!"
         content.sound = .default
-        content.categoryIdentifier = challengeCategory
         
         let dateComponents = Calendar.current.dateComponents(
             [.year, .month, .day, .hour, .minute],
@@ -122,7 +81,6 @@ class LearnNotificationManager {
         content.title = "Time to Learn"
         content.body = "Take a few minutes to learn about \(category.rawValue.lowercased())"
         content.sound = .default
-        content.categoryIdentifier = learningCategory
         
         let dateComponents = Calendar.current.dateComponents(
             [.hour, .minute],
@@ -144,7 +102,6 @@ class LearnNotificationManager {
         content.title = "Keep Your Learning Streak!"
         content.body = "You're on a \(currentStreak)-day streak. Don't break it!"
         content.sound = .default
-        content.categoryIdentifier = learningCategory
         
         // Schedule for 8 PM if they haven't completed anything today
         var dateComponents = Calendar.current.dateComponents([.hour, .minute], from: Date())
@@ -197,67 +154,5 @@ class LearnNotificationManager {
             }
             completion(granted)
         }
-    }
-}
-
-// MARK: - Notification Response Handling
-
-extension LearnNotificationManager {
-    func handleNotificationResponse(_ response: UNNotificationResponse, context: NSManagedObjectContext) {
-        let userInfo = response.notification.request.content.userInfo
-        
-        switch response.actionIdentifier {
-        case "MARK_COMPLETE":
-            if let challengeIdString = userInfo["challengeId"] as? String,
-               let challengeId = UUID(uuidString: challengeIdString) {
-                markChallengeComplete(challengeId: challengeId, context: context)
-            }
-            
-        case "SNOOZE":
-            if let challengeIdString = userInfo["challengeId"] as? String {
-                snoozeNotification(challengeId: challengeIdString)
-            }
-            
-        case "VIEW":
-            // Handle view action in the app's navigation
-            break
-            
-        default:
-            break
-        }
-    }
-    
-    private func markChallengeComplete(challengeId: UUID, context: NSManagedObjectContext) {
-        let fetchRequest: NSFetchRequest<LearnChallenge> = LearnChallenge.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", challengeId as CVarArg)
-        
-        context.perform {
-            do {
-                if let challenge = try context.fetch(fetchRequest).first {
-                    LearnProgressManager.shared.updateChallengeProgress(challenge, progress: 1.0, context: context)
-                }
-            } catch {
-                ZeezLogger.error(ZeezLogger.learning, "Error marking challenge complete", error: error)
-            }
-        }
-    }
-    
-    private func snoozeNotification(challengeId: String) {
-        // Schedule a reminder for 1 hour later
-        let content = UNMutableNotificationContent()
-        content.title = "Reminder"
-        content.body = "Don't forget about your challenge!"
-        content.sound = .default
-        content.categoryIdentifier = challengeCategory
-        content.userInfo = ["challengeId": challengeId]
-        
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: AppConstants.Learning.achievementNotificationDelay, repeats: false)
-        let request = UNNotificationRequest(
-            identifier: "\(Self.identifierPrefix)snoozed_\(challengeId)_\(Date().timeIntervalSince1970)",
-            content: content,
-            trigger: trigger
-        )
-        
-        notificationCenter.add(request)
     }
 }

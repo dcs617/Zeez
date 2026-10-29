@@ -176,9 +176,6 @@ struct AppConstants {
         
         /// Daily fact notification delay (24 * 60 * 60 = 24 hours)
         static let dailyFactInterval: TimeInterval = 24 * 60 * 60
-        
-        /// Achievement notification trigger delay (60 * 60 = 1 hour)
-        static let achievementNotificationDelay: TimeInterval = 60 * 60
     }
     
     // MARK: - Chart and Visualization Constants
