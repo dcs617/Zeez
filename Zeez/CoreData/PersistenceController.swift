@@ -84,9 +84,9 @@ final class PersistenceController {
     }()
     
     /// Non-shared instances are for tests, previews, and deliberately scratch stores
-    /// (e.g. `LearnContentLoader`) ONLY — production code must use `.shared`. The
-    /// argument has no default value so an accidental `PersistenceController()`
-    /// fails to compile instead of silently creating a second stack (2.6).
+    /// ONLY — production code must use `.shared`. The argument has no default value
+    /// so an accidental `PersistenceController()` fails to compile instead of
+    /// silently creating a second stack (2.6).
     init(inMemory: Bool) {
         container = NSPersistentContainer(name: "Zeez", managedObjectModel: Self.model)
         

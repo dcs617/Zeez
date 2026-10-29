@@ -441,11 +441,45 @@ and `Views/FetchRequestView.swift`.
   selection of them. Learn still reaches notes through Quick Notes and an article's highlights, and
   `LearnNoteDetailView` still shares a single note.
 
-**Still without callers** (found 2026-10-27 by a reference search over `Zeez/`; not deleted):
-`LearnContentManager` with `LearnContentManager+DefaultContent`, `LearnEnvironmentalDetailView`,
-`LearnGlossaryView` (and `LearnGlossaryTermDetailView`, which only it opens), `LearnReferenceView`,
-`ToolCard` (`LearnToolCard.swift`), `LearnNoteListView`, `LearnQuizBrowserView` and
-`LearnSleepPositionDetailView`. A Learn cleanup should decide each one the same way.
+**The rest, deleted 2026-10-29 (the dead-code batch).** A reference search on 2026-10-27 found more
+Learn files without callers; Daniel chose to delete them, with the other dead Learn files the batch found.
+All paths are under `Zeez/Learn/` unless shown.
+- `LearnGlossaryView.swift` and `LearnGlossaryTermDetailView.swift`: a searchable glossary over
+  `GlossaryTerm` rows, which nothing creates.
+- `LearnReferenceView.swift`, with `Zeez/Views/YearFilterView.swift`, which only it used: a list of
+  `ScientificReference` rows filtered by year. `LearnReferenceList` and `LearnReferenceCard` stay: an
+  article's reference section uses them.
+- `LearnToolCard.swift` (`ToolCard`): a card whose only user was its preview's "Sample Tool".
+- `Note/LearnNoteListView.swift`: a filtered note list, a second note browser.
+- `Quiz/LearnQuizBrowserView.swift`: "All Quizzes", over quizzes nothing creates.
+- `Sleep/LearnSleepPositionDetailView.swift`: a detail screen per sleep position. `LearnSleepPositionView`
+  stays.
+- `LearnEnvironmentalDetailView.swift`: see §6.
+- `LearnAchievementManager.swift` and `LearnAchievementNotification.swift`: a streak and achievement
+  overlay, never shown.
+- `LearnArticleShareSheet.swift`: an article's export to text, Markdown or PDF, never opened. A single
+  note still shares from `LearnNoteDetailView`.
+- `LearnProgressManager.swift`: article progress, bookmarks and challenge progress. Its only user was the
+  notification-action handler deleted the same day (it had no caller either; see
+  `NotificationCategoryGuardTests`).
+- `Sleep/LearnSleepCycleAnimation.swift`: an animated cycle diagram, orphaned with this screen in D1a.
+- `LearnContentLoader.swift`: `MockLearnContentLoader` and `PersistenceController.previewWithLearnContent`,
+  which nothing used.
+
+**Learn content was never seeded.** `LearnContentManager.ensureDefaultContent` has had no caller since it
+was written (`c933950`, v0.3), so Articles and Challenges have always shown their empty states. Nothing
+creates a `Quiz`, so an article's quiz card (wired 2026-10-29) cannot appear. Learning Paths' IDs
+(`basics`, `cycles`, `environment`, `advanced` in `LearningPath.swift`) are matched against
+`LearnArticle.category`, which holds `LearnCategory` raw values ("Sleep Basics", "Optimization", "Sleep
+Science", "Challenges"), so every path would be empty even with content; and `LearnPathDetail`, presented
+as a sheet, has no `NavigationStack`, so its article links could not push. The daily "Time to Learn"
+reminder opens this empty tab. `LearnNotificationManager`'s challenge reminders
+(`scheduleChallengeReminder`, `scheduleCompletionReminder`, `removeChallengeNotifications`) have no
+callers; the first schedules every day's reminder for the same moment, non-repeating.
+`LearnContentManager` and `LearnContentManager+DefaultContent` stay in the tree, parked like §7: the
+seeder holds six articles and three challenges whose copy has not been reviewed against
+`SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` §4. **Definition of done:** reviewed copy; a seeding call, with a
+test; a path-to-category mapping; quiz content; and the challenge reminders fixed or removed.
 
 **Claims tier and label.** Educational content. `ClinicalVocabularyGuardTests` exempts `Zeez/Learn`,
 so any Learn surface that returns needs its copy reviewed by hand against

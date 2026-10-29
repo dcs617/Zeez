@@ -130,12 +130,6 @@ struct LearnArticleQuizBadge: View {
     VStack(spacing: 20) {
         LearnProgressMiniWidget()
         LearnArticleQuizBadge(quiz: nil)
-        LearnAchievementNotification(
-            title: "7 Day Streak!",
-            message: "You've been learning for a week straight",
-            systemImage: "flame.fill",
-            color: .orange
-        )
     }
     .padding()
     .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
