@@ -244,10 +244,7 @@ struct SleepControlView: View {
     private func endSession(_ session: SleepSession) {
         SleepSessionManager.shared.endSession(session) { result in
             switch result {
-            case .success(let completedSession):
-                ZeezLogger.info(ZeezLogger.sleepTracking, "Successfully ended sleep session: \(completedSession.id?.uuidString ?? "unknown")")
-                EnvironmentalMonitor.shared.stopMonitoring()
-                MovementDataManager.shared.stopMonitoring()
+            case .success:
                 showingSessionSummary = true
                 
             case .failure(let error):

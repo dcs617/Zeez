@@ -3,6 +3,35 @@ import HealthKit
 import UIKit
 import os.log
 
+/// What a recording runs while it is active. Production starts the microphone and motion
+/// monitors; tests pass a fake, so starting a session never touches real audio or Core Motion.
+protocol SessionMonitoring {
+    func start(for session: SleepSession)
+    func stop()
+}
+
+/// The monitors a recording runs. Their lifecycle belongs here and nowhere else
+/// (`SessionMonitorLifecycleGuardTests`).
+struct LiveSessionMonitors: SessionMonitoring {
+    func start(for session: SleepSession) {
+        EnvironmentalMonitor.shared.startMonitoring(for: session)
+        MovementDataManager.shared.startMonitoring(for: session)
+    }
+
+    func stop() {
+        EnvironmentalMonitor.shared.stopMonitoring()
+        MovementDataManager.shared.stopMonitoring()
+    }
+}
+
+/// How ending a recording turned out.
+enum SessionEndOutcome {
+    /// Saved; heart-rate sync and analysis follow.
+    case saved(SleepSession)
+    /// Shorter than `AppConstants.Sleep.minimumSessionDuration`, so deleted rather than kept.
+    case discardedTooShort
+}
+
 final class SleepSessionManager {
     static let shared = SleepSessionManager()
 
@@ -10,25 +39,23 @@ final class SleepSessionManager {
     private let healthStore: HKHealthStore
     private let errorManager = ErrorManager.shared
     private let validator: SleepSessionValidator
+    private let monitors: SessionMonitoring
 
     /// Tests inject an in-memory controller (second audit A7) so the whole
     /// end-of-session flow — validation, save, analysis — stays off the
-    /// shared store; production uses the shared stack.
-    init(persistenceController: PersistenceController = .shared) {
+    /// shared store, and fake monitors; production uses the shared stack.
+    init(persistenceController: PersistenceController = .shared,
+         monitors: SessionMonitoring = LiveSessionMonitors()) {
         self.persistenceController = persistenceController
         self.validator = SleepSessionValidator(persistenceController: persistenceController)
         self.healthStore = HKHealthStore()
+        self.monitors = monitors
     }
     
+    /// Recording needs no HealthKit: heart rate is synced at the end when HealthKit has any.
     func startSession(completion: @escaping (Result<SleepSession, Error>) -> Void) {
         let context = persistenceController.container.viewContext
-        
-        guard HKHealthStore.isHealthDataAvailable() else {
-            errorManager.report(.healthKitNotAvailable)
-            completion(.failure(AppError.healthKitNotAvailable))
-            return
-        }
-        
+
         // Create new session
         let session = SleepSession(context: context)
         session.id = UUID()
@@ -45,11 +72,9 @@ final class SleepSessionManager {
             // Save if validation passes
             try context.save()
             completion(.success(session))
-            
-            // Start monitoring systems
-            EnvironmentalMonitor.shared.startMonitoring(for: session)
-            MovementDataManager.shared.startMonitoring(for: session)
-            
+
+            monitors.start(for: session)
+
         } catch {
             context.rollback()
             errorManager.reportError(error)
@@ -57,10 +82,37 @@ final class SleepSessionManager {
         }
     }
     
-    func endSession(_ session: SleepSession, completion: @escaping (Result<SleepSession, Error>) -> Void) {
+    /// Ends a recording at `endTime`, capped at `AppConstants.Sleep.maximumSessionDuration`.
+    ///
+    /// Ending never fails for want of data: one shorter than the minimum is deleted, and the
+    /// rest is saved whatever its readings cover. Only a failed save leaves it running.
+    func endSession(_ session: SleepSession,
+                    at endTime: Date = Date(),
+                    completion: @escaping (Result<SessionEndOutcome, Error>) -> Void) {
         let context = persistenceController.container.viewContext
-        
-        session.endTime = Date()
+
+        guard let startTime = session.startTime else {
+            completion(.failure(SessionValidationError.missingStartTime))
+            return
+        }
+        let end = min(endTime, startTime.addingTimeInterval(AppConstants.Sleep.maximumSessionDuration))
+
+        guard end.timeIntervalSince(startTime) >= AppConstants.Sleep.minimumSessionDuration else {
+            context.delete(session)
+            do {
+                try context.save()
+                monitors.stop()
+                ZeezLogger.info(ZeezLogger.sleepTracking, "Recording under the minimum length discarded")
+                completion(.success(.discardedTooShort))
+            } catch {
+                context.rollback()
+                errorManager.reportError(error)
+                completion(.failure(error))
+            }
+            return
+        }
+
+        session.endTime = end
         session.isActive = false
         session.modifiedAt = Date()
 
@@ -70,17 +122,10 @@ final class SleepSessionManager {
         // Zeez-recorded sessions never earned a real estimate (A7).
 
         do {
-            // Validate session before saving
-            try validator.validateSession(session)
-            
-            // Save if validation passes
+            try validator.validateEnd(session)
             try context.save()
-            
-            // Stop monitoring systems
-            EnvironmentalMonitor.shared.stopMonitoring()
-            MovementDataManager.shared.stopMonitoring()
-            
-            completion(.success(session))
+            monitors.stop()
+            completion(.success(.saved(session)))
 
             // Sync heart-rate data from HealthKit, THEN analyze — the
             // estimate must see the imported samples, so analysis is chained
@@ -135,6 +180,10 @@ final class SleepSessionManager {
     }
     
     func syncWithHealthKit(for session: SleepSession, completion: @escaping (Error?) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            completion(AppError.healthKitNotAvailable)
+            return
+        }
         guard let startTime = session.startTime,
               let endTime = session.endTime else {
             completion(AppError.dataProcessingFailed)

@@ -55,8 +55,13 @@ struct AppConstants {
         /// Maximum valid sleep duration (12 * 3600 = 12 hours)
         static let maximumDuration: TimeInterval = 12 * 3600
         
-        /// Maximum session duration before validation error (24 * 3600 = 24 hours)
+        /// Maximum session duration before validation error (24 * 3600 = 24 hours).
+        /// A recording still running at this length ends at it.
         static let maximumSessionDuration: TimeInterval = 24 * 3600
+
+        /// A recording shorter than this (15 * 60 = 15 minutes) is discarded when it ends,
+        /// rather than kept as a night.
+        static let minimumSessionDuration: TimeInterval = 15 * 60
         
         /// Target sleep duration for analysis (8 * 3600 = 8 hours)
         static let targetDuration: TimeInterval = 8 * 3600

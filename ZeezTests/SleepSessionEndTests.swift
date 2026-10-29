@@ -11,20 +11,6 @@ import CoreData
 @Suite("Session end scoring (A7)", .serialized)
 struct SleepSessionEndTests {
 
-    /// The validator requires environmental readings covering ≥80% of the
-    /// session (production sessions get them from `EnvironmentalMonitor`).
-    @MainActor
-    private func seedEnvironmentalCoverage(for session: SleepSession,
-                                           from start: Date, to end: Date,
-                                           in context: NSManagedObjectContext) {
-        for fraction in [0.0, 0.5, 0.95] {
-            let reading = EnvironmentalReading(context: context)
-            reading.id = UUID()
-            reading.timestamp = start.addingTimeInterval(end.timeIntervalSince(start) * fraction)
-            reading.session = session
-        }
-    }
-
     @MainActor
     private func endSession(_ manager: SleepSessionManager, _ session: SleepSession) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -42,7 +28,7 @@ struct SleepSessionEndTests {
     @Test @MainActor
     func endSessionDoesNotFabricateAScore() async throws {
         let controller = PersistenceController(inMemory: true)
-        let manager = SleepSessionManager(persistenceController: controller)
+        let manager = SleepSessionManager(persistenceController: controller, monitors: FakeSessionMonitors())
         let context = controller.container.viewContext
 
         // 20 minutes: long enough to pass validation (≥15 min), short enough
@@ -52,7 +38,6 @@ struct SleepSessionEndTests {
         session.id = UUID()
         session.startTime = Date(timeIntervalSinceNow: -20 * 60)
         session.isActive = true
-        seedEnvironmentalCoverage(for: session, from: session.startTime!, to: Date(), in: context)
         try context.save()
 
         try await endSession(manager, session)
@@ -70,7 +55,7 @@ struct SleepSessionEndTests {
     @Test @MainActor
     func endedSessionWithSensorDataGetsAPersistedEstimate() async throws {
         let controller = PersistenceController(inMemory: true)
-        let manager = SleepSessionManager(persistenceController: controller)
+        let manager = SleepSessionManager(persistenceController: controller, monitors: FakeSessionMonitors())
         let context = controller.container.viewContext
 
         let start = Date(timeIntervalSinceNow: -8 * 3600)
@@ -96,7 +81,6 @@ struct SleepSessionEndTests {
             heartRate.value = i % 7 == 0 ? 72 : 55
             heartRate.session = session
         }
-        seedEnvironmentalCoverage(for: session, from: start, to: Date(), in: context)
         try context.save()
 
         try await endSession(manager, session)

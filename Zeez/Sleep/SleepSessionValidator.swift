@@ -13,12 +13,26 @@ final class SleepSessionValidator {
         self.persistenceController = persistenceController
     }
     
-    /// Validates a sleep session before saving
+    /// Validates a session as it starts: valid times, and no other session at its start.
+    ///
+    /// It once also required environmental readings and movement data on the active session,
+    /// which a session that has just been created never has, so no recording could start
+    /// (found 2026-10-29: `startSession` failed with `.missingSensorData` every time).
     func validateSession(_ session: SleepSession) throws {
         try validateTimes(session)
-        try validateSensorData(session)
         try validateOverlap(session)
         try validateDuration(session)
+    }
+
+    /// Validates a session as it ends: its times only.
+    ///
+    /// Ending must not fail for want of data. A check that the readings covered 80% of the
+    /// night, or that it lasted 15 minutes, rolled the end back and left the session active,
+    /// so it could never be ended and blocked every later start (`validateOverlap`). Short
+    /// sessions are discarded by `SleepSessionManager.endSession`, and whether the data
+    /// supports an estimate is the analyzer's question, not the save's.
+    func validateEnd(_ session: SleepSession) throws {
+        try validateTimes(session)
     }
     
     /// Validates session times are logical and within bounds
@@ -46,23 +60,6 @@ final class SleepSessionValidator {
         }
     }
     
-    /// Validates required sensor data is present and consistent
-    private func validateSensorData(_ session: SleepSession) throws {
-        if session.isActive {
-            // Check if environmental monitoring is working
-            if let readings = session.environmentalReadings?.allObjects as? [EnvironmentalReading],
-               readings.isEmpty {
-                throw SessionValidationError.missingSensorData
-            }
-            
-            // Check if movement monitoring is working
-            if let movements = session.movementData?.allObjects as? [MovementData],
-               movements.isEmpty {
-                throw SessionValidationError.missingSensorData
-            }
-        }
-    }
-    
     /// Checks for overlapping sleep sessions
     private func validateOverlap(_ session: SleepSession) throws {
         guard let startTime = session.startTime,
@@ -85,32 +82,14 @@ final class SleepSessionValidator {
         }
     }
     
-    /// Validates session duration and data consistency
+    /// A session that already has an end must be at least the minimum length.
     private func validateDuration(_ session: SleepSession) throws {
         guard let startTime = session.startTime,
               let endTime = session.endTime else { return }
-        
-        let duration = endTime.timeIntervalSince(startTime)
-        
-        // Check for minimum duration (15 minutes)
-        if duration < 900 {
+
+        if endTime.timeIntervalSince(startTime) < AppConstants.Sleep.minimumSessionDuration {
             throw SessionValidationError.insufficientDuration
         }
-        
-        // Validate data points match duration
-        if let readings = session.environmentalReadings?.allObjects as? [EnvironmentalReading] {
-            let readingsDuration = calculateDataCoverage(readings.compactMap { $0.timestamp })
-            if readingsDuration < duration * 0.8 {  // Allow 20% margin for sensor delays
-                throw SessionValidationError.incompleteSensorData
-            }
-        }
-    }
-    
-    /// Calculates the time span covered by a series of timestamps
-    private func calculateDataCoverage(_ timestamps: [Date]) -> TimeInterval {
-        guard let first = timestamps.min(),
-              let last = timestamps.max() else { return 0 }
-        return last.timeIntervalSince(first)
     }
 }
 
@@ -122,8 +101,6 @@ enum SessionValidationError: LocalizedError {
     case excessiveDuration
     case insufficientDuration
     case overlappingSession
-    case missingSensorData
-    case incompleteSensorData
     
     var errorDescription: String? {
         switch self {
@@ -139,10 +116,6 @@ enum SessionValidationError: LocalizedError {
             return "Session must be at least 15 minutes long"
         case .overlappingSession:
             return "Another sleep session exists during this time"
-        case .missingSensorData:
-            return "Required sensor data is missing"
-        case .incompleteSensorData:
-            return "Insufficient sensor data for session duration"
         }
     }
     
@@ -160,10 +133,6 @@ enum SessionValidationError: LocalizedError {
             return "Continue tracking for at least 15 minutes"
         case .overlappingSession:
             return "End or delete the overlapping session first"
-        case .missingSensorData:
-            return "Check sensor permissions and device connectivity"
-        case .incompleteSensorData:
-            return "Ensure all sensors are working properly"
         }
     }
 }
