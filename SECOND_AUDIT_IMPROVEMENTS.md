@@ -502,7 +502,7 @@ If `StoreKitTests` fails, uninstall the app from the simulator and re-run before
 
 ## 7. Prompt for the next implementation chat
 
-Replaced 2026-10-27. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`):
+Replaced 2026-10-29. Earlier prompts are in git history (`git log -p -- SECOND_AUDIT_IMPROVEMENTS.md`):
 - Phase A, replaced 2026-10-20.
 - §8a durable HealthKit import identity, delivered in code 2026-10-22 (`2244e20`…`6b15519`).
 - The data-safety + claims batch, delivered 2026-10-22 (`9d5b3b7`…`77a11db`, docs in the commit after):
@@ -513,9 +513,9 @@ Replaced 2026-10-27. Earlier prompts are in git history (`git log -p -- SECOND_A
 - D2a and D2b, delivered 2026-10-26/27 (`d46a2e2`…`f6de1a1`, docs in the commit after); Phase D, D2.
 - The no-hardware batch, delivered 2026-10-27 (`81c1cae`…`77f605d`, docs in the commit after): D2's five
   follow-ups and the tracked cleanups (`FUTURE_IMPROVEMENTS.md`, completed 2026-10-27).
-- The dead-code batch, delivered 2026-10-29 (`9c64ecc`…`c256d66`, docs in the commit after): two live alarm bugs,
-  the dead buttons, and the dead code the no-hardware batch turned up (`FUTURE_IMPROVEMENTS.md`, completed
-  2026-10-29).
+- The dead-code batch, delivered 2026-10-29 (`9c64ecc`…`c256d66`, docs in the commit after, and the declarations it
+  stranded in `bc2f726`): two live alarm bugs, the dead buttons, and the dead code the no-hardware batch turned up
+  (`FUTURE_IMPROVEMENTS.md`, completed 2026-10-29).
 - The Swift Testing attribution fix, delivered 2026-10-25 (`b7a3379`…`3dff641`, docs `5a377d3`). 112 assertions
   in 13 suites ran where a failure reached no test; they now return values from their closures, each fix proven
   by breaking an assertion. `SwiftTestingAttributionGuardTests` scans for the shapes, and the `unit-tests` job fails
@@ -548,7 +548,187 @@ of the investigated list. Leave Commerce and §7's environmental cluster untouch
 to mark all of T4 blocked, since an imported night is never scored, and to record the uncalled challenge reminders
 rather than delete them.
 
-**When the developer account is renewed: the device pass**, before anything else. T1 relocates the store *and* runs
+**Decisions 2026-10-29, later (recording and premium):** Zeez records sleep itself, so in-app recording is to be
+reconnected, overnight through background audio, designed first and then tested on a device. A recording on an
+unplugged phone gets a soft, non-blocking suggestion to charge it (Sleep Cycle recommends a charger and estimates
+about 30% of the battery a night). Errors alert for a failed save, low storage, a recording that fails to start or
+end, and a permission denied at the start of one; scheduling failures, the badge reset and low battery on foreground
+are logged only. Premium: free keeps recording, last night with the experimental score, the alarm, Apple Health
+import and the last 7 days; premium adds longer history and Trends, month-over-month comparison, links to the user's
+own notes and environment, and suggestions from the user's own history against their own goal (Tier 3, each with a
+written spec before the paywall lists it). Learn content stays visible, low priority, reviewed before submission.
+Daniel also chose to delete what the dead-code batch stranded, including the simulated Learn offline feature
+(`bc2f726`).
+
+**Next, while the account is pending: reconnect in-app recording.** The prompt:
+
+```
+Read CLAUDE.md, then all of this prompt before acting. Then read PARKED_CAPABILITIES.md §5,
+§7, §9 and §14, ZEEZ_SCORE_SPECIFICATION.md §2–§4, SLEEP_METRICS_CLAIMS_AND_VALIDATION.md (its
+noise, missing-input and "recorded session" rules), FUTURE_IMPROVEMENTS.md ("Still open"),
+SECOND_AUDIT_IMPROVEMENTS.md §7, and DEVICE_TEST_RUN.md T4, T5 and T9.
+
+Context: the device pass is still blocked on my Apple Developer Program renewal, so this is
+no-hardware work. The dead-code batch (9c64ecc…bc2f726) is pushed (step 0 checks its CI run);
+the docs commit that queued this prompt may not be. 359 tests / 57 suites. It parked in-app recording (PARKED §14): no screen opens SleepControlView, the only
+caller of SleepSessionManager.startSession, so nothing records a night and a release build
+cannot show a Zeez score. I have decided to reconnect it.
+
+======================================================================================
+DECISIONS (2026-10-29)
+======================================================================================
+ 1. Zeez records sleep itself. Reconnect in-app recording; PARKED §14 lists what it needs.
+ 2. Overnight recording uses background audio (UIBackgroundModes "audio"). Design it first,
+    then build it. Everything that needs a device goes into DEVICE_TEST_RUN.md.
+ 3. Battery: a soft, non-blocking message when a recording starts on an unplugged phone,
+    suggesting the charger. Never block a recording. The low-battery error on every
+    foreground (BackgroundTaskManager.checkBatteryAndStorage) becomes a log line.
+ 4. Error alerts. Alert: a failed save; low storage; a recording that fails to start or
+    end; microphone or motion permission denied when starting a recording, with Open
+    Settings. Log only: background-scheduling failures, the badge reset, low battery on
+    foreground. Each alert shows at most once per occurrence.
+ 5. Premium is a later batch, not this one. Free: recording, last night with the
+    experimental score, the alarm, Apple Health import, the last 7 days. Premium: longer
+    history and Trends, month-over-month, links between sleep and the user's own notes or
+    environment, and suggestions from the user's own history against their own goal
+    (Tier 3). Each premium feature gets a written spec before the paywall advertises it.
+ 6. Learn content: low priority; reviewed before App Store submission.
+
+======================================================================================
+WORK ORDER AND CHECKPOINTS
+======================================================================================
+0. CI first. Run `git log --oneline @{u}..` and
+   `gh run list --branch feature/sleep-simplification --limit 3`. If the latest run failed,
+   fix that first. Push only when I say.
+1. Design, no product code. Read the recording path end to end: SleepControlView,
+   SleepSessionManager, EnvironmentalMonitor, MovementDataManager, SleepSessionValidator,
+   SleepAnalyzer, SleepStageAnalyzer, BackgroundTaskManager's active-session code,
+   AlarmAudioController and AlarmAudioSessioning, AlarmNotificationHandler, ActiveAlarmView,
+   ErrorManager, AppError, SceneDelegate, RootView, DashboardView, SleepGoalSettingsView,
+   Settings' Sleep Goal section and Info.plist. Answer the DESIGN QUESTIONS below.
+   CHECKPOINT: the written design, and each open decision with your recommendation.
+2. Implement in the order below, one commit per item, each behaviour change with a test
+   that fails against the old code (prove it). CHECKPOINT after item 3, the alarm path.
+3. Docs (see DOCS).
+4. Final report.
+
+======================================================================================
+DESIGN QUESTIONS (facts found 2026-10-29 in brackets; re-verify them)
+======================================================================================
+ a. Audio session. [EnvironmentalMonitor sets .playAndRecord / .measurement and samples an
+    AVAudioRecorder on a Timer, in the foreground only, per its doc comment.
+    AlarmAudioController sets .playback with .duckOthers.] One owner of AVAudioSession, or
+    a coordinator? When the alarm rings during a recording, with the app alive in the
+    background: which callbacks fire, does the notification sound still play, and what do
+    Stop and Continue do to the recording (end the session, or ask)? The alarm must never
+    be quieter or later because a recording is running. Interruptions (a call, Siri,
+    another app's audio) and route changes.
+ b. Movement. [MovementDataManager sets accelerometerUpdateInterval = 60 s: one instantaneous
+    reading a minute.] Does that measure movement at all? What does SleepStageAnalyzer infer
+    from a flat signal, such as a phone on the nightstand? A flat or missing signal must
+    make stages unavailable, never "deep sleep all night" (missing-input policy). Where the
+    phone should sit, and what the screen tells the user.
+ c. Coverage. SleepSessionValidator needs EnvironmentalReading timestamps over ≥80% of a
+    session. Does background sampling keep that? Does a microphone-denied session still
+    record and validate, with noise unavailable (T9)?
+ d. A night cut short by the app being killed leaves the session isActive
+    (SleepSessionManager.swift:133, BackgroundTaskManager.swift:404). What happens at the
+    next launch today, and what should?
+ e. The battery message: wording, when it shows (unplugged at start; a stronger line below
+    some level), where it appears, and that it never blocks.
+ f. The error presenter: one alert at RootView fed by ErrorManager; which AppError cases
+    present (decision 4); the new cases needed (permission denied); de-duplication; and
+    what becomes of showStatus messages.
+ g. Recording UI: the route on the Sleep tab, inside its NavigationStack; whether the
+    active recording is a fullScreenCover (owning one NavigationStack); Add Note
+    (SleepSession has a `notes` relationship: check what it holds); the session summary
+    that showingSessionSummary promises, within the claims contract; and
+    SleepGoalSettingsView, which duplicates Settings' Sleep Goal section (recommend which
+    goes).
+ h. Two sources on one night: a watch wearer who also records gets an imported Apple night
+    and a Zeez session. How do the dashboard and Trends count that today? The per-night
+    preferred source needs a claims amendment, so propose the least change that avoids
+    double counting, and ask before amending the contract.
+ i. Privacy: NSMicrophoneUsageDescription promises audio is analysed on device and never
+    stored or uploaded; keep that true. The microphone indicator while recording in the
+    background. The App Privacy answers stay "no data collected".
+ j. What can be tested without hardware, and the new DEVICE_TEST_RUN checks.
+
+======================================================================================
+IMPLEMENTATION ORDER (adjust it at the checkpoint)
+======================================================================================
+ 1. The error presenter and its policy (decision 4).
+ 2. The battery message (decision 3).
+ 3. Audio-session ownership shared with the alarm. CHECKPOINT.
+ 4. The background audio mode, and monitors that keep sampling in the background.
+ 5. The movement signal and its missing-input handling.
+ 6. The recording route, Add Note, the session summary, SleepGoalSettingsView.
+ 7. Recovering a night the app did not end.
+
+======================================================================================
+DOCS
+======================================================================================
+ - DEVICE_TEST_RUN.md: unblock T4 and T9 (or say exactly what still blocks them). Add
+   checks for an overnight recording on a locked phone, the alarm during a recording
+   (foreground, locked, force-quit), interruptions, the battery message and the error
+   alerts. Mark [SIM OK] whatever a simulator can show. Update the baseline line.
+ - PARKED_CAPABILITIES.md §14: what was reconnected and what is still missing.
+ - FUTURE_IMPROVEMENTS.md: a "Completed" block in its style; close or update the
+   recording, ErrorManager and battery items.
+ - SECOND_AUDIT_IMPROVEMENTS.md §7: provenance, decisions, open items, and the device-pass
+   prompt's "landed before it" line (which T checks cover this batch).
+ - CLAUDE.md: the audio-session rule, the background mode, the error-alert policy, and
+   any new guard.
+
+======================================================================================
+VALIDATION
+======================================================================================
+Prefix every xcodebuild with DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer, and
+export it for the attribution script too. Never run two xcodebuild invocations at once.
+After every commit:
+  xcodebuild test -project Zeez.xcodeproj -scheme Zeez \
+    -destination 'id=55075C0E-1B8E-479A-9DED-7E0E2AF0F8CF' -only-testing:ZeezTests \
+    -resultBundlePath <scratch>/<name>.xcresult 2>&1 | tee <scratch>/<name>.log
+  bash .github/scripts/check-swift-testing-attribution.sh <scratch>/<name>.log \
+    <scratch>/<name>.xcresult
+Before the last commit: the watch build
+(-destination 'id=598623F5-EF0C-4225-8180-E94BCD7EE976') and the UI smoke tests
+(-configuration Debug, MainViewUITests and OnboardingUITests). CI builds with Xcode 16.4 /
+Swift 6.1: gate new-SDK symbols with #if compiler(>=6.2) and spell out literals whose type
+matters. New tests follow CLAUDE.md's Testing rules. The alarm path has fakes already
+(FakeAudioSession, FakeAudioPlayerFactory, FakeNotificationCenter); extend them rather than
+touching real audio or notifications.
+
+======================================================================================
+CONSTRAINTS
+======================================================================================
+- Don't touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine). If a
+  capability or build setting has to change there, stop and ask. Stage files explicitly;
+  never `git add -A` or `git commit -a`.
+- No Core Data model change without asking (Add Note may tempt one).
+- No ZeezScore input, weight or band change without asking. If one is needed, bump
+  ZeezScore.version and ZEEZ_SCORE_SPECIFICATION.md together.
+- Don't start, without asking: the premium spec or paywall, D3c, the per-night source
+  amendment, Learn seeding, the alarm volume table, or the off-main audio start.
+- The alarm is the product's core. Every change on its path needs a test, and its device
+  checks go first in DEVICE_TEST_RUN's alarm section.
+- ZeezLogger, never print. Interactive elements keep accessibilityLabel and
+  accessibilityHint. No dead controls (DeadControlGuardTests).
+- If my developer account is renewed mid-batch, finish the current commit and ask whether
+  to run the device pass first.
+- If something here turns out wrong, say so and adapt. Don't force it.
+
+======================================================================================
+FINAL REPORT
+======================================================================================
+Commits (SHA and subject); tests and suites before and after; each new test with the
+evidence that it failed against the old code; the attribution check, watch build and UI
+smoke; the design decisions as taken; what changed in PARKED, FUTURE, SECOND_AUDIT §7 and
+DEVICE_TEST_RUN; and anything unanticipated.
+```
+
+**When the developer account is renewed: the device pass**, before anything else (if the recording batch is under
+way, finish its current commit first). T1 relocates the store *and* runs
 its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. The
 prompt:
 
@@ -594,15 +774,15 @@ in-app recording or seeding Learn content without asking.
 - **D2's findings** (`FUTURE_IMPROVEMENTS.md`, "Found by D2, waiting on the device pass"): the volume table and the
   off-main audio start wait on T5.1. The other five were fixed in the no-hardware batch.
 - **The paywall's copy** (found 2026-10-26): `SubscriptionView` sells capabilities that do not exist, so no screen
-  opens it (`PaywallReachabilityGuardTests`), which blocks `DEVICE_TEST_RUN.md` T13. A product decision first.
-- **In-app recording is parked** (2026-10-29, `PARKED_CAPABILITIES.md` §14): no screen starts a session, so a
+  opens it (`PaywallReachabilityGuardTests`), which blocks `DEVICE_TEST_RUN.md` T13. The free/premium split is decided
+  (2026-10-29, above); a premium spec comes after recording, then the copy, then an entry point.
+- **In-app recording** (2026-10-29, `PARKED_CAPABILITIES.md` §14): to be reconnected, prompt above. Until it lands a
   release build cannot show a Zeez score, and `DEVICE_TEST_RUN.md` T4's scored-session checks and T9 are blocked.
-  Reconnecting it is a product decision.
 - **Learn has no content** (2026-10-29, `PARKED_CAPABILITIES.md` §10): the seeder has never run, nothing creates a
-  quiz, and Learning Paths' IDs match no category. Its copy needs a claims review before anything is seeded.
-- **Found by the dead-code batch** (`FUTURE_IMPROVEMENTS.md`, still open): `ErrorManager`'s errors reach no screen;
-  `StoreKitManager`'s transaction listener never starts (with the paywall item); Learn reminders pile up on each time
-  change; and stage-duration helpers only tests use.
+  quiz, and Learning Paths' IDs match no category. Low priority; its copy is reviewed before App Store submission.
+- **Found by the dead-code batch** (`FUTURE_IMPROVEMENTS.md`, still open): `ErrorManager`'s errors reach no screen
+  (its alert policy is decided and lands with recording); `StoreKitManager`'s transaction listener never starts (with
+  the paywall item); Learn reminders pile up on each time change; and stage-duration helpers only tests use.
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
   which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
 - **Blocked on the renewed account:** the device pass (the prompt above), D3c WidgetKit extension (needs the App

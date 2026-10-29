@@ -586,7 +586,9 @@ Privacy questionnaire and `PrivacyInfo.xcprivacy` updated to match, with a priva
 
 ## 14. In-app recording UI — *built, never routed; parked in tree, not deleted*
 
-**Status:** Present in the codebase, deliberately dormant (Daniel, 2026-10-29). Not scheduled.
+**Status:** Present in the codebase, deliberately dormant (Daniel, 2026-10-29). **Later the same day Daniel decided
+to reconnect it**, overnight through background audio; `SECOND_AUDIT_IMPROVEMENTS.md` §7 holds the prompt. This entry
+stays until that lands.
 
 **Files:** `Zeez/Sleep/SleepControlView.swift`, `Zeez/Sleep/SleepGoalSettingsView.swift`.
 

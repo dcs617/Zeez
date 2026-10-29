@@ -164,6 +164,10 @@ Carried over from the archived roadmap's Phase 3.
   the paywall now, and `PaywallReachabilityGuardTests` keeps it that way. **This blocks `DEVICE_TEST_RUN.md` T13**
   (StoreKit sandbox), which needs a paywall to buy from. Decide what premium actually unlocks, rewrite the feature
   list against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md`, then give it an entry point and change the guard on purpose.
+  **Split decided 2026-10-29:** free keeps recording, last night with the experimental score, the alarm, Apple Health
+  import and the last 7 days; premium adds longer history and Trends, month-over-month comparison, links to the user's
+  own notes and environment, and suggestions from the user's own history against their own goal (Tier 3, `PARKED_CAPABILITIES.md`
+  §5). Next: a written spec per premium feature, after recording is reconnected, since most of it needs recorded nights.
 - Real WidgetKit extension. The in-app `Zeez/Widgets/` tree was deleted in **B1** (it was
   unreachable and carried fabricated readings); a genuine extension target has not been built.
   Tracked as Phase **D3c**; see `PARKED_CAPABILITIES.md` §4. Its Core Data prerequisite is done:
@@ -216,7 +220,11 @@ Carried over from the archived roadmap's Phase 3.
   the microphone and motion monitors, and a release build cannot show a Zeez score (Apple Health nights are never
   scored). Daniel chose to park it. **Blocks `DEVICE_TEST_RUN.md` T4's scored-session checks and T9.** Reconnecting
   needs a route, a working Add Note, the promised session summary, an error surface, and a decision on
-  `SleepGoalSettingsView`, which duplicates Settings' Sleep Goal section.
+  `SleepGoalSettingsView`, which duplicates Settings' Sleep Goal section. **Decided later on 2026-10-29: reconnect it,
+  overnight through background audio**, with a soft charger suggestion; the prompt is queued in
+  `SECOND_AUDIT_IMPROVEMENTS.md` §7. Found while writing it: `EnvironmentalMonitor` (`.playAndRecord`) and
+  `AlarmAudioController` (`.playback`) each set the shared audio session's category, and `MovementDataManager` takes
+  one accelerometer reading a minute, which may not measure movement at all.
 - **Learn has no content** (2026-10-29; `PARKED_CAPABILITIES.md` §10, "Learn content was never seeded").
   `LearnContentManager.ensureDefaultContent` has never had a caller, so Articles and Challenges are always empty,
   and the daily "Time to Learn" reminder opens that empty tab. Nothing creates a `Quiz`, so the quiz card wired
@@ -224,8 +232,9 @@ Carried over from the archived roadmap's Phase 3.
   `LearnCategory` values, so every path would stay empty, and `LearnPathDetail`, shown as a sheet, has no
   `NavigationStack` for its article links. `LearnNotificationManager`'s challenge reminders have no callers, and
   the first schedules every day's reminder for the same moment. Learn Settings' "Show Completed Challenges" toggle is
-  read by nothing yet. The parked seeder's six articles and three
-  challenges need a review against `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` §4 first.
+  read by nothing yet. The parked seeder's six articles and three challenges need a review against
+  `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` §4 first. Low priority (2026-10-29), but done before App Store submission:
+  an empty section is a guideline 2.1 risk.
 - **Learn reminders pile up** (2026-10-29). Each change of Learn → Settings → Reminder Time schedules another
   repeating daily reminder under a new identifier and leaves the earlier ones, so dragging the picker can leave
   dozens. They count against iOS's 64 pending notifications, which the alarm's follow-up chains also need
@@ -234,8 +243,10 @@ Carried over from the archived roadmap's Phase 3.
 - **`ErrorManager`'s errors reach no screen** (2026-10-29). `ErrorView` was its only presenter and was never
   applied; it is deleted. Live reports therefore go nowhere: `SceneDelegate`'s failed viewContext save and badge
   reset, `BackgroundTaskManager`'s scheduling failures and its low-battery and low-storage warnings (checked on every
-  foreground), and `TrendsView.swift:230`. The rest come from the parked recording path. Giving it a presenter is
-  a product decision; don't start it without asking.
+  foreground), and `TrendsView.swift:230`. The rest come from the parked recording path. **Policy decided 2026-10-29**
+  and built with recording: alert for a failed save, low storage, a recording that fails to start or end, and a
+  permission denied when one starts (with Open Settings); log only scheduling failures, the badge reset and low battery
+  on foreground; each alert at most once per occurrence.
 - **`StoreKitManager`'s transaction listener never starts** (2026-10-29). It starts in `StoreKitManager`'s init,
   and only `SubscriptionView`, which no screen opens, touches `StoreKitManager.shared`. Purchases made elsewhere
   (another device, Ask to Buy, a refund) are not observed. Belongs with the paywall item above.
