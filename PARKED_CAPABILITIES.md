@@ -131,7 +131,10 @@ prohibited phrases across every non-Learn tree and will fail the build if they r
 teaches sleep debt as a published concept (NHLBI framing) rather than reporting the user's own,
 and says so on screen. `DailyMetrics.sleepDebt` also remains, as a persisted Core Data attribute
 — renaming it requires a new model version, so the name stays and the *presentation* is what the
-guard test polices.
+guard test polices. Its only writer in a release build, `Sleep/SleepMetricsCalculator.swift`, was deleted
+2026-10-29 (the dead-code batch): it filled `DailyMetrics` with total sleep, average heart rate, and
+`sleepDebt` as the shortfall against the goal, and nothing read those rows. The `DailyMetrics` and
+`WeeklyMetrics` entities stay (no model change); only `MockDataGenerator` writes them, in DEBUG builds.
 
 **Validation status.** Not applicable; the framing is prohibited rather than unvalidated.
 

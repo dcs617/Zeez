@@ -130,30 +130,4 @@ struct SleepDebtTrackingTests {
 
         #expect(SleepGoalPolicy.duration(from: bedtime, to: wakeTime) == 8 * 3600)
     }
-
-    @Test("Daily metrics keep duration and goal shortfall in seconds")
-    func dailyMetricsUseConsistentTimeUnits() async throws {
-        let context = makeContext()
-        let session = try context.performAndWait {
-            addPreferences(goalHours: 8, in: context)
-            let session = addSession(
-                start: date(25, hour: 22),
-                hours: 6,
-                source: "Manual Session",
-                in: context
-            )
-            try context.save()
-            return session
-        }
-
-        try await SleepMetricsCalculator().updateDailyMetrics(for: session, in: context)
-
-        let stored = try context.performAndWait {
-            try context.fetch(DailyMetrics.fetchRequest()).first
-                .map { (totalSleepTime: $0.totalSleepTime, sleepDebt: $0.sleepDebt) }
-        }
-        let metrics = try #require(stored)
-        #expect(metrics.totalSleepTime == 6 * 3600)
-        #expect(metrics.sleepDebt == 2 * 3600)
-    }
 }
