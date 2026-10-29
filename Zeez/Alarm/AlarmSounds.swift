@@ -77,13 +77,16 @@ struct AlarmSounds {
     }
     
     /// Preview a sound (play it for a few seconds)
-    static func previewSound(_ soundOption: AlarmSoundOption, completion: @escaping () -> Void) {
+    static func previewSound(_ soundOption: AlarmSoundOption, completion originalCompletion: @escaping () -> Void) {
         var player: AVAudioPlayer?
-        
+        // Every way out gives the session back, so a preview never keeps it from a recording.
+        let completion = {
+            AudioSessionCoordinator.shared.release(.preview)
+            originalCompletion()
+        }
+
         do {
-            // Configure audio session for playback
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
+            try AudioSessionCoordinator.shared.acquire(.preview)
             
             if soundOption.isBuiltIn {
                 // For built-in default sound, play the system alert sound

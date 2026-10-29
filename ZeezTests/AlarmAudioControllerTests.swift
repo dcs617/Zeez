@@ -4,7 +4,7 @@ import AVFoundation
 @testable import Zeez
 
 /// Records what the alarm audio asked of the audio session (second-audit D2b).
-final class FakeAudioSession: AlarmAudioSessioning, @unchecked Sendable {
+final class FakeAudioSession: AudioSessioning, @unchecked Sendable {
     enum Call: Equatable {
         case setCategory(AVAudioSession.Category, AVAudioSession.CategoryOptions)
         case setActive(Bool, AVAudioSession.SetActiveOptions)

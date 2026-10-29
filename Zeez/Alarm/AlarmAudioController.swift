@@ -7,7 +7,7 @@ import os.log
 final class AlarmAudioController {
     static let shared = AlarmAudioController()
 
-    private let session: AlarmAudioSessioning
+    private let audioSession: AudioSessionCoordinator
     private let players: AlarmAudioPlayerMaking
     private var player: AlarmAudioPlaying?
     private(set) var isPlaying = false
@@ -28,19 +28,17 @@ final class AlarmAudioController {
     private static let fallbackName = "Alarm_Classic"
     private static let fallbackVolume: Float = 0.8
 
-    // Xcode 26's SDK renames .allowBluetooth → .allowBluetoothHFP (old name deprecated);
-    // CI builds with Xcode 16.x, which only has .allowBluetooth.
-    #if compiler(>=6.2)
-    private let bluetoothOption: AVAudioSession.CategoryOptions = .allowBluetoothHFP
-    #else
-    private let bluetoothOption: AVAudioSession.CategoryOptions = .allowBluetooth
-    #endif
-
-    /// Tests inject a fake session + player factory; production uses the real ones.
-    init(session: AlarmAudioSessioning = AVAudioSession.sharedInstance(),
+    /// Production shares the app's one audio-session owner with the recording, so the alarm
+    /// always outranks it (`AudioSessionCoordinator`).
+    init(coordinator: AudioSessionCoordinator = .shared,
          players: AlarmAudioPlayerMaking = AVAudioPlayerMaker()) {
-        self.session = session
+        self.audioSession = coordinator
         self.players = players
+    }
+
+    /// Tests: a controller on a fake session of its own, and a fake player factory.
+    convenience init(session: AudioSessioning, players: AlarmAudioPlayerMaking) {
+        self.init(coordinator: AudioSessionCoordinator(session: session), players: players)
     }
 
     /// Whether the alarm has fallen back to the repeating system beep, the last resort
@@ -61,8 +59,7 @@ final class AlarmAudioController {
 
     private func play(_ source: Source, volume: Float) {
         do {
-            try session.setCategory(.playback, mode: .default, options: [.duckOthers, bluetoothOption])
-            try session.setActive(true, options: [])
+            try audioSession.acquire(.alarm)
 
             let url: URL
             let playerVolume: Float
@@ -152,12 +149,10 @@ final class AlarmAudioController {
         fallbackTimer?.invalidate()
         fallbackTimer = nil
 
-        do {
-            try session.setActive(false, options: [.notifyOthersOnDeactivation])
-            ZeezLogger.info(ZeezLogger.alarm, "🔇 Stopped alarm audio")
-        } catch {
-            ZeezLogger.error(ZeezLogger.alarm, "Error deactivating audio session", error: error)
-        }
+        // Deactivates the session, unless a recording still holds it: then the recording gets
+        // its microphone back instead of the app being suspended under it.
+        audioSession.release(.alarm)
+        ZeezLogger.info(ZeezLogger.alarm, "🔇 Stopped alarm audio")
     }
 
     /// Test if a sound file is playable

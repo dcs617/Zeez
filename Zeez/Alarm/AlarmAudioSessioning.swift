@@ -1,16 +1,6 @@
 import AVFoundation
 
-/// The slice of AVAudioSession the alarm's looped audio uses (second-audit D2b).
-///
-/// Production injects the shared session; tests inject a fake that records what was
-/// asked of it, so stopping can be checked for `.notifyOthersOnDeactivation`.
-protocol AlarmAudioSessioning: AnyObject {
-    func setCategory(_ category: AVAudioSession.Category, mode: AVAudioSession.Mode,
-                     options: AVAudioSession.CategoryOptions) throws
-    func setActive(_ active: Bool, options: AVAudioSession.SetActiveOptions) throws
-}
-
-extension AVAudioSession: AlarmAudioSessioning {}
+// The audio session itself belongs to `AudioSessionCoordinator` (`AudioSessioning`).
 
 /// The slice of AVAudioPlayer the alarm's looped audio uses.
 protocol AlarmAudioPlaying: AnyObject {

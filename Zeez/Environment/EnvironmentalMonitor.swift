@@ -27,6 +27,19 @@ final class EnvironmentalMonitor {
     private init() {
         self.persistenceController = .shared
         removeLegacyRecordingFile()
+        // The alarm outranks the recording for the audio session. While it rings the recorder
+        // is stopped, so samples read "not measured", and it restarts when the alarm stops.
+        AudioSessionCoordinator.shared.recordingInputChanged = { [weak self] hasInput in
+            DispatchQueue.main.async {
+                guard let self, self.monitoringTimer != nil, !self.microphoneDenied else { return }
+                if hasInput {
+                    self.startRecorder()
+                } else {
+                    self.audioRecorder?.stop()
+                    self.audioRecorder = nil
+                }
+            }
+        }
     }
 
     func startMonitoring(for session: SleepSession) {
@@ -56,7 +69,8 @@ final class EnvironmentalMonitor {
         monitoringTimer = nil
         audioRecorder?.stop()
         audioRecorder = nil
-        try? AVAudioSession.sharedInstance().setActive(false)
+        // Deactivates the session only if the alarm does not hold it.
+        AudioSessionCoordinator.shared.release(.recording)
     }
     
     func getEnvironmentalReadings(for session: SleepSession) throws -> [EnvironmentalReading] {
@@ -97,11 +111,13 @@ final class EnvironmentalMonitor {
     }
     
     private func startRecorder() {
-        let audioSession = AVAudioSession.sharedInstance()
+        let coordinator = AudioSessionCoordinator.shared
 
         do {
-            try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [])
-            try audioSession.setActive(true)
+            try coordinator.acquire(.recording)
+            // The alarm (or a sound preview) holds the session: the recorder starts when it
+            // is handed back, and samples until then read "not measured".
+            guard coordinator.recordingHasInput else { return }
 
             // Metering only — record to /dev/null so no audio ever reaches disk.
             // The NSMicrophoneUsageDescription promises on-device analysis with
@@ -130,18 +146,10 @@ final class EnvironmentalMonitor {
         try? FileManager.default.removeItem(at: legacyURL)
     }
     
+    /// Asks for the microphone. Asking needs no audio-session category.
     func checkSensorAvailability(completion: @escaping (Bool) -> Void) {
-        let audioSession = AVAudioSession.sharedInstance()
-
-        do {
-            try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [])
-
-            // The microphone is the only sensor monitoring actually uses (2.9).
-            AVAudioApplication.requestRecordPermission { hasPermission in
-                completion(hasPermission)
-            }
-        } catch {
-            completion(false)
+        AVAudioApplication.requestRecordPermission { hasPermission in
+            completion(hasPermission)
         }
     }
 
