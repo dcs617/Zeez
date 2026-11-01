@@ -20,20 +20,23 @@ final class EnvironmentalMonitor {
     private var monitoringTimer: Timer?
     private let samplingInterval: TimeInterval = 300 // 5 minutes
     private let errorManager = ErrorManager.shared
-    /// Set when the user has denied mic access so sampling degrades to
-    /// non-noise metrics without re-reporting an error every interval.
-    private var microphoneDenied = false
+    private let microphone: MicrophonePermission
 
     private init() {
         self.persistenceController = .shared
+        self.microphone = LiveMicrophonePermission()
         removeLegacyRecordingFile()
         // The alarm outranks the recording for the audio session. While it rings the recorder
         // is stopped, so samples read "not measured", and it restarts when the alarm stops.
         AudioSessionCoordinator.shared.recordingInputChanged = { [weak self] hasInput in
             DispatchQueue.main.async {
-                guard let self, self.monitoringTimer != nil, !self.microphoneDenied else { return }
+                guard let self, self.monitoringTimer != nil else { return }
                 if hasInput {
-                    self.startRecorder()
+                    do {
+                        try self.startRecorder()
+                    } catch {
+                        ZeezLogger.error(ZeezLogger.environment, "Microphone did not restart", error: error)
+                    }
                 } else {
                     self.audioRecorder?.stop()
                     self.audioRecorder = nil
@@ -42,26 +45,30 @@ final class EnvironmentalMonitor {
         }
     }
 
-    func startMonitoring(for session: SleepSession) {
+    /// Starts sampling. Main thread. Throws when the microphone is not allowed or does not
+    /// start: a recording measures nothing without it (decision 2026-11-01), so the caller
+    /// does not start one. `SleepRecordingController` asks for access before it gets here.
+    func startMonitoring(for session: SleepSession) throws {
         stopMonitoring()
 
-        // Noise sampling needs the microphone — ask before first use and
-        // degrade to light/temperature-only monitoring if the user declines.
-        AVAudioApplication.requestRecordPermission { [weak self] granted in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.microphoneDenied = !granted
-                if granted {
-                    self.startRecorder()
-                } else {
-                    ZeezLogger.info(ZeezLogger.environment, "Microphone permission denied — monitoring without noise sampling")
-                }
-                self.monitoringTimer = Timer.scheduledTimer(withTimeInterval: self.samplingInterval, repeats: true) { [weak self] _ in
-                    self?.captureEnvironmentalData(for: session)
-                }
-                self.monitoringTimer?.fire()
+        guard microphone.isGranted else { throw AppError.microphonePermissionDenied }
+        let coordinator = AudioSessionCoordinator.shared
+        try coordinator.acquire(.recording)
+        // A sound preview may hold the session for a moment: the recorder then starts when it
+        // is handed back.
+        if coordinator.recordingHasInput {
+            do {
+                try startRecorder()
+            } catch {
+                coordinator.release(.recording)
+                throw error
             }
         }
+
+        monitoringTimer = Timer.scheduledTimer(withTimeInterval: samplingInterval, repeats: true) { [weak self] _ in
+            self?.captureEnvironmentalData(for: session)
+        }
+        monitoringTimer?.fire()
     }
 
     func stopMonitoring() {
@@ -110,32 +117,24 @@ final class EnvironmentalMonitor {
         }
     }
     
-    private func startRecorder() {
-        let coordinator = AudioSessionCoordinator.shared
+    /// Starts the meter. The recording must hold the audio session with its input live.
+    private func startRecorder() throws {
+        audioRecorder?.stop()
+        audioRecorder = nil
 
-        do {
-            try coordinator.acquire(.recording)
-            // The alarm (or a sound preview) holds the session: the recorder starts when it
-            // is handed back, and samples until then read "not measured".
-            guard coordinator.recordingHasInput else { return }
+        // Metering only — record to /dev/null so no audio ever reaches disk.
+        // The NSMicrophoneUsageDescription promises on-device analysis with
+        // no storage or upload; this is what keeps that claim true.
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatAppleIMA4),
+            AVSampleRateKey: 8000.0,
+            AVNumberOfChannelsKey: 1
+        ]
 
-            // Metering only — record to /dev/null so no audio ever reaches disk.
-            // The NSMicrophoneUsageDescription promises on-device analysis with
-            // no storage or upload; this is what keeps that claim true.
-            let settings: [String: Any] = [
-                AVFormatIDKey: Int(kAudioFormatAppleIMA4),
-                AVSampleRateKey: 8000.0,
-                AVNumberOfChannelsKey: 1
-            ]
-
-            let recorder = try AVAudioRecorder(url: URL(fileURLWithPath: "/dev/null"), settings: settings)
-            recorder.isMeteringEnabled = true
-            recorder.record()
-            audioRecorder = recorder
-
-        } catch {
-            errorManager.reportError(AppError.sensorDataUnavailable)
-        }
+        let recorder = try AVAudioRecorder(url: URL(fileURLWithPath: "/dev/null"), settings: settings)
+        recorder.isMeteringEnabled = true
+        guard recorder.record() else { throw AppError.sensorDataUnavailable }
+        audioRecorder = recorder
     }
 
     /// Earlier builds recorded lossless audio to Documents indefinitely
@@ -155,8 +154,7 @@ final class EnvironmentalMonitor {
 
     /// Returns a relative noise index (0–100), not decibels. See `NoiseIndex`.
     private func captureNoiseLevel() -> Double {
-        // Mic denied or recorder unavailable — record "not measured", not silence.
-        guard !microphoneDenied else { return EnvironmentalReading.notMeasured }
+        // Recorder unavailable — record "not measured", not silence.
         guard let recorder = audioRecorder else {
             errorManager.reportError(AppError.sensorDataUnavailable)
             return EnvironmentalReading.notMeasured

@@ -6,15 +6,16 @@ import os.log
 /// What a recording runs while it is active. Production starts the microphone and motion
 /// monitors; tests pass a fake, so starting a session never touches real audio or Core Motion.
 protocol SessionMonitoring {
-    func start(for session: SleepSession)
+    /// Throws when the recording cannot run: without the microphone it measures nothing.
+    func start(for session: SleepSession) throws
     func stop()
 }
 
 /// The monitors a recording runs. Their lifecycle belongs here and nowhere else
 /// (`SessionMonitorLifecycleGuardTests`).
 struct LiveSessionMonitors: SessionMonitoring {
-    func start(for session: SleepSession) {
-        EnvironmentalMonitor.shared.startMonitoring(for: session)
+    func start(for session: SleepSession) throws {
+        try EnvironmentalMonitor.shared.startMonitoring(for: session)
         MovementDataManager.shared.startMonitoring(for: session)
     }
 
@@ -53,6 +54,8 @@ final class SleepSessionManager {
     }
     
     /// Recording needs no HealthKit: heart rate is synced at the end when HealthKit has any.
+    /// It does need its monitors: when they cannot start, the session is deleted again rather
+    /// than left running with nothing recording it, and the error goes to the caller.
     func startSession(completion: @escaping (Result<SleepSession, Error>) -> Void) {
         let context = persistenceController.container.viewContext
 
@@ -71,15 +74,28 @@ final class SleepSessionManager {
             
             // Save if validation passes
             try context.save()
-            completion(.success(session))
-
-            monitors.start(for: session)
-
         } catch {
             context.rollback()
             errorManager.reportError(error)
             completion(.failure(error))
+            return
         }
+
+        do {
+            try monitors.start(for: session)
+        } catch {
+            ZeezLogger.error(ZeezLogger.sleepTracking, "Recording monitors did not start", error: error)
+            monitors.stop()
+            context.delete(session)
+            do {
+                try context.save()
+            } catch {
+                ZeezLogger.error(ZeezLogger.sleepTracking, "Could not remove the recording that did not start", error: error)
+            }
+            completion(.failure(error))
+            return
+        }
+        completion(.success(session))
     }
     
     /// Ends a recording at `endTime`, capped at `AppConstants.Sleep.maximumSessionDuration`.

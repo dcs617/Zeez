@@ -158,11 +158,12 @@ enum AppError: LocalizedError, Equatable {
         }
     }
 
-    /// A condition holds until it clears (storage freed, access granted), so one occurrence
-    /// spans every check that finds it; an event is an occurrence by itself.
+    /// A condition holds until it clears (storage freed), so one occurrence spans every check
+    /// that finds it; an event is an occurrence by itself. A Start refused for want of the
+    /// microphone is an event: each tap that does nothing has to say why.
     var isCondition: Bool {
         switch self {
-        case .storageSpaceLow, .microphonePermissionDenied:
+        case .storageSpaceLow:
             return true
         default:
             return false

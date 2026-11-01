@@ -63,7 +63,9 @@ struct RecordingAlarmBoundaryTests {
                    withCompletionHandler: nil)
 
         var clock = Date()
-        let controller = SleepRecordingController(manager: manager, notificationCenter: center, now: { clock })
+        let controller = SleepRecordingController(manager: manager, notificationCenter: center,
+                                                  microphone: FakeMicrophonePermission(granted: true),
+                                                  errors: ErrorManager(), now: { clock })
 
         let session: SleepSession = try await withCheckedThrowingContinuation { continuation in
             controller.start { continuation.resume(with: $0) }

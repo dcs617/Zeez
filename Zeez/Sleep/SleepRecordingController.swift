@@ -28,6 +28,10 @@ enum RecordingAlarmBoundary {
 
 /// The live recording: starts and ends sessions through `SleepSessionManager`, and ends a
 /// running one just before the next alarm (`RecordingAlarmBoundary`). Main thread only.
+///
+/// A recording needs the microphone (decision 2026-11-01), so Start asks first: when access
+/// is refused, nothing starts and the alert offers Settings. A recording that cannot start
+/// for any other reason alerts too (decision 4, 2026-10-29).
 final class SleepRecordingController: ObservableObject {
     static let shared = SleepRecordingController()
 
@@ -37,25 +41,47 @@ final class SleepRecordingController: ObservableObject {
 
     private let manager: SleepSessionManager
     private let center: AlarmNotificationScheduling
+    private let microphone: MicrophonePermission
+    private let errors: ErrorManager
     private let now: () -> Date
     private var alarmTimer: Timer?
 
-    /// Tests inject an in-memory manager, a fake notification center and a clock.
+    /// Tests inject an in-memory manager, fakes for the notification center and the
+    /// microphone, their own error manager, and a clock.
     init(manager: SleepSessionManager = .shared,
          notificationCenter: AlarmNotificationScheduling = UNUserNotificationCenter.current(),
+         microphone: MicrophonePermission = LiveMicrophonePermission(),
+         errors: ErrorManager = .shared,
          now: @escaping () -> Date = Date.init) {
         self.manager = manager
         self.center = notificationCenter
+        self.microphone = microphone
+        self.errors = errors
         self.now = now
     }
 
     func start(completion: @escaping (Result<SleepSession, Error>) -> Void) {
-        manager.startSession { [weak self] result in
-            if case .success(let session) = result {
-                self?.activeSession = session
-                self?.refreshAlarmBoundary()
+        microphone.request { [weak self] granted in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                guard granted else {
+                    ZeezLogger.info(ZeezLogger.sleepTracking, "Recording not started: no microphone access")
+                    self.errors.report(.microphonePermissionDenied)
+                    completion(.failure(AppError.microphonePermissionDenied))
+                    return
+                }
+                self.manager.startSession { result in
+                    switch result {
+                    case .success(let session):
+                        self.activeSession = session
+                        self.refreshAlarmBoundary()
+                    case .failure(let error):
+                        let denied = (error as? AppError) == .microphonePermissionDenied
+                        self.errors.report(denied ? .microphonePermissionDenied : .sleepSessionCreationFailed)
+                    }
+                    completion(result)
+                }
             }
-            completion(result)
         }
     }
 
@@ -96,10 +122,10 @@ final class SleepRecordingController: ObservableObject {
         guard activeSession != nil else { return }
         let endTime = min(now(), alarmEndTime ?? now())
         ZeezLogger.info(ZeezLogger.sleepTracking, "Recording ends for the alarm")
-        end(at: endTime) { result in
+        end(at: endTime) { [errors] result in
             if case .failure(let error) = result {
                 ZeezLogger.error(ZeezLogger.sleepTracking, "Recording did not end for the alarm", error: error)
-                ErrorManager.shared.report(.sleepSessionUpdateFailed)
+                errors.report(.sleepSessionUpdateFailed)
             }
             completion(result)
         }

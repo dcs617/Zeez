@@ -8,6 +8,12 @@ final class FakeSessionMonitors: SessionMonitoring, @unchecked Sendable {
     private let lock = NSLock()
     private var starts = 0
     private var stops = 0
+    private let startError: Error?
+
+    /// `startError`: the monitors fail to start with it, as a microphone that won't start does.
+    init(startError: Error? = nil) {
+        self.startError = startError
+    }
 
     var startCount: Int {
         lock.lock(); defer { lock.unlock() }
@@ -18,8 +24,9 @@ final class FakeSessionMonitors: SessionMonitoring, @unchecked Sendable {
         return stops
     }
 
-    func start(for session: SleepSession) {
+    func start(for session: SleepSession) throws {
         lock.lock(); starts += 1; lock.unlock()
+        if let startError { throw startError }
     }
     func stop() {
         lock.lock(); stops += 1; lock.unlock()
