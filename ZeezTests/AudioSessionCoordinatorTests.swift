@@ -37,9 +37,9 @@ struct AudioSessionCoordinatorTests {
     private static let alarmOptions: AVAudioSession.CategoryOptions = [.duckOthers, .allowBluetooth]
     #endif
 
-    private func coordinator() -> (AudioSessionCoordinator, FakeAudioSession, RecordingInputLog) {
+    private func coordinator(notifications: NotificationCenter = NotificationCenter()) -> (AudioSessionCoordinator, FakeAudioSession, RecordingInputLog) {
         let session = FakeAudioSession()
-        let coordinator = AudioSessionCoordinator(session: session)
+        let coordinator = AudioSessionCoordinator(session: session, notificationCenter: notifications)
         let log = RecordingInputLog()
         coordinator.recordingInputChanged = { log.record($0) }
         return (coordinator, session, log)
@@ -154,6 +154,91 @@ struct AudioSessionCoordinatorTests {
 
         #expect(!Array(session.calls.dropFirst(before)).contains(.setActive(false, [.notifyOthersOnDeactivation])))
         #expect(coordinator.recordingHasInput)
+    }
+
+    private static func interruption(_ type: AVAudioSession.InterruptionType, on center: NotificationCenter) {
+        center.post(name: AVAudioSession.interruptionNotification, object: nil,
+                    userInfo: [AVAudioSessionInterruptionTypeKey: type.rawValue])
+    }
+
+    @Test("A call takes the recording's input, and the recording gets it back when the call ends")
+    func interruptionPausesAndResumesTheRecording() throws {
+        let notifications = NotificationCenter()
+        let (coordinator, session, log) = coordinator(notifications: notifications)
+        try coordinator.acquire(.recording)
+
+        Self.interruption(.began, on: notifications)
+        #expect(log.changes == [false])
+        #expect(!coordinator.recordingHasInput, "The recording would sample a microphone the call has taken")
+
+        let before = session.calls.count
+        Self.interruption(.ended, on: notifications)
+        #expect(Array(session.calls.dropFirst(before)) == [Self.recordingCategory, .setActive(true, [])])
+        #expect(log.changes == [false, true])
+        #expect(coordinator.recordingHasInput)
+    }
+
+    @Test("While the session cannot be reactivated, the recording stays without input")
+    func refusedReactivationKeepsTheRecordingPaused() throws {
+        let notifications = NotificationCenter()
+        let (coordinator, session, log) = coordinator(notifications: notifications)
+        try coordinator.acquire(.recording)
+        Self.interruption(.began, on: notifications)
+
+        session.refusesActivation = true
+        #expect(!coordinator.reactivateRecording())
+        #expect(log.changes == [false])
+        #expect(!coordinator.recordingHasInput)
+
+        session.refusesActivation = false
+        #expect(coordinator.reactivateRecording())
+        #expect(coordinator.recordingHasInput)
+    }
+
+    @Test("An interruption's end leaves a ringing alarm's session alone")
+    func interruptionEndDoesNotTouchTheAlarm() throws {
+        let notifications = NotificationCenter()
+        let (coordinator, session, log) = coordinator(notifications: notifications)
+        try coordinator.acquire(.recording)
+        try coordinator.acquire(.alarm)
+        let before = session.calls.count
+
+        Self.interruption(.began, on: notifications)
+        Self.interruption(.ended, on: notifications)
+        notifications.post(name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+
+        #expect(session.calls.count == before, "The alarm's audio path is not the coordinator's to resume")
+        #expect(log.changes == [false])
+    }
+
+    @Test("After media services reset, the recording's session is configured again")
+    func mediaResetRebuildsTheRecordingSession() throws {
+        let notifications = NotificationCenter()
+        let (coordinator, session, log) = coordinator(notifications: notifications)
+        try coordinator.acquire(.recording)
+        let before = session.calls.count
+
+        notifications.post(name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
+
+        #expect(Array(session.calls.dropFirst(before)) == [Self.recordingCategory, .setActive(true, [])])
+        #expect(log.changes == [false, true], "Its old recorder is gone; it needs a new one")
+    }
+
+    @Test("A headset coming or going makes the recording check its input; the coordinator's own category changes do not")
+    func routeChangesReachTheRecording() throws {
+        let notifications = NotificationCenter()
+        let (coordinator, _, log) = coordinator(notifications: notifications)
+        try coordinator.acquire(.recording)
+
+        for reason: AVAudioSession.RouteChangeReason in [.categoryChange, .override] {
+            notifications.post(name: AVAudioSession.routeChangeNotification, object: nil,
+                               userInfo: [AVAudioSessionRouteChangeReasonKey: reason.rawValue])
+        }
+        #expect(log.changes.isEmpty)
+
+        notifications.post(name: AVAudioSession.routeChangeNotification, object: nil,
+                           userInfo: [AVAudioSessionRouteChangeReasonKey: AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue])
+        #expect(log.changes == [true])
     }
 }
 

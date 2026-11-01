@@ -12,10 +12,17 @@ final class FakeAudioSession: AudioSessioning, @unchecked Sendable {
 
     private let lock = NSLock()
     private var storage: [Call] = []
+    private var refusing = false
 
     var calls: [Call] {
         lock.lock(); defer { lock.unlock() }
         return storage
+    }
+
+    /// Activation fails, as it does while a phone call holds the audio hardware.
+    var refusesActivation: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return refusing }
+        set { lock.lock(); refusing = newValue; lock.unlock() }
     }
 
     func setCategory(_ category: AVAudioSession.Category, mode: AVAudioSession.Mode,
@@ -24,7 +31,11 @@ final class FakeAudioSession: AudioSessioning, @unchecked Sendable {
     }
 
     func setActive(_ active: Bool, options: AVAudioSession.SetActiveOptions) throws {
-        lock.lock(); storage.append(.setActive(active, options)); lock.unlock()
+        lock.lock()
+        storage.append(.setActive(active, options))
+        let refuse = active && refusing
+        lock.unlock()
+        if refuse { throw NSError(domain: "FakeAudioSession", code: 1) }
     }
 }
 

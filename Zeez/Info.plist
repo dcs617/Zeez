@@ -32,7 +32,7 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Zeez needs permission to save sleep-related data to HealthKit.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Zeez samples ambient noise levels while you sleep to score your sleep environment. Audio is analyzed on-device and never stored or uploaded.</string>
+	<string>Zeez measures how loud your room is while you record a night. Audio is analyzed on your iPhone and never stored or uploaded.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -52,6 +52,7 @@
 	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
+		<string>audio</string>
 		<string>processing</string>
 	</array>
 	<key>UILaunchScreen</key>

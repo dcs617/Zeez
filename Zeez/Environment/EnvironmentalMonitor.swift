@@ -3,43 +3,73 @@ import AVFoundation
 import UIKit
 import os.log
 
-/// Samples the sleep environment while the app is in the FOREGROUND (2.9).
+/// The slice of `AVAudioRecorder` the monitor uses, so tests can stand in a fake meter.
+protocol NoiseMeter: AnyObject {
+    var isRecording: Bool { get }
+    func record() -> Bool
+    func stop()
+    func updateMeters()
+    func averagePower(forChannel channelNumber: Int) -> Float
+}
+
+extension AVAudioRecorder: NoiseMeter {}
+
+/// Samples the room's noise while a recording runs, all night (2026-11-01).
 ///
-/// Honest scope, per the 1.7 relabel precedent: the sampling timer is suspended
-/// with the app, so a locked phone collects nothing overnight — full-night
-/// coverage requires Zeez open on a charging device. Only noise is genuinely
-/// measured (microphone metering); iPhones have no ambient temperature/humidity
+/// The app keeps running with the phone locked because the recording holds a live microphone
+/// (UIBackgroundModes `audio`); without one, iOS suspends it and nothing is sampled. Only noise
+/// is genuinely measured (microphone metering); iPhones have no ambient temperature/humidity
 /// sensor and no usable ambient-light API, so those attributes are stored as
 /// `EnvironmentalReading.notMeasured` rather than fabricated (the previous
 /// camera-ISO "light level" never measured anything without a capture session).
+///
+/// Noise is `notMeasured` whenever the meter is not hearing the room: the alarm holds the
+/// session, a call interrupted it, the route changed under it, or it has only just started. A
+/// stopped meter reads −160 dB, which would be stored as the quietest possible room.
 final class EnvironmentalMonitor {
     static let shared = EnvironmentalMonitor()
-    
+
+    /// How long a meter runs before its level means anything.
+    static let meterWarmUp: TimeInterval = 1
+
     private let persistenceController: PersistenceController
-    private var audioRecorder: AVAudioRecorder?
+    private let coordinator: AudioSessionCoordinator
+    private let microphone: MicrophonePermission
+    private let errors: ErrorManager
+    private let makeMeter: () throws -> NoiseMeter
+    private let now: () -> Date
+    private var meter: NoiseMeter?
+    private var meterStartedAt: Date?
     private var monitoringTimer: Timer?
     private let samplingInterval: TimeInterval = 300 // 5 minutes
-    private let errorManager = ErrorManager.shared
-    private let microphone: MicrophonePermission
+    /// A failed save alerts once per recording, not every five minutes all night.
+    private var hasReportedSaveFailure = false
 
-    private init() {
-        self.persistenceController = .shared
-        self.microphone = LiveMicrophonePermission()
+    /// Tests inject an in-memory store, their own coordinator and error manager, fakes for the
+    /// microphone and the meter, and a clock.
+    init(persistenceController: PersistenceController = .shared,
+         coordinator: AudioSessionCoordinator = .shared,
+         microphone: MicrophonePermission = LiveMicrophonePermission(),
+         errors: ErrorManager = .shared,
+         makeMeter: @escaping () throws -> NoiseMeter = EnvironmentalMonitor.makeRecorder,
+         now: @escaping () -> Date = Date.init) {
+        self.persistenceController = persistenceController
+        self.coordinator = coordinator
+        self.microphone = microphone
+        self.errors = errors
+        self.makeMeter = makeMeter
+        self.now = now
         removeLegacyRecordingFile()
-        // The alarm outranks the recording for the audio session. While it rings the recorder
-        // is stopped, so samples read "not measured", and it restarts when the alarm stops.
-        AudioSessionCoordinator.shared.recordingInputChanged = { [weak self] hasInput in
+        // The alarm outranks the recording for the audio session, and the system can take the
+        // session away. While the input is gone the meter is stopped, so samples read
+        // "not measured", and it restarts when the input comes back.
+        coordinator.recordingInputChanged = { [weak self] hasInput in
             DispatchQueue.main.async {
                 guard let self, self.monitoringTimer != nil else { return }
                 if hasInput {
-                    do {
-                        try self.startRecorder()
-                    } catch {
-                        ZeezLogger.error(ZeezLogger.environment, "Microphone did not restart", error: error)
-                    }
+                    self.ensureMeter()
                 } else {
-                    self.audioRecorder?.stop()
-                    self.audioRecorder = nil
+                    self.stopMeter()
                 }
             }
         }
@@ -52,60 +82,69 @@ final class EnvironmentalMonitor {
         stopMonitoring()
 
         guard microphone.isGranted else { throw AppError.microphonePermissionDenied }
-        let coordinator = AudioSessionCoordinator.shared
         try coordinator.acquire(.recording)
-        // A sound preview may hold the session for a moment: the recorder then starts when it
+        // A sound preview may hold the session for a moment: the meter then starts when it
         // is handed back.
         if coordinator.recordingHasInput {
             do {
-                try startRecorder()
+                try startMeter()
             } catch {
                 coordinator.release(.recording)
                 throw error
             }
         }
 
+        hasReportedSaveFailure = false
         monitoringTimer = Timer.scheduledTimer(withTimeInterval: samplingInterval, repeats: true) { [weak self] _ in
-            self?.captureEnvironmentalData(for: session)
+            self?.captureSample(for: session)
         }
-        monitoringTimer?.fire()
     }
 
     func stopMonitoring() {
         monitoringTimer?.invalidate()
         monitoringTimer = nil
-        audioRecorder?.stop()
-        audioRecorder = nil
+        stopMeter()
         // Deactivates the session only if the alarm does not hold it.
-        AudioSessionCoordinator.shared.release(.recording)
+        coordinator.release(.recording)
     }
-    
+
+    /// Whether a recording is being sampled. For tests.
+    var isMonitoring: Bool { monitoringTimer != nil }
+
     func getEnvironmentalReadings(for session: SleepSession) throws -> [EnvironmentalReading] {
         let context = persistenceController.container.viewContext
         let request: NSFetchRequest<EnvironmentalReading> = EnvironmentalReading.fetchRequest()
         request.predicate = NSPredicate(format: "session == %@", session)
         request.sortDescriptors = [NSSortDescriptor(keyPath: \EnvironmentalReading.timestamp, ascending: true)]
-        
+
         do {
             return try context.fetch(request)
         } catch {
-            errorManager.reportError(AppError.dataProcessingFailed)
+            errors.reportError(AppError.dataProcessingFailed)
             throw error
         }
     }
-    
-    private func captureEnvironmentalData(for session: SleepSession) {
+
+    /// Takes one sample. The timer calls it every `samplingInterval`; tests call it directly.
+    func captureSample(for session: SleepSession) {
+        let noise = currentNoiseLevel()
+        // iOS does not promise to say when an interruption ends, and a route change can stop
+        // the meter: a sample that finds it stopped asks for the input back.
+        if meter?.isRecording != true {
+            coordinator.reactivateRecording()
+        }
+
         let context = persistenceController.container.viewContext
-        
+
         let reading = EnvironmentalReading(context: context)
         reading.id = UUID()
-        reading.timestamp = Date()
+        reading.timestamp = now()
         reading.deviceType = UIDevice.current.model
         reading.session = session
-        
+
         // Noise is the only metric this hardware can genuinely measure — the
         // rest are marked not-measured instead of fabricated (2.9, see class doc).
-        reading.noiseLevel = captureNoiseLevel()
+        reading.noiseLevel = noise
         reading.lightLevel = EnvironmentalReading.notMeasured
         reading.temperature = EnvironmentalReading.notMeasured
         reading.humidity = EnvironmentalReading.notMeasured
@@ -113,28 +152,64 @@ final class EnvironmentalMonitor {
         do {
             try context.save()
         } catch {
-            errorManager.reportError(AppError.dataProcessingFailed)
+            // Left in the context, the reading would make every later save fail with it.
+            context.delete(reading)
+            ZeezLogger.error(ZeezLogger.environment, "Noise sample not saved", error: error)
+            if !hasReportedSaveFailure {
+                hasReportedSaveFailure = true
+                errors.report(.saveFailed)
+            }
         }
     }
-    
-    /// Starts the meter. The recording must hold the audio session with its input live.
-    private func startRecorder() throws {
-        audioRecorder?.stop()
-        audioRecorder = nil
 
-        // Metering only — record to /dev/null so no audio ever reaches disk.
-        // The NSMicrophoneUsageDescription promises on-device analysis with
-        // no storage or upload; this is what keeps that claim true.
+    /// Returns a relative noise index (0–100), not decibels (see `NoiseIndex`), or
+    /// `notMeasured` when the meter is not hearing the room.
+    private func currentNoiseLevel() -> Double {
+        guard let meter, meter.isRecording,
+              let startedAt = meterStartedAt,
+              now().timeIntervalSince(startedAt) >= Self.meterWarmUp else {
+            return EnvironmentalReading.notMeasured
+        }
+        meter.updateMeters()
+        return NoiseIndex.fromAveragePower(meter.averagePower(forChannel: 0))
+    }
+
+    /// Restarts the meter when it has stopped. The input must be live.
+    private func ensureMeter() {
+        guard meter?.isRecording != true else { return }
+        do {
+            try startMeter()
+        } catch {
+            ZeezLogger.error(ZeezLogger.environment, "Microphone did not restart", error: error)
+        }
+    }
+
+    private func startMeter() throws {
+        stopMeter()
+        let meter = try makeMeter()
+        guard meter.record() else { throw AppError.sensorDataUnavailable }
+        self.meter = meter
+        meterStartedAt = now()
+    }
+
+    private func stopMeter() {
+        meter?.stop()
+        meter = nil
+        meterStartedAt = nil
+    }
+
+    /// Metering only — record to /dev/null so no audio ever reaches disk.
+    /// The NSMicrophoneUsageDescription promises on-device analysis with
+    /// no storage or upload; this is what keeps that claim true.
+    static func makeRecorder() throws -> NoiseMeter {
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatAppleIMA4),
             AVSampleRateKey: 8000.0,
             AVNumberOfChannelsKey: 1
         ]
-
         let recorder = try AVAudioRecorder(url: URL(fileURLWithPath: "/dev/null"), settings: settings)
         recorder.isMeteringEnabled = true
-        guard recorder.record() else { throw AppError.sensorDataUnavailable }
-        audioRecorder = recorder
+        return recorder
     }
 
     /// Earlier builds recorded lossless audio to Documents indefinitely
@@ -144,28 +219,13 @@ final class EnvironmentalMonitor {
         let legacyURL = documentsPath.appendingPathComponent("environmental_audio.caf")
         try? FileManager.default.removeItem(at: legacyURL)
     }
-    
+
     /// Asks for the microphone. Asking needs no audio-session category.
     func checkSensorAvailability(completion: @escaping (Bool) -> Void) {
-        AVAudioApplication.requestRecordPermission { hasPermission in
-            completion(hasPermission)
-        }
+        microphone.request(completion)
     }
 
-    /// Returns a relative noise index (0–100), not decibels. See `NoiseIndex`.
-    private func captureNoiseLevel() -> Double {
-        // Recorder unavailable — record "not measured", not silence.
-        guard let recorder = audioRecorder else {
-            errorManager.reportError(AppError.sensorDataUnavailable)
-            return EnvironmentalReading.notMeasured
-        }
-
-        recorder.updateMeters()
-        return NoiseIndex.fromAveragePower(recorder.averagePower(forChannel: 0))
-    }
-    
     deinit {
         stopMonitoring()
-        audioRecorder?.stop()
     }
 }
