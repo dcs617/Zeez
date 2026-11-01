@@ -24,6 +24,59 @@ struct LiveSessionMonitors: SessionMonitoring {
     }
 }
 
+/// Where a recording's heart rate comes from. Production reads Apple Health, which the
+/// watch writes to; tests pass a fake.
+protocol HeartRateSource {
+    func heartRates(from start: Date, to end: Date,
+                    completion: @escaping (Result<[(timestamp: Date, value: Double)], Error>) -> Void)
+}
+
+struct HealthKitHeartRateSource: HeartRateSource {
+    let store: HKHealthStore
+
+    func heartRates(from start: Date, to end: Date,
+                    completion: @escaping (Result<[(timestamp: Date, value: Double)], Error>) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            completion(.failure(AppError.healthKitNotAvailable))
+            return
+        }
+        guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+            completion(.failure(AppError.sensorDataUnavailable))
+            return
+        }
+
+        let predicate = HKQuery.predicateForSamples(
+            withStart: start,
+            end: end,
+            options: .strictStartDate
+        )
+
+        let query = HKSampleQuery(
+            sampleType: heartRateType,
+            predicate: predicate,
+            limit: HKObjectQueryNoLimit,
+            sortDescriptors: nil
+        ) { _, samples, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+
+            let heartRateData = samples?.compactMap { sample -> (timestamp: Date, value: Double)? in
+                guard let sample = sample as? HKQuantitySample else { return nil }
+                return (
+                    timestamp: sample.startDate,
+                    value: sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
+                )
+            } ?? []
+
+            completion(.success(heartRateData))
+        }
+
+        store.execute(query)
+    }
+}
+
 /// How ending a recording turned out.
 enum SessionEndOutcome {
     /// Saved; heart-rate sync and analysis follow.
@@ -40,16 +93,26 @@ final class SleepSessionManager {
     private let errorManager = ErrorManager.shared
     private let validator: SleepSessionValidator
     private let monitors: SessionMonitoring
+    private let heartRateSource: HeartRateSource
+    /// Sessions whose heart rate is being synced, so two syncs never insert it twice.
+    private let syncLock = NSLock()
+    private var syncingSessions: Set<NSManagedObjectID> = []
+
+    /// How long after a recording ends Zeez still looks for its heart rate.
+    static let pendingHeartRateWindow: TimeInterval = 36 * 3600
 
     /// Tests inject an in-memory controller (second audit A7) so the whole
     /// end-of-session flow — validation, save, analysis — stays off the
-    /// shared store, and fake monitors; production uses the shared stack.
+    /// shared store, fake monitors and a fake heart-rate source; production uses the
+    /// shared stack and Apple Health.
     init(persistenceController: PersistenceController = .shared,
-         monitors: SessionMonitoring = LiveSessionMonitors()) {
+         monitors: SessionMonitoring = LiveSessionMonitors(),
+         heartRateSource: HeartRateSource? = nil) {
         self.persistenceController = persistenceController
         self.validator = SleepSessionValidator(persistenceController: persistenceController)
         self.healthStore = HKHealthStore()
         self.monitors = monitors
+        self.heartRateSource = heartRateSource ?? HealthKitHeartRateSource(store: healthStore)
     }
     
     /// Recording needs no HealthKit: heart rate is synced at the end when HealthKit has any.
@@ -156,8 +219,8 @@ final class SleepSessionManager {
                     do {
                         try await SleepAnalyzer.shared.analyzeSleepSession(objectID: sessionID, container: container)
                     } catch {
-                        // Expected for e.g. sub-30-minute or sensor-less
-                        // sessions; the score simply stays unavailable.
+                        // A session too short or without the inputs gets the sentinel
+                        // instead of throwing; this is a failed fetch or save.
                         ZeezLogger.info(ZeezLogger.sleepTracking, "End-of-session analysis skipped: \(error.localizedDescription)")
                     }
                 }
@@ -194,11 +257,38 @@ final class SleepSessionManager {
         return try context.fetch(request).first
     }
     
-    func syncWithHealthKit(for session: SleepSession, completion: @escaping (Error?) -> Void) {
-        guard HKHealthStore.isHealthDataAvailable() else {
-            completion(AppError.healthKitNotAvailable)
+    /// Heart rate for recent recordings that ended without any. A recording that ends for the
+    /// alarm usually ends with the phone locked, when Apple Health cannot be read, and the
+    /// watch may not have synced the night yet. Zeez looks again each time it comes to the
+    /// foreground, for recordings ended in the last `pendingHeartRateWindow`. Main thread.
+    func syncPendingHeartRate(now: Date = Date(), completion: @escaping () -> Void = {}) {
+        let context = persistenceController.container.viewContext
+        let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "isActive == NO AND endTime >= %@ AND heartRateData.@count == 0 AND NOT (deviceIdentifier CONTAINS[c] %@)",
+            now.addingTimeInterval(-Self.pendingHeartRateWindow) as NSDate,
+            AppConstants.DataProvenance.healthKitMarker
+        )
+        let sessions = (try? context.fetch(request)) ?? []
+        guard !sessions.isEmpty else {
+            completion()
             return
         }
+
+        let group = DispatchGroup()
+        for session in sessions {
+            group.enter()
+            syncWithHealthKit(for: session) { error in
+                if let error {
+                    ZeezLogger.info(ZeezLogger.sleepTracking, "Heart rate not synced yet: \(error.localizedDescription)")
+                }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main, execute: completion)
+    }
+
+    func syncWithHealthKit(for session: SleepSession, completion: @escaping (Error?) -> Void) {
         guard let startTime = session.startTime,
               let endTime = session.endTime else {
             completion(AppError.dataProcessingFailed)
@@ -210,7 +300,24 @@ final class SleepSessionManager {
         // context's queue (snapshot pattern, second audit A3).
         let sessionID = session.objectID
 
-        fetchHeartRateData(startTime: startTime, endTime: endTime) { [weak self] result in
+        // A sync already running for this session will insert its heart rate.
+        syncLock.lock()
+        let isNew = syncingSessions.insert(sessionID).inserted
+        syncLock.unlock()
+        guard isNew else {
+            completion(nil)
+            return
+        }
+        let finish: (Error?) -> Void = { [weak self] error in
+            if let self {
+                self.syncLock.lock()
+                self.syncingSessions.remove(sessionID)
+                self.syncLock.unlock()
+            }
+            completion(error)
+        }
+
+        heartRateSource.heartRates(from: startTime, to: endTime) { [weak self] result in
             guard let self = self else { return }
 
             switch result {
@@ -219,7 +326,7 @@ final class SleepSessionManager {
                 context.perform {
                     do {
                         guard let session = try context.existingObject(with: sessionID) as? SleepSession else {
-                            completion(AppError.dataProcessingFailed)
+                            finish(AppError.dataProcessingFailed)
                             return
                         }
 
@@ -238,58 +345,17 @@ final class SleepSessionManager {
                         }
 
                         try context.save()
-                        completion(nil)
+                        finish(nil)
                     } catch {
                         self.errorManager.reportError(AppError.dataProcessingFailed)
-                        completion(AppError.dataProcessingFailed)
+                        finish(AppError.dataProcessingFailed)
                     }
                 }
 
             case .failure(let error):
                 self.errorManager.reportError(error)
-                completion(error)
+                finish(error)
             }
         }
-    }
-    
-    private func fetchHeartRateData(
-        startTime: Date,
-        endTime: Date,
-        completion: @escaping (Result<[(timestamp: Date, value: Double)], Error>) -> Void
-    ) {
-        guard let heartRateType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
-            completion(.failure(AppError.sensorDataUnavailable))
-            return
-        }
-        
-        let predicate = HKQuery.predicateForSamples(
-            withStart: startTime,
-            end: endTime,
-            options: .strictStartDate
-        )
-        
-        let query = HKSampleQuery(
-            sampleType: heartRateType,
-            predicate: predicate,
-            limit: HKObjectQueryNoLimit,
-            sortDescriptors: nil
-        ) { _, samples, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            
-            let heartRateData = samples?.compactMap { sample -> (timestamp: Date, value: Double)? in
-                guard let sample = sample as? HKQuantitySample else { return nil }
-                return (
-                    timestamp: sample.startDate,
-                    value: sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
-                )
-            } ?? []
-            
-            completion(.success(heartRateData))
-        }
-        
-        healthStore.execute(query)
     }
 }

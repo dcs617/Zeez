@@ -43,9 +43,15 @@ final class SleepAnalyzer: Sendable {
             throw AnalysisError.invalidSessionTimes
         }
 
+        // Too short to analyze is permanent, so it gets the sentinel like a session without
+        // data, rather than an error: recordings of 15–30 minutes are kept (2026-10-29), and
+        // each one thrown at the backlog would be retried on every run.
         let duration = endTime.timeIntervalSince(startTime)
         guard duration >= 30 * 60 else {
-            throw AnalysisError.sessionTooShort(duration: duration)
+            ZeezLogger.info(ZeezLogger.sleepTracking, "Skipping analysis: session shorter than 30 minutes")
+            session.qualityScore = 1.0
+            try context.save()
+            return
         }
 
         ZeezLogger.info(ZeezLogger.sleepTracking, "Analyzing sleep session")

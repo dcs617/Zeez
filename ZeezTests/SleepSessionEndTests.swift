@@ -31,9 +31,10 @@ struct SleepSessionEndTests {
         let manager = SleepSessionManager(persistenceController: controller, monitors: FakeSessionMonitors())
         let context = controller.container.viewContext
 
-        // 20 minutes: long enough to pass validation (≥15 min), short enough
-        // that the analyzer refuses it (<30 min) — so any score appearing on
-        // this session could only come from a fabricated write.
+        // 20 minutes: long enough to keep (≥15 min), short enough that the
+        // analyzer refuses it (<30 min) and writes only the no-score sentinel
+        // (2026-11-01) — so any displayable score could only come from a
+        // fabricated write.
         let session = SleepSession(context: context)
         session.id = UUID()
         session.startTime = Date(timeIntervalSinceNow: -20 * 60)
@@ -47,7 +48,7 @@ struct SleepSessionEndTests {
         // (wrongly) write something before re-checking.
         try await Task.sleep(nanoseconds: 2_000_000_000)
         context.refresh(session, mergeChanges: true)
-        #expect(session.qualityScore == 0)
+        #expect(session.qualityScore <= 1.0, "0 or the sentinel; never an estimate")
         #expect((session.qualityScores?.count ?? 0) == 0)
         #expect(!session.hasDisplayableScore)
     }

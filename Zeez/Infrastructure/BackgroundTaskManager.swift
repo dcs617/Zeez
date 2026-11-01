@@ -441,57 +441,72 @@ final class BackgroundTaskManager {
             }
             
             do {
-                // Fetch only objectIDs, and build the request inside the context's perform
-                // block, to avoid passing managed objects or the (non-Sendable) fetch
-                // request across queue boundaries.
-                let sessionIDs = try await context.perform {
-                    // Get sessions needing analysis with priority ordering.
-                    // Exclude HealthKit-imported sessions that already have source-reported stages:
-                    // those sessions keep qualityScore=0 (unavailable) intentionally and must not
-                    // be routed through stage inference.
-                    let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
-                    request.predicate = NSPredicate(
-                        format: "qualityScore == 0 AND isActive == NO AND NOT (deviceIdentifier CONTAINS[c] %@ AND sleepStages.@count > 0)",
-                        AppConstants.DataProvenance.healthKitMarker
-                    )
-                    request.sortDescriptors = [
-                        NSSortDescriptor(key: "endTime", ascending: false) // Most recent first
-                    ]
-                    return try context.fetch(request).map { $0.objectID }
-                }
-
-                // Process in batches with progress monitoring
-                let batchSize = self.getBatchSize()
-                let idBatches = sessionIDs.chunked(into: batchSize)
-                var processedCount = 0
-
-                for batch in idBatches {
-                    guard let resourceStatus = self.resourceMonitor?.getCurrentResourceStatus(),
-                          resourceStatus.canProcessData else {
-                        ZeezLogger.info(ZeezLogger.background, "Stopping processing due to resource constraints after \(processedCount) sessions")
-                        break
-                    }
-
-                    // SleepAnalyzer accepts an NSManagedObjectID and creates its own
-                    // background context, maintaining proper queue confinement.
-                    for objectID in batch {
-                        try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID)
-                        processedCount += 1
-                    }
-
-                    ZeezLogger.debug(ZeezLogger.background, "Processed \(processedCount)/\(sessionIDs.count) sessions")
-                }
-                
+                let processedCount = try await Self.analyzeBacklog(
+                    in: context,
+                    batchSize: self.getBatchSize(),
+                    canContinue: { self.resourceMonitor?.getCurrentResourceStatus().canProcessData ?? false },
+                    analyze: { try await SleepAnalyzer.shared.analyzeSleepSession(objectID: $0) }
+                )
                 ZeezLogger.info(ZeezLogger.background, "Background processing completed: \(processedCount) sessions processed")
                 completion(true)
-                
+
             } catch {
                 ZeezLogger.error(ZeezLogger.background, "Failed to process backlogged data", error: error)
                 completion(false)
             }
         }
     }
-    
+
+    /// Analyzes the sessions awaiting analysis, most recent first, in batches while
+    /// `canContinue` allows. A session whose analysis fails is logged and skipped: until
+    /// 2026-11-01 the first failure ended the run, so one night that could not be analyzed
+    /// stopped every older night from ever being analyzed. Returns how many were analyzed.
+    static func analyzeBacklog(in context: NSManagedObjectContext,
+                               batchSize: Int,
+                               canContinue: () -> Bool,
+                               analyze: (NSManagedObjectID) async throws -> Void) async throws -> Int {
+        // Fetch only objectIDs, and build the request inside the context's perform
+        // block, to avoid passing managed objects or the (non-Sendable) fetch
+        // request across queue boundaries.
+        let sessionIDs = try await context.perform {
+            // Get sessions needing analysis with priority ordering.
+            // Exclude HealthKit-imported sessions that already have source-reported stages:
+            // those sessions keep qualityScore=0 (unavailable) intentionally and must not
+            // be routed through stage inference.
+            let request: NSFetchRequest<SleepSession> = SleepSession.fetchRequest()
+            request.predicate = NSPredicate(
+                format: "qualityScore == 0 AND isActive == NO AND NOT (deviceIdentifier CONTAINS[c] %@ AND sleepStages.@count > 0)",
+                AppConstants.DataProvenance.healthKitMarker
+            )
+            request.sortDescriptors = [
+                NSSortDescriptor(key: "endTime", ascending: false) // Most recent first
+            ]
+            return try context.fetch(request).map { $0.objectID }
+        }
+
+        var processedCount = 0
+        for batch in sessionIDs.chunked(into: batchSize) {
+            guard canContinue() else {
+                ZeezLogger.info(ZeezLogger.background, "Stopping processing due to resource constraints after \(processedCount) sessions")
+                break
+            }
+
+            // SleepAnalyzer accepts an NSManagedObjectID and creates its own
+            // background context, maintaining proper queue confinement.
+            for objectID in batch {
+                do {
+                    try await analyze(objectID)
+                    processedCount += 1
+                } catch {
+                    ZeezLogger.error(ZeezLogger.background, "Backlog analysis skipped a session", error: error)
+                }
+            }
+
+            ZeezLogger.debug(ZeezLogger.background, "Processed \(processedCount)/\(sessionIDs.count) sessions")
+        }
+        return processedCount
+    }
+
     private func getBatchSize() -> Int {
         guard let resourceStatus = resourceMonitor?.getCurrentResourceStatus() else {
             return 5 // Conservative default

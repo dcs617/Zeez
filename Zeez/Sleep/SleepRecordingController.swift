@@ -170,13 +170,43 @@ final class SleepRecordingController: ObservableObject {
 
     /// The app is in the foreground again. While it was suspended the end-for-alarm timer
     /// could not fire, and the alarms may have changed: a recording whose boundary has passed
-    /// ends there, not now, and any other recording rereads the pending alarms.
+    /// ends there, not now, and any other recording rereads the pending alarms. Recent
+    /// recordings that ended without heart rate look for it again.
     func appBecameActive() {
+        manager.syncPendingHeartRate()
         guard activeSession != nil else { return }
         if let end = alarmEndTime, end <= now() {
             endForAlarm()
         } else {
             refreshAlarmBoundary()
+        }
+    }
+
+    /// A recording still marked active when Zeez starts was cut off: the app was closed or
+    /// killed during the night, so nothing ended it, and it would block every later start.
+    /// It ends at its last noise sample, the last moment anything was recorded, and the alert
+    /// says so; one too short to keep is discarded without one. Run once at launch.
+    func recoverInterruptedRecording(completion: @escaping () -> Void = {}) {
+        guard activeSession == nil,
+              let orphan = try? manager.activeSession(),
+              let start = orphan.startTime else {
+            completion()
+            return
+        }
+        let readings = orphan.environmentalReadings?.allObjects as? [EnvironmentalReading] ?? []
+        let lastSample = readings.compactMap(\.timestamp).max() ?? start
+        ZeezLogger.info(ZeezLogger.sleepTracking, "Ending a recording the app was closed during")
+        manager.endSession(orphan, at: lastSample) { [errors] result in
+            switch result {
+            case .success(.saved(let session)):
+                errors.report(.recordingEndedEarly(savedUntil: session.endTime ?? lastSample))
+            case .success(.discardedTooShort):
+                break
+            case .failure(let error):
+                ZeezLogger.error(ZeezLogger.sleepTracking, "Could not end the interrupted recording", error: error)
+                errors.report(.sleepSessionUpdateFailed)
+            }
+            completion()
         }
     }
 

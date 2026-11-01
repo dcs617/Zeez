@@ -47,6 +47,9 @@ struct ZeezApp: App {
         // Start alarm system
         AlarmObserver.shared.startObserving(context: persistenceController.container.viewContext)
         ZeezLogger.info(ZeezLogger.alarm, "Alarm system initialized")
+
+        // A recording the app was closed during is still marked active: end it.
+        SleepRecordingController.shared.recoverInterruptedRecording()
     }
     
     private func verifyDataIntegrity() {
