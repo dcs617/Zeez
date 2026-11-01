@@ -16,6 +16,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         backgroundTaskManager.checkBatteryAndStorage()
+        SleepRecordingController.shared.appBecameActive()
         UNUserNotificationCenter.current().setBadgeCount(0) { error in
             // Log only: there is nothing the user could do about it.
             if let error = error {

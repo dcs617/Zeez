@@ -88,4 +88,71 @@ struct RecordingAlarmBoundaryTests {
         #expect(!session.isActive)
         #expect(controller.activeSession == nil)
     }
+
+    // MARK: Back in the foreground
+
+    /// Adds a main alarm firing at `fire` (to the second) and returns that fire date.
+    @discardableResult
+    private func addAlarm(_ identifier: String, at fire: Date, to center: FakeNotificationCenter) throws -> Date {
+        let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fire)
+        center.add(UNNotificationRequest(identifier: identifier,
+                                         content: UNMutableNotificationContent(),
+                                         trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: false)),
+                   withCompletionHandler: nil)
+        return try #require(Calendar.current.date(from: components))
+    }
+
+    private func recording(center: FakeNotificationCenter, clock: TestClock) async throws -> (SleepRecordingController, SleepSession) {
+        let manager = SleepSessionManager(persistenceController: PersistenceController(inMemory: true),
+                                          monitors: FakeSessionMonitors())
+        let controller = SleepRecordingController(manager: manager, notificationCenter: center,
+                                                  microphone: FakeMicrophonePermission(granted: true),
+                                                  errors: ErrorManager(), now: { clock.now })
+        let session: SleepSession = try await withCheckedThrowingContinuation { continuation in
+            controller.start { continuation.resume(with: $0) }
+        }
+        try await AlarmTestSupport.waitUntil("the alarm boundary") { controller.alarmEndTime != nil }
+        return (controller, session)
+    }
+
+    @Test("Back in the foreground after the alarm's time, the recording ends at the alarm, not now")
+    func foregroundAfterTheAlarmEndsAtTheBoundary() async throws {
+        let center = FakeNotificationCenter()
+        let fire = try addAlarm("alarm-A-main-1-day2-standard", at: Date().addingTimeInterval(2 * 3600), to: center)
+        let clock = TestClock(Date())
+        let (controller, session) = try await recording(center: center, clock: clock)
+
+        // Suspended overnight, so the timer never fired; the user opens Zeez half an hour later.
+        clock.advance(fire.timeIntervalSince(clock.now) + 1800)
+        controller.appBecameActive()
+        try await AlarmTestSupport.waitUntil("the recording to end") { controller.activeSession == nil }
+
+        #expect(session.endTime == fire.addingTimeInterval(-RecordingAlarmBoundary.lead))
+        #expect(!session.isActive)
+    }
+
+    @Test("Back in the foreground before the alarm, the recording rereads the alarms")
+    func foregroundBeforeTheAlarmRereadsTheAlarms() async throws {
+        let center = FakeNotificationCenter()
+        try addAlarm("alarm-A-main-1-day2-standard", at: Date().addingTimeInterval(2 * 3600), to: center)
+        let clock = TestClock(Date())
+        let (controller, _) = try await recording(center: center, clock: clock)
+
+        center.removePendingNotificationRequests(withIdentifiers: ["alarm-A-main-1-day2-standard"])
+        let later = try addAlarm("alarm-B-main-1-day2-standard", at: Date().addingTimeInterval(3 * 3600), to: center)
+        controller.appBecameActive()
+        let expected = later.addingTimeInterval(-RecordingAlarmBoundary.lead)
+        try await AlarmTestSupport.waitUntil("the new boundary") { controller.alarmEndTime == expected }
+
+        #expect(controller.activeSession != nil)
+    }
+
+    @Test("The app checks the recording against the alarms each time it becomes active")
+    func sceneDelegateRefreshesTheRecording() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Zeez/App/SceneDelegate.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        #expect(source.contains("SleepRecordingController.shared.appBecameActive()"))
+    }
 }

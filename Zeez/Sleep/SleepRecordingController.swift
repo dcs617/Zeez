@@ -116,6 +116,18 @@ final class SleepRecordingController: ObservableObject {
         }
     }
 
+    /// The app is in the foreground again. While it was suspended the end-for-alarm timer
+    /// could not fire, and the alarms may have changed: a recording whose boundary has passed
+    /// ends there, not now, and any other recording rereads the pending alarms.
+    func appBecameActive() {
+        guard activeSession != nil else { return }
+        if let end = alarmEndTime, end <= now() {
+            endForAlarm()
+        } else {
+            refreshAlarmBoundary()
+        }
+    }
+
     /// The boundary has come. The recording ends there, not later, even when the timer ran
     /// late: anything after it is the alarm.
     func endForAlarm(completion: @escaping (Result<SessionEndOutcome, Error>) -> Void = { _ in }) {
