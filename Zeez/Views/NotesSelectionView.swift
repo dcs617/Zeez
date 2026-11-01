@@ -33,7 +33,7 @@ struct NotesSelectionView: View {
         _notes = FetchRequest(
             entity: SleepNote.entity(),
             sortDescriptors: [NSSortDescriptor(keyPath: \SleepNote.modifiedAt, ascending: false)],
-            predicate: nil
+            predicate: SleepNote.learnNotesPredicate
         )
     }
     

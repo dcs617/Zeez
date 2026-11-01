@@ -26,6 +26,13 @@ enum RecordingAlarmBoundary {
     }
 }
 
+/// How the last recording ended, for the summary `RecordingView` shows until it is closed.
+enum FinishedRecording: Equatable {
+    case saved(RecordingSummary)
+    /// Shorter than `AppConstants.Sleep.minimumSessionDuration`, so not kept.
+    case discardedTooShort
+}
+
 /// The live recording: starts and ends sessions through `SleepSessionManager`, and ends a
 /// running one just before the next alarm (`RecordingAlarmBoundary`). Main thread only.
 ///
@@ -38,6 +45,12 @@ final class SleepRecordingController: ObservableObject {
     @Published private(set) var activeSession: SleepSession?
     /// When the running recording will end for the next alarm, if one is pending.
     @Published private(set) var alarmEndTime: Date?
+    /// The recording that just ended, until its summary is closed. A recording that ended for
+    /// the alarm while the phone was locked shows its summary when Zeez is next opened.
+    @Published private(set) var finished: FinishedRecording?
+
+    /// Whether the recording screen is up: a recording runs, or its summary waits.
+    var isShowingRecording: Bool { activeSession != nil || finished != nil }
 
     private let manager: SleepSessionManager
     private let center: AlarmNotificationScheduling
@@ -73,6 +86,7 @@ final class SleepRecordingController: ObservableObject {
                 self.manager.startSession { result in
                     switch result {
                     case .success(let session):
+                        self.finished = nil
                         self.activeSession = session
                         self.refreshAlarmBoundary()
                     case .failure(let error):
@@ -90,11 +104,49 @@ final class SleepRecordingController: ObservableObject {
         alarmTimer?.invalidate()
         alarmTimer = nil
         manager.endSession(session, at: endTime ?? now()) { [weak self] result in
-            if case .success = result {
+            if case .success(let outcome) = result {
                 self?.activeSession = nil
                 self?.alarmEndTime = nil
+                switch outcome {
+                case .saved(let saved):
+                    self?.finished = RecordingSummary(session: saved).map(FinishedRecording.saved)
+                case .discardedTooShort:
+                    self?.finished = .discardedTooShort
+                }
             }
             completion(result)
+        }
+    }
+
+    /// Closes the summary.
+    func dismissSummary() {
+        finished = nil
+    }
+
+    /// Adds a note to the running recording. Returns whether it was saved; a failed save
+    /// alerts and leaves nothing behind.
+    @discardableResult
+    func addNote(_ text: String) -> Bool {
+        let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let session = activeSession, let context = session.managedObjectContext, !content.isEmpty else {
+            return false
+        }
+        let note = SleepNote(context: context)
+        note.id = UUID()
+        note.content = content
+        note.category = SleepNote.recordingCategory
+        note.timestamp = now()
+        note.createdAt = now()
+        note.modifiedAt = now()
+        note.session = session
+        do {
+            try context.save()
+            return true
+        } catch {
+            context.delete(note)
+            ZeezLogger.error(ZeezLogger.sleepTracking, "Recording note not saved", error: error)
+            errors.report(.saveFailed)
+            return false
         }
     }
 

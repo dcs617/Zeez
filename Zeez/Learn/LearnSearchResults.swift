@@ -63,10 +63,13 @@ private struct SearchResultsList: View {
         // Notes fetch request
         _notes = FetchRequest(
             sortDescriptors: [NSSortDescriptor(keyPath: \SleepNote.modifiedAt, ascending: false)],
-            predicate: NSPredicate(
-                format: "title CONTAINS[cd] %@ OR content CONTAINS[cd] %@",
-                searchText, searchText
-            )
+            predicate: NSCompoundPredicate(andPredicateWithSubpredicates: [
+                SleepNote.learnNotesPredicate,
+                NSPredicate(
+                    format: "title CONTAINS[cd] %@ OR content CONTAINS[cd] %@",
+                    searchText, searchText
+                )
+            ])
         )
         
         // Highlights fetch request

@@ -55,7 +55,9 @@ struct SessionMonitorLifecycleGuardTests {
 
     @Test("No other start path starts the monitors a second time")
     func callersDoNotDoubleStart() throws {
-        for path in ["Zeez/Sleep/SleepControlView.swift",
+        for path in ["Zeez/Sleep/RecordingView.swift",
+                     "Zeez/Views/Dashboard/RecordingStartCard.swift",
+                     "Zeez/Sleep/SleepRecordingController.swift",
                      "Zeez/Infrastructure/BackgroundTaskManager.swift"] {
             #expect(!(try source(path)).contains("startMonitoring"),
                     "\(path) starts a sleep monitor. startSession already does — a second start re-prompts for permissions (C1), and from a background context it assigns across contexts (A4)")

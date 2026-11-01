@@ -67,6 +67,8 @@ struct DashboardView: View {
                         .padding(.bottom, 8)
                     
                     VStack(spacing: 24) {
+                        RecordingStartCard()
+
                         if hasAnySleepData {
                             weeklyProgressSection
                             metricsSection

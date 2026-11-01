@@ -11,7 +11,8 @@ struct LearnStatisticsView: View {
     
     @FetchRequest<SleepNote>(
         entity: SleepNote.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \SleepNote.createdAt, ascending: false)]
+        sortDescriptors: [NSSortDescriptor(keyPath: \SleepNote.createdAt, ascending: false)],
+        predicate: SleepNote.learnNotesPredicate
     ) private var notes
     
     var body: some View {

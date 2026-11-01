@@ -36,7 +36,7 @@ struct DashboardEmptyStateCard: View {
             .accessibilityHint("Opens the importer to bring your sleep history into Zeez")
             .accessibilityIdentifier("dashboardImportButton")
 
-            Text("You can also record a session from the Sleep tab.")
+            Text("Or record tonight with Zeez, above.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

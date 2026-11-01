@@ -10,6 +10,7 @@ struct LearnNoteLinker: View {
     @FetchRequest<SleepNote>(
         entity: SleepNote.entity(),
         sortDescriptors: [NSSortDescriptor(keyPath: \SleepNote.modifiedAt, ascending: false)],
+        predicate: SleepNote.learnNotesPredicate,
         animation: .default
     ) private var allNotes
     

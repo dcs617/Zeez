@@ -412,10 +412,11 @@ final class BackgroundTaskManager {
                     return
                 }
 
-                // This task must NOT start the monitors. They are foreground-only
+                // This task must NOT start the monitors. They need the app's own
+                // live process, kept running by the recording's microphone
                 // (Timer/mic sampling a BGAppRefreshTask can't sustain), their
                 // lifecycle is owned by the session start path
-                // (SleepSessionManager/SleepControlView), and handing them this
+                // (SleepSessionManager/SleepRecordingController), and handing them this
                 // background-context session made EnvironmentalMonitor attach
                 // readings across contexts on viewContext — an illegal
                 // cross-context relationship (second audit A4).

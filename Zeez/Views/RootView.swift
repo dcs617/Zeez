@@ -7,6 +7,7 @@ struct RootView: View {
     @StateObject private var modalCoordinator = ModalCoordinator.shared
     @StateObject private var permissionManager = AlarmPermissionManager.shared
     @StateObject private var errorManager = ErrorManager.shared
+    @StateObject private var recording = SleepRecordingController.shared
     @State private var activeAlarm: AlarmConfiguration?
     @State private var showingActiveAlarm = false
     @State private var showingPermissionDenied = false
@@ -75,6 +76,15 @@ struct RootView: View {
             }
         }
         .overlay {
+            // A running recording and its summary lie over the app instead of presenting:
+            // the alarm screen below must stay the only full-screen cover, so it can always
+            // present (RecordingScreenTests).
+            if onboardingManager.hasCompletedOnboarding && recording.isShowingRecording {
+                RecordingView()
+                    .transition(.opacity.animation(.easeInOut))
+                    .zIndex(900)
+            }
+
             // Permission Explainer
             if permissionManager.showPermissionExplainer {
                 AlarmPermissionExplainerView(
