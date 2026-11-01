@@ -68,11 +68,13 @@ final class SleepAnalyzer: Sendable {
             return
         }
 
-        // Gate: require at least minimal evidence to run stage inference.
-        // Without data the analyzer would only produce fixed-timing guesses that look
-        // physiologically plausible but are not measured.
-        guard !movements.isEmpty || !heartRates.isEmpty else {
-            ZeezLogger.info(ZeezLogger.sleepTracking, "Skipping stage analysis: no movement or heart rate data available")
+        // Gate (ZeezScore-3.1): stage inference needs both movement and heart rate. With
+        // either missing the analyzer fills it in (no movement reads as lying still, no heart
+        // rate as 65 bpm) and lays REM over the night by the clock: stages that look
+        // physiologically plausible but are not measured. The phone stopped recording
+        // movement on 2026-11-01, so a phone-only recording gets no stages.
+        guard !movements.isEmpty && !heartRates.isEmpty else {
+            ZeezLogger.info(ZeezLogger.sleepTracking, "Skipping stage analysis: needs both movement and heart rate")
             // Set a sentinel (1.0) so BackgroundTaskManager does not retry indefinitely.
             // UI treats qualityScore <= 1.0 as "no displayable score" and shows nothing.
             session.qualityScore = 1.0

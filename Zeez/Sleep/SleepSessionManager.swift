@@ -3,8 +3,8 @@ import HealthKit
 import UIKit
 import os.log
 
-/// What a recording runs while it is active. Production starts the microphone and motion
-/// monitors; tests pass a fake, so starting a session never touches real audio or Core Motion.
+/// What a recording runs while it is active. Production starts the microphone; tests pass a
+/// fake, so starting a session never touches real audio.
 protocol SessionMonitoring {
     /// Throws when the recording cannot run: without the microphone it measures nothing.
     func start(for session: SleepSession) throws
@@ -12,16 +12,15 @@ protocol SessionMonitoring {
 }
 
 /// The monitors a recording runs. Their lifecycle belongs here and nowhere else
-/// (`SessionMonitorLifecycleGuardTests`).
+/// (`SessionMonitorLifecycleGuardTests`). The phone records no movement (decision
+/// 2026-11-01, `PARKED_CAPABILITIES.md` §15): it lies on a nightstand, not on the pillow.
 struct LiveSessionMonitors: SessionMonitoring {
     func start(for session: SleepSession) throws {
         try EnvironmentalMonitor.shared.startMonitoring(for: session)
-        MovementDataManager.shared.startMonitoring(for: session)
     }
 
     func stop() {
         EnvironmentalMonitor.shared.stopMonitoring()
-        MovementDataManager.shared.stopMonitoring()
     }
 }
 

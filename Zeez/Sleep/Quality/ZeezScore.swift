@@ -9,7 +9,7 @@ import Foundation
 /// The score is never a validated measure of sleep quality, recovery, or health.
 enum ZeezScore {
     /// Persisted with every estimate as `SleepQualityScore.calculationVersion`.
-    static let version = "ZeezScore-3.0"
+    static let version = "ZeezScore-3.1"
 
     /// Coverage below which no score is produced at all. Required components
     /// (see `ZeezScoreComponent.isRequired`) must additionally all be available.

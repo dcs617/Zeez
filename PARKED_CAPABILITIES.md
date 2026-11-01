@@ -623,3 +623,45 @@ Estimate" label in text and `accessibilityValue` (rule 10); noise is the relativ
 unavailable, never `0` or "quiet" (T9).
 
 **Definition of done.** The list above, with T4 and T9 passing on a device.
+
+---
+
+## 15. Phone movement — *deleted 2026-11-01*
+
+**Removed:** `Zeez/Sleep/MovementDataManager.swift`, which sampled the phone's accelerometer during a
+recording and stored each reading as `MovementData`. `LiveSessionMonitors` no longer starts it. The
+`MovementData` entity stays in the model (no model change): the DEBUG mock generator writes it, and
+`SleepStageAnalyzer` reads it.
+
+**Why removed (Daniel, 2026-11-01).** It only measures anything with the phone on the mattress, and asking
+people to sleep with their phone by the pillow is unrealistic and off-putting: "chances are I'm knocking it
+off or rolling over it." A phone on a nightstand feels no movement at all.
+
+**What was wrong with it besides.**
+- The magnitude included gravity: a phone at rest reads about 1 g, so every reading was activity level 5,
+  "very active", and the analyzer would have read every recorded night as awake throughout.
+- Removing gravity alone turns a phone on a nightstand into a perfectly still sleeper, so "deep sleep all
+  night". A flat signal has to read as *no measurement*, not as stillness.
+- The recording never started (`startSession` failed every time until 2026-10-29), so neither defect ever
+  reached a user.
+
+**What follows.** `ZeezScore-3.1` requires movement **and** heart rate before inferring stages
+(`ZEEZ_SCORE_SPECIFICATION.md` §2), so a phone-only recording gets no stages and no Zeez score. It keeps its
+times and the room's noise. Whether a recording gets stages from another source (Apple Watch stages read
+from Apple Health, or a Zeez watch recorder) is an open decision in `SECOND_AUDIT_IMPROVEMENTS.md` §7.
+
+**What returning needs.** A source that is actually on the sleeper: the wrist, not the phone. Movement
+without gravity (device motion's user acceleration, or a high-pass filter), a flat signal treated as missing,
+and an evaluation against a reference with comparable sensors (§9). On watchOS, `CMSensorRecorder` logs
+wrist acceleration for up to three days without the app running.
+
+**Claims tier and label.** Movement-derived stages are Tier 3 (§9) and must never be presented as
+equivalent to Apple-reported stages.
+
+**Missing-input policy.** No movement makes stage inference unavailable (3.1); it is never read as lying
+still.
+
+**Definition of done (to return).** The list above, with a device check on the wrist and §9's go/no-go
+report.
+
+Known SHA: deleted in the commit after `c857f9e` (`git show c857f9e:Zeez/Sleep/MovementDataManager.swift`).

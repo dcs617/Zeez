@@ -42,6 +42,18 @@ struct SleepAnalysisIdempotencyTests {
         }
     }
 
+    private func addHeartRate(to session: SleepSession, context: NSManagedObjectContext, count: Int = 10) {
+        guard let start = session.startTime, let end = session.endTime else { return }
+        let interval = end.timeIntervalSince(start) / Double(count)
+        for i in 0..<count {
+            let hr = HeartRateData(context: context)
+            hr.id = UUID()
+            hr.timestamp = start.addingTimeInterval(Double(i) * interval)
+            hr.value = 60.0
+            hr.session = session
+        }
+    }
+
     // MARK: - Insufficient-Data Gating
 
     @Test("Session with no movement or heart rate receives sentinel score, not a fabricated stage estimate")
@@ -139,6 +151,7 @@ struct SleepAnalysisIdempotencyTests {
         let objectID = try context.performAndWait {
             let session = makeSession(in: context)
             addMovement(to: session, context: context)
+            addHeartRate(to: session, context: context)
             try context.save()
             return session.objectID
         }
@@ -159,6 +172,7 @@ struct SleepAnalysisIdempotencyTests {
             return s?.sleepStages?.count ?? 0
         }
 
+        #expect(stageCountAfterFirst > 0, "Analysis must run for this test to say anything")
         #expect(stageCountAfterFirst == stageCountAfterSecond,
                 "Re-running analysis should replace, not append, stage records")
     }
@@ -170,6 +184,7 @@ struct SleepAnalysisIdempotencyTests {
         let objectID = try context.performAndWait {
             let session = makeSession(in: context)
             addMovement(to: session, context: context)
+            addHeartRate(to: session, context: context)
             try context.save()
             return session.objectID
         }
@@ -189,21 +204,43 @@ struct SleepAnalysisIdempotencyTests {
 
     // MARK: - Evidence Threshold Boundary
 
-    @Test("Session with only heart rate data runs stage analysis and produces a displayable score")
-    func heartRateOnlySessionRunsAnalysis() async throws {
+    /// ZeezScore-3.1: under 3.0 either input was enough, and the analyzer filled in the other
+    /// (no movement read as lying still, no heart rate as 65 bpm), so a night with heart rate
+    /// alone got stages and a displayable score.
+    @Test("One input alone, heart rate or movement, infers no stages and gets no score", arguments: [true, false])
+    func oneInputIsNotEnough(hasHeartRate: Bool) async throws {
         let controller = makeController()
         let context = controller.container.viewContext
         let objectID = try context.performAndWait {
             let session = makeSession(in: context)
-
-            let start = session.startTime!
-            for i in 0..<10 {
-                let hr = HeartRateData(context: context)
-                hr.id = UUID()
-                hr.timestamp = start.addingTimeInterval(Double(i) * 2700)
-                hr.value = 60.0
-                hr.session = session
+            if hasHeartRate {
+                addHeartRate(to: session, context: context)
+            } else {
+                addMovement(to: session, context: context)
             }
+            try context.save()
+            return session.objectID
+        }
+        try await SleepAnalyzer.shared.analyzeSleepSession(objectID: objectID, container: controller.container)
+
+        let bgContext = controller.container.newBackgroundContext()
+        let (score, hasDisplayable, stageCount) = try await bgContext.perform {
+            let s = try bgContext.existingObject(with: objectID) as? SleepSession
+            return (s?.qualityScore ?? 0, s?.hasDisplayableScore ?? false, s?.sleepStages?.count ?? 0)
+        }
+        #expect(score == 1.0, "The sentinel, so background analysis stops retrying")
+        #expect(!hasDisplayable)
+        #expect(stageCount == 0, "Stages from one input are mostly filled-in defaults")
+    }
+
+    @Test("Movement and heart rate together run stage analysis and produce a displayable score")
+    func bothInputsRunAnalysis() async throws {
+        let controller = makeController()
+        let context = controller.container.viewContext
+        let objectID = try context.performAndWait {
+            let session = makeSession(in: context)
+            addMovement(to: session, context: context)
+            addHeartRate(to: session, context: context)
             try context.save()
             return session.objectID
         }
@@ -214,7 +251,7 @@ struct SleepAnalysisIdempotencyTests {
             let s = try bgContext.existingObject(with: objectID) as? SleepSession
             return (s?.qualityScore ?? 0, s?.hasDisplayableScore ?? false)
         }
-        #expect(score > 1.0, "Session with heart rate data should receive a real quality estimate")
-        #expect(hasDisplayable, "Session with heart rate data should have a displayable score")
+        #expect(score > 1.0)
+        #expect(hasDisplayable)
     }
 }

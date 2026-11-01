@@ -1,7 +1,7 @@
 # Experimental Zeez Estimate — Score Specification
 
 Status: Live specification for the Tier-3 Zeez sleep score
-Version: `ZeezScore-3.0`
+Version: `ZeezScore-3.1`
 Adopted: 2026-07-09 (second-audit item B8)
 Implements: `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md`, Tier-3 row and §4 language rules
 
@@ -30,7 +30,7 @@ A session is scored only when **all** of the following hold:
 | --- | --- |
 | Session has valid ordered start/end times | `SleepAnalyzer.analyzeInContext` |
 | Recorded interval ≥ 30 minutes | `SleepAnalyzer.analyzeInContext` |
-| At least one movement or heart-rate sample exists | `SleepAnalyzer.analyzeInContext` |
+| At least one movement sample **and** at least one heart-rate sample exist (3.1) | `SleepAnalyzer.analyzeInContext` |
 | Stages are Zeez-inferred, not Apple-Health-reported | `SleepAnalyzer.analyzeInContext` |
 | Required score components are available (§4) | `SleepQualityCalculator.calculateMetrics` |
 
@@ -130,17 +130,24 @@ sensorBreadthFactor = 1.00  movement and heart-rate series both present
                       0.70  stages present but no retained raw series
 ```
 
+Since 3.1 every scored session has both series, so new estimates no longer use 0.85.
+
 This describes **how complete the inputs were**, never how accurate the method is. No
 value of `confidenceScore` licenses stronger wording than "Experimental Zeez Estimate".
 
 ## 6. Versioning
 
-`ZeezScore.version` (`ZeezScore-3.0`) is persisted to
+`ZeezScore.version` (`ZeezScore-3.1`) is persisted to
 `SleepQualityScore.calculationVersion` with every estimate, so stored scores remain
 attributable to the specification that produced them. Earlier records carry
 `SleepAnalyzer-2.0` and were produced under the neutral-default policy described in §4;
-they are not comparable with 3.0 scores and must not be mixed in a trend without
+they are not comparable with 3.x scores and must not be mixed in a trend without
 disclosure.
+
+| Version | Change |
+| --- | --- |
+| `ZeezScore-3.0` | Missing-input policy (§4); required components; coverage floor |
+| `ZeezScore-3.1` (2026-11-01) | Stage inference needs movement **and** heart rate (§2). Under 3.0 either alone was enough, and the analyzer filled in the other: no movement read as lying still, no heart rate as 65 bpm. Weights, bands and components are unchanged. The phone stopped recording movement the same day (`PARKED_CAPABILITIES.md` §15), so a phone-only recording gets no stages and no score. A stored 3.0 score is not recomputed: it keeps its value, Trends leave it out of their averages, and its breakdown reads as an earlier version (§8). Only mock sessions had ever been scored (`PARKED_CAPABILITIES.md` §14), so no real night changes |
 
 ## 7. Validation status
 

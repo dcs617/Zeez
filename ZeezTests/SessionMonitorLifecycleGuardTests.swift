@@ -33,8 +33,24 @@ struct SessionMonitorLifecycleGuardTests {
         let contents = try source("Zeez/Sleep/SleepSessionManager.swift")
         #expect(contents.contains("EnvironmentalMonitor.shared.startMonitoring"),
                 "SleepSessionManager no longer starts the environmental monitor; if ownership moved, update this guard and C1's note rather than deleting the invariant")
-        #expect(contents.contains("MovementDataManager.shared.startMonitoring"),
-                "SleepSessionManager no longer starts the movement monitor")
+    }
+
+    /// The phone records no movement (decision 2026-11-01, PARKED_CAPABILITIES.md §15): it lies
+    /// on a nightstand, where it feels nothing, and its readings included gravity.
+    @Test("Nothing in the app reads the phone's motion sensors")
+    func phoneRecordsNoMovement() throws {
+        let app = Self.repoRoot.appendingPathComponent("Zeez")
+        let files = FileManager.default.enumerator(at: app, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" } ?? []
+        #expect(files.count > 50, "The scan found too few sources to mean anything")
+        for file in files {
+            let contents = try String(contentsOf: file, encoding: .utf8)
+            for symbol in ["CMMotionManager", "MovementDataManager", "import CoreMotion"] {
+                #expect(!contents.contains(symbol),
+                        "\(file.lastPathComponent) uses \(symbol). Phone movement is parked: PARKED_CAPABILITIES.md §15 says what returning needs")
+            }
+        }
     }
 
     @Test("No other start path starts the monitors a second time")

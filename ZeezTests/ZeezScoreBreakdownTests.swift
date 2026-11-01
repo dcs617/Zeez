@@ -127,6 +127,15 @@ struct ZeezScoreBreakdownTests {
                 hr.value = 60
                 hr.session = session
             }
+            // ZeezScore-3.1 infers stages only from movement and heart rate together.
+            for i in 0..<20 {
+                let movement = MovementData(context: context)
+                movement.id = UUID()
+                movement.timestamp = session.startTime!.addingTimeInterval(Double(i) * 1350)
+                movement.magnitude = 0.5
+                movement.activityLevel = 1
+                movement.session = session
+            }
             try context.save()
             return session.objectID
         }
