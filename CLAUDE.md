@@ -60,8 +60,8 @@ At startup, `ZeezApp.setupApp()` runs `AlarmDataMigrationHelper` and starts `Ala
 
 ### Sleep Analysis Pipeline
 `SleepAnalyzer.shared.analyzeSleepSession(_:)` orchestrates analysis in four steps:
-1. Inline validation in `SleepAnalyzer` — checks the session has valid times and minimum data
-2. `SleepStageAnalyzer` (`Sleep/Stage/`) — detects stages from movement + heart rate
+1. Inline validation in `SleepAnalyzer` — checks the session has valid times and minimum data; too short or missing inputs writes the `qualityScore = 1.0` sentinel instead of throwing
+2. `SleepStageAnalyzer` (`Sleep/Stage/`) — detects stages from movement + heart rate, and since `ZeezScore-3.1` runs only when a session has **both** (the phone records no movement, so a phone-only recording gets no stages or score; `PARKED_CAPABILITIES.md` §15)
 3. `SleepQualityCalculator` (`Sleep/Quality/`) — scores duration, sleep opportunity, stage distribution, fragmentation, latency
 4. Updates session with results in a background context
 
@@ -105,7 +105,9 @@ Zeez/
 - `BackgroundTaskManager.shared` — BGTask registration and execution for sleep data processing
 - `StoreKitManager.shared` — StoreKit 2 subscription handling (async/await, transaction listener). Only `SubscriptionView` touches it, and no screen opens that, so it is never created and its transaction listener does not run until the paywall gets an entry point
 - `RealDataManager.shared` (`DataImport/`) — coordinates HealthKit data import
-- `ErrorManager.shared` — centralized error tracking. Nothing presents its errors (`ErrorView` was never applied, and is deleted)
+- `ErrorManager.shared` — the app's error alerts. `RootView` presents `currentAlert`; see "Errors" below
+- `SleepRecordingController.shared` (`Sleep/`) — the live recording: starts (after asking for the microphone) and ends sessions through `SleepSessionManager`, ends one 5 s before the next alarm, recovers one the app was closed during at launch. `RootView` overlays `RecordingView` while it runs and while its summary waits
+- `AudioSessionCoordinator.shared` (`Infrastructure/`) — the one owner of the audio session; see "Audio session" below
 - `ModalCoordinator.shared` — global sheet presentation from `RootView`
 
 ### Premium Features
@@ -126,6 +128,14 @@ Users import via Settings > Sleep Data > Import Sleep Data (`Views/SimpleDataImp
 - **EnvironmentalReading**: numeric attributes use the sentinel `EnvironmentalReading.notMeasured` (-1) for metrics the hardware can't measure — always read via the `measured*` optional accessors (`Environment/EnvironmentalReading+Measured.swift`), never the raw attributes, or absent sensors read as freezing/pitch-dark rooms.
 - **Threading**: never touch a managed object or context off its queue. The alarm stack uses the snapshot pattern — `AlarmSnapshot` (`Zeez/Alarm/AlarmSnapshot.swift`) is built inside `context.perform` and only plain values cross onto dispatch queues or `UNUserNotificationCenter` callbacks. Verify threading changes by launching with `-com.apple.CoreData.ConcurrencyDebug 1`.
 
+### Audio session and the overnight recording
+- Only `AudioSessionCoordinator` calls `setCategory`/`setActive` or touches `AVAudioSession.sharedInstance()`; `AudioSessionGuardTests` enforces it. Clients `acquire`/`release` a role, and the highest-priority holder's configuration is the session's: alarm > preview > recording. The alarm's configuration is exactly what it always was, a lower client waits untouched, and the session is deactivated only when nobody holds it. The coordinator resumes a recording after an interruption, route change or media-services reset; it never resumes the alarm.
+- `Zeez/Info.plist` (a standalone file, `GENERATE_INFOPLIST_FILE = NO`) declares UIBackgroundModes `audio` and `processing`. The recording's live microphone is what keeps the app running with the phone locked, so a recording requires the microphone. It ends 5 s before the next alarm or snooze (`RecordingAlarmBoundary`), so the alarm path is the one that runs without a recording.
+- A noise sample the meter did not hear (stopped, interrupted, the alarm holding the session, or under a second old) is stored as `EnvironmentalReading.notMeasured`, never as a quiet room.
+
+### Errors
+`AppError.presentation` decides whether an error alerts or only logs (decision 2026-10-29): alert for a failed save, low storage, a recording that can't start or end, the microphone refused (`opensSettings`), and a recording the app was closed during; log only for everything else, including background scheduling, the badge reset and low battery on foreground. Report with `ErrorManager.shared.report(_:)`. Each alert shows at most once per occurrence (a condition such as low storage until it clears), and alerts are held while the alarm screen is up. A new `AppError` case needs a presentation, and `ErrorAlertPolicyTests` lists every case.
+
 ### Alarm notifications
 - Only `AlarmNotificationRegistrar.registerCategories` calls `setNotificationCategories`. The call replaces the app's whole set, so a second caller drops the alarm's Snooze / Continue / Stop (Learn's did, until 2026-10-29). Add a category to the registrar's one call; `NotificationCategoryGuardTests` enforces it.
 
@@ -143,8 +153,9 @@ Uses Swift Testing (`import Testing`, `@testable import Zeez`); `ZeezUITests` is
   - **Kept:** a private context's `performAndWait`; `viewContext.performAndWait` in a `@MainActor` test or suite; async helpers that await their body inline (`withSQLiteStore`); `loadPersistentStores` callbacks; XCTest's `XCTAssert*` in all of these.
 
   Return plain values out of the closure and assert outside it. `SwiftTestingAttributionGuardTests` enforces this. It cannot tell a private context from the viewContext by reading source, so it holds private contexts to the same rule, and `@MainActor` exempts only `performAndWait`. The `unit-tests` CI job also fails on the `«unknown»` line, which catches what the scan misses once that assertion fails.
-- **Fixtures**: `SleepSessionValidator` needs `EnvironmentalReading` timestamps covering ≥80% of a session, so any test that ends a session must seed readings or it throws `.incompleteSensorData`.
-- **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests`, `SwiftTestingAttributionGuardTests`, `PaywallReachabilityGuardTests` — no screen opens `SubscriptionView` until its copy is reviewed — `ExperimentalLabelGuardTests` — no chart names a score series "Quality" — `DeadControlGuardTests` — no `Button` has an empty action; its `known` list has been empty since 2026-10-29 — `NotificationCategoryGuardTests` — only the alarm registers notification categories — and `LearningPathNumbersGuardTests` — Learning Paths shows no fixed counts or estimates) locate sources via `#filePath` so they work in CI. Use them to pin an invariant a refactor establishes.
+- **Fixtures**: ending a session needs no readings (since 2026-10-29), but one shorter than 15 minutes is discarded, so a test that wants it saved ends it ≥ 15 minutes after its start. Recording fakes: `FakeSessionMonitors`, `FakeMicrophonePermission`, `FakeNoiseMeter`, `FakeHeartRateSource`, `TestClock`; the alarm's `FakeAudioSession` can refuse activation, as during a call.
+- **Dates**: `OnboardingBedtimeTests` compute from today's date and fail on a daylight-saving change day (a real product bug, `FUTURE_IMPROVEMENTS.md`); on any other day they pass.
+- **Guard suites**: source-scanning tests (`HeartRateClaimsGuardTests`, `ClinicalVocabularyGuardTests`, `SessionMonitorLifecycleGuardTests` — also keeps Core Motion out of the app —, `AudioSessionGuardTests` — only the coordinator configures the audio session —, `RecordingScreenTests`' guards — Learn's note lists fetch only Learn notes, and the alarm stays `RootView`'s only full-screen cover —, `SwiftTestingAttributionGuardTests`, `PaywallReachabilityGuardTests` — no screen opens `SubscriptionView` until its copy is reviewed — `ExperimentalLabelGuardTests` — no chart names a score series "Quality" — `DeadControlGuardTests` — no `Button` has an empty action; its `known` list has been empty since 2026-10-29 — `NotificationCategoryGuardTests` — only the alarm registers notification categories — and `LearningPathNumbersGuardTests` — Learning Paths shows no fixed counts or estimates) locate sources via `#filePath` so they work in CI. Several give false failures in a checkout under a symlinked path (a worktree in `/tmp`, which is `/private/tmp`), because their path stripping no longer matches. Use them to pin an invariant a refactor establishes.
 - **A regression test that passes against the unfixed code pins nothing** — temporarily revert the fix and confirm the test fails before trusting it.
 - **UI tests** read `#if DEBUG` launch arguments: `-uiTestCompletedOnboarding` / `-uiTestResetOnboarding` (`OnboardingManager`), `-uiTestResetStore` (`ZeezApp.init`, clears the store before `RootView` exists) and `-uiTestSeedMockData [days]` (seeds mock sessions after any reset; Trends' tests need recorded nights). A Release UI-test run hangs on onboarding. Learn opens a first-visit cover; pass `-hasShownLearnOnboarding YES`, which sets the `@AppStorage` key through the launch-argument defaults domain.
 - `StoreKitTests`' four `SKTestSession` tests flake under simulator contention when a live app instance is present. If they fail, uninstall the app from the simulator and re-run before investigating.

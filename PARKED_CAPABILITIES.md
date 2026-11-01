@@ -392,8 +392,12 @@ whether it was available; the "Experimental Zeez Estimate" label in text **and**
 `Archive/SLEEP_REFACTORING_PLAN.md` Phase 6.
 
 **What it does.** `Zeez/Sleep/Stage/SleepStageAnalyzer.swift` infers sleep stages from movement and
-heart rate for every Zeez-recorded session. B8 made `stageDistribution` a **required** score
-component, so those inferred stages are the substrate of the Zeez score.
+heart rate. B8 made `stageDistribution` a **required** score component, so those inferred stages are the
+substrate of the Zeez score. Since `ZeezScore-3.1` (2026-11-01) it runs only on a session with **both**
+inputs; under 3.0 either was enough, and it filled the other in (no movement read as lying still, no heart
+rate as 65 bpm). The phone records no movement any more (§15), so today only mock sessions reach it. It
+still fills an epoch with no samples with defaults, and lays REM over the night by the clock; an evaluation
+has to measure that too.
 
 **The gap.** Phase 6's exit criterion is "no production stage inference is enabled without a
 defensible evaluation." No dataset or device evaluation has been run;
@@ -584,45 +588,56 @@ Privacy questionnaire and `PrivacyInfo.xcprivacy` updated to match, with a priva
 
 ---
 
-## 14. In-app recording UI — *built, never routed; parked in tree, not deleted*
+## 14. In-app recording UI — *reconnected 2026-11-01*
 
-**Status:** Present in the codebase, deliberately dormant (Daniel, 2026-10-29). **Later the same day Daniel decided
-to reconnect it**, overnight through background audio; `SECOND_AUDIT_IMPROVEMENTS.md` §7 holds the prompt. This entry
-stays until that lands.
+**Status:** Reconnected (`SECOND_AUDIT_IMPROVEMENTS.md` §7, the recording batch). This entry now records what
+came back, what did not, and what is still owed. Delete it once T4 and T9 have passed on a device and the open
+items below are closed or moved.
 
-**Files:** `Zeez/Sleep/SleepControlView.swift`, `Zeez/Sleep/SleepGoalSettingsView.swift`.
+**What came back.**
+- **A route.** The Sleep tab's **Record Tonight** card (`Views/Dashboard/RecordingStartCard.swift`). The
+  running recording and its summary are `Sleep/RecordingView.swift`, laid over the whole app by `RootView` so
+  the alarm stays its only full-screen cover (`RecordingScreenTests`).
+- **A start that works.** `startSession` had never succeeded (the validator wanted readings on a session
+  created a moment before), and an end could get stuck and block every later start. `SleepRecordingController`
+  now owns start and end; recordings under 15 minutes are discarded, and one is capped at 24 hours.
+- **The whole night.** UIBackgroundModes `audio`: the live microphone keeps the app running locked. A
+  recording needs the microphone (Start asks; refused, the alert offers Settings). Interruptions, route
+  changes and media-services resets are handled by `AudioSessionCoordinator`, the one owner of the audio
+  session, in which the alarm outranks a recording.
+- **The alarm first.** The recording ends 5 seconds before the next alarm or snooze, so the alarm rings exactly
+  as without one; back in the foreground, a recording past its alarm ends there.
+- **Add Note** (a `SleepNote` on the session; Learn's lists exclude them), and **a summary** within the claims
+  contract: recorded window, relative noise index, gaps left out, no stages or score.
+- **An error surface.** `RootView` presents `ErrorManager.currentAlert` under a written policy (`AppError
+  .presentation`).
+- **Recovery.** A recording the app was closed during is ended at its last sample at launch, with an alert;
+  heart rate is looked up again on each foreground for 36 hours; the analysis backlog skips a failure.
+- **Deleted:** `SleepControlView` (replaced) and `SleepGoalSettingsView` (duplicated Settings' Sleep Goal).
+  Phone movement went with them (§15).
 
-**Why it is unreachable.** No other file in the repo's history has ever created `SleepControlView`. It is the
-only caller of `SleepSessionManager.startSession`, which is the only thing that starts
-`EnvironmentalMonitor` (microphone noise sampling) and `MovementDataManager` (motion), as
-`SessionMonitorLifecycleGuardTests` pins. So recording a night, sampling the microphone and monitoring
-movement cannot be reached, and `Info.plist` still carries `NSMicrophoneUsageDescription` for a prompt no
-user can trigger.
+**Still missing.**
+- **Stages and a score for a recorded night.** A phone-only night has neither (`ZeezScore-3.1`, §15). Whether
+  they come from Apple Watch stages read from Apple Health (today never scored, spec §2) or from a Zeez watch
+  recorder is Daniel's decision, `SECOND_AUDIT_IMPROVEMENTS.md` §7.
+- **Leaving the recording screen.** It covers the app until the recording ends: to change an alarm, end it
+  and start again. Because nothing else can change alarms meanwhile, the boundary is reread only at start and
+  on foreground.
+- **The alarm after an interruption or a media-services reset.** The coordinator resumes only a recording;
+  what those events do to a ringing alarm is unchanged and untested on a device (D2b's watchdog covers
+  Siri).
+- **Noise sampling** is one meter reading every 5 minutes, not an average over the interval.
+- **A device pass:** T4, T5.0, T9 and T16 in `DEVICE_TEST_RUN.md`.
 
-**What follows from that.** Outside previews, only three things create a `SleepSession`: this path, the
-HealthKit importer and the DEBUG mock generator. Apple Health nights are never scored
-(`ZEEZ_SCORE_SPECIFICATION.md` §2), so **a release build cannot show a Zeez score**, and §9's owned-sensor
-stage inference runs only on mock sessions. `DEVICE_TEST_RUN.md` T4's scored-session checks and T9 are
-blocked on this entry.
+**Claims tier and label.** A recorded night's duration is "Recorded session duration", never time asleep;
+noise is the relative index, never dB (§7, B5). A Zeez score, when a night has one, is Tier 3 and carries the
+"Experimental Zeez Estimate" label in text and `accessibilityValue` (rule 10).
 
-**What reconnecting needs.**
-- A route: a control on the Sleep tab, inside its `NavigationStack` (`MainView`).
-- A working **Add Note**: its action calls `addSleepNote()`, whose body is `// To be implemented`.
-  `DeadControlGuardTests` cannot see an empty function behind a named action.
-- The session summary it promises: ending a session sets `showingSessionSummary`, and no sheet reads it.
-- An error surface. Its failures go to `ErrorManager.showError`, and nothing presents `ErrorManager`'s errors
-  since `ErrorView` was deleted (it was never applied either).
-- A decision on its gear, which opens `SleepGoalSettingsView`. That screen duplicates Settings' Sleep Goal
-  section; one of the two should go.
-- A device pass of T4 and T9, and the microphone and motion prompts' copy reviewed against what is stored.
+**Missing-input policy.** A stretch the microphone did not hear (the alarm, a call, a lost input, a meter
+that has just started) is stored as `notMeasured` and left out of the summary, never `0` or "quiet". A
+refused microphone starts no recording at all.
 
-**Claims tier and label.** Whatever it records: a Zeez score is Tier 3 and carries the "Experimental Zeez
-Estimate" label in text and `accessibilityValue` (rule 10); noise is the relative index, never dB (§7, B5).
-
-**Missing-input policy.** A session recorded with the microphone denied has no noise reading and renders it
-unavailable, never `0` or "quiet" (T9).
-
-**Definition of done.** The list above, with T4 and T9 passing on a device.
+**Definition of done.** T4's possible checks, T5.0, T9 and T16 passing on a device.
 
 ---
 

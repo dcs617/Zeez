@@ -560,7 +560,8 @@ written spec before the paywall lists it). Learn content stays visible, low prio
 Daniel also chose to delete what the dead-code batch stranded, including the simulated Learn offline feature
 (`bc2f726`).
 
-**Next, while the account is pending: reconnect in-app recording.** The prompt:
+**Done 2026-11-01: in-app recording reconnected** (`58df65e`…`1ca9674`, unpushed; what landed, the decisions and
+the open items follow the prompt). The prompt, kept for provenance:
 
 ```
 Read CLAUDE.md, then all of this prompt before acting. Then read PARKED_CAPABILITIES.md §5,
@@ -727,8 +728,38 @@ smoke; the design decisions as taken; what changed in PARKED, FUTURE, SECOND_AUD
 DEVICE_TEST_RUN; and anything unanticipated.
 ```
 
-**When the developer account is renewed: the device pass**, before anything else (if the recording batch is under
-way, finish its current commit first). T1 relocates the store *and* runs
+**The recording batch (2026-10-29 → 2026-11-01).** Twelve commits, 359 tests / 57 suites → 437 / 67, every new
+behaviour test shown failing against the old code (or, for new code, a mutation) before it was trusted; watch build and
+UI smoke 10/10 before the docs commit.
+
+- **Found at design time, not in the prompt:** `startSession` had never succeeded (the validator wanted readings on a
+  session created a moment before); an end could get stuck and block every later start; `MovementDataManager`'s
+  magnitude included gravity, so every reading was "very active"; the analyzer filled a missing input with defaults
+  (no movement as stillness, heart rate as 65 bpm); a stopped recorder's −160 dB was stored as the quietest room; the
+  alarm screen's Stop left the follow-ups ringing; a denied microphone meant no background survival; `SleepNote` was
+  shared with Learn's unfiltered lists; and raw accelerometer needs no permission, so decision 4's "motion permission
+  denied" cannot occur.
+- **Decisions (Daniel):** 2026-10-29, at the design checkpoint: take all the recommendations (below), fix the Stop bug,
+  and leave (h) for later. 2026-11-01, at the alarm checkpoint: drop phone movement entirely ("requesting users put
+  their phones next to them beside their pillows is unrealistic"), and require the microphone to record.
+- **Design as taken:** the recording ends 5 s before the next alarm or snooze, so the alarm path is today's;
+  `AudioSessionCoordinator` owns the audio session and the alarm outranks a recording; the recording screen is a
+  `RootView` overlay, never a cover, so the alarm screen can always present; notes are `SleepNote`s on the session,
+  and Learn's lists fetch `session == nil`; recordings under 15 min are discarded and one is capped at 24 h; a
+  recording the app was closed during ends at its last sample at launch, with an alert; heart rate is looked up again
+  on each foreground for 36 h; `SleepGoalSettingsView` and `SleepControlView` are deleted; the microphone string says
+  what recording does; `audio` is added in `Info.plist` (no project setting changed); `ZeezScore-3.1` infers stages
+  only from movement **and** heart rate, so a phone-only recording gets no stages and no score.
+- **Commits:** `58df65e` error alerts at `RootView` by `AppError.presentation`; `0f3e2f4` battery suggestion;
+  `fd4aff5` a session starts and always ends; `7cbf79f` audio coordinator, recording ends before the alarm;
+  `52d28a1` the alarm screen's Stop cancels the follow-ups; `6bad2fb` the microphone is required; `a987401` all night
+  in the background, gaps never quiet; `c857f9e` foreground ends a recording past its alarm; `f23e368` no phone
+  movement, `ZeezScore-3.1`; `dbbc12e` the recording screen, notes, summary; `1ca9674` interrupted night, pending heart
+  rate, backlog; then the docs.
+- **Device checks:** `DEVICE_TEST_RUN.md` T5.0 (first in the alarm section), T9 (rewritten) and T16; T4's
+  scored-session checks stay blocked.
+
+**When the developer account is renewed: the device pass**, before anything else. T1 relocates the store *and* runs
 its first structural migration (model v2→v3) on one launch, which makes it the riskiest check in the file. The
 prompt:
 
@@ -736,9 +767,9 @@ prompt:
 Read CLAUDE.md, then DEVICE_TEST_RUN.md ("How to use this file", T0 and T1 in full) and
 SECOND_AUDIT_IMPROVEMENTS.md §5 and §7. Context: my Apple Developer Program membership is
 renewed, and I am running the device pass on an iPhone 13 Pro Max with a paired Apple Watch.
-D1, D2, the no-hardware batch and the dead-code batch landed before it; T5.1, T5.9,
-T8 and T15 cover them. T4 and T9 are blocked: the app cannot record a session
-(PARKED_CAPABILITIES.md §14).
+D1, D2, the no-hardware batch, the dead-code batch and the recording batch landed before
+it; T5.0, T5.1, T5.9, T8, T9, T15 and T16 cover them. T4's scored-session checks stay
+blocked: no real night can carry a Zeez score (ZeezScore-3.1, PARKED_CAPABILITIES.md §15).
 
 Your part is preparation and triage. I run every test on the hardware.
 
@@ -764,25 +795,37 @@ Work in this order and stop at each checkpoint:
 
 Do not touch Zeez.xcodeproj/project.pbxproj's uncommitted changes (mine); T0's App Groups
 toggle changes it too, and I will commit that myself. T13 stays blocked until a screen opens
-the paywall. Do not start D3c, the paywall copy, the per-night source work, reconnecting
-in-app recording or seeding Learn content without asking.
+the paywall. Do not start D3c, the paywall copy, the per-night source work, scoring Apple
+Watch stages, a Zeez watch recorder or seeding Learn content without asking.
 ```
 
 **Open items** (none needs hardware unless marked):
-- **The dead-code batch is unpushed** (`9c64ecc`…, 2026-10-29). The no-hardware batch was pushed and its CI run,
-  40459850793, passed. Step 0 of the device-pass prompt checks this batch's run once it is pushed.
+- **The recording batch is unpushed** (`ca5f0b8`, the docs commit that queued it, then `58df65e`…, 2026-11-01).
+  Step 0 of the device-pass prompt checks its CI run once it is pushed.
+- **Stages and a score for a recorded night** (Daniel's decision, asked 2026-11-01). A phone-only recording has
+  neither (`ZeezScore-3.1`). Recommended: score only nights with Apple-reported stages (reversing spec §2's refusal,
+  since Zeez's own inference is the unvalidated one, `PARKED_CAPABILITIES.md` §9) as its own batch with the spec
+  written first; no Zeez watch recorder for now; a watch smart alarm (an extended runtime session) as a later feature.
+  Joining a recording to the same night's Apple stages is the per-night source work below. Until then the premium
+  split's free "last night with the experimental score" has no score to show for a recorded night.
+- **(h) Two sources on one night** (deferred by Daniel, 2026-10-29). A watch wearer who records gets an imported
+  Apple night and a Zeez session; the dashboard's goal durations, `SleepDebtCalculator` and session counts count both.
 - **D2's findings** (`FUTURE_IMPROVEMENTS.md`, "Found by D2, waiting on the device pass"): the volume table and the
   off-main audio start wait on T5.1. The other five were fixed in the no-hardware batch.
 - **The paywall's copy** (found 2026-10-26): `SubscriptionView` sells capabilities that do not exist, so no screen
   opens it (`PaywallReachabilityGuardTests`), which blocks `DEVICE_TEST_RUN.md` T13. The free/premium split is decided
   (2026-10-29, above); a premium spec comes after recording, then the copy, then an entry point.
-- **In-app recording** (2026-10-29, `PARKED_CAPABILITIES.md` §14): to be reconnected, prompt above. Until it lands a
-  release build cannot show a Zeez score, and `DEVICE_TEST_RUN.md` T4's scored-session checks and T9 are blocked.
+- **Left open by the recording batch** (`PARKED_CAPABILITIES.md` §14): the recording screen can't be left to change
+  an alarm; what an interruption or a media-services reset does to a ringing alarm is unchanged and unhandled; noise
+  is one meter reading every 5 minutes.
 - **Learn has no content** (2026-10-29, `PARKED_CAPABILITIES.md` §10): the seeder has never run, nothing creates a
   quiz, and Learning Paths' IDs match no category. Low priority; its copy is reviewed before App Store submission.
-- **Found by the dead-code batch** (`FUTURE_IMPROVEMENTS.md`, still open): `ErrorManager`'s errors reach no screen
-  (its alert policy is decided and lands with recording); `StoreKitManager`'s transaction listener never starts (with
-  the paywall item); Learn reminders pile up on each time change; and stage-duration helpers only tests use.
+- **Found by the dead-code batch** (`FUTURE_IMPROVEMENTS.md`, still open): `StoreKitManager`'s transaction listener
+  never starts (with the paywall item); Learn reminders pile up on each time change; and stage-duration helpers only
+  tests use. (`ErrorManager`'s errors now reach `RootView`'s alert, `58df65e`.)
+- **Onboarding's bedtime is an hour off on a daylight-saving day** (found 2026-11-01): `OnboardingManager.computeBedtime`
+  subtracts the goal in absolute time, so onboarding on the night the clocks change stores a bedtime an hour early or
+  late, and the three `OnboardingBedtimeTests` fail on such a day.
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
   which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
 - **Blocked on the renewed account:** the device pass (the prompt above), D3c WidgetKit extension (needs the App

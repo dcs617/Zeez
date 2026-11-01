@@ -150,9 +150,36 @@ Carried over from the archived roadmap's Phase 3.
   environmental detail views (`554cb23`, §6); local analytics, `ErrorView`, `DeveloperSettings`, `DateHelper` and
   three stale docs-as-code files (`4808115`, §13); and dead declarations inside live files (`c256d66`).
 - In-app recording (`SleepControlView`, `SleepGoalSettingsView`) is parked in the tree, not deleted
-  (`PARKED_CAPABILITIES.md` §14).
+  (`PARKED_CAPABILITIES.md` §14). Reconnected 2026-11-01, and both files replaced or deleted (below).
 - ZeezTests 360 → 359 in 57 suites (5 new, 6 deleted), green after every commit with the attribution check clean;
   UI smoke 10/10; the watch app builds.
+
+**Completed 2026-11-01 (the recording batch, `58df65e`…`1ca9674`; `SECOND_AUDIT_IMPROVEMENTS.md` §7):**
+
+- ~~In-app recording is unreachable~~. The Sleep tab's Record Tonight card starts one; it runs all night on a locked
+  phone through background audio, needs the microphone, and ends 5 s before the next alarm so the alarm rings as it
+  always has. The recording screen and its summary lie over the app, so the alarm screen can always present. Notes are
+  kept with the night and out of Learn. Device checks `DEVICE_TEST_RUN.md` T5.0, T9 and T16 (`PARKED_CAPABILITIES.md`
+  §14).
+- ~~`startSession` never succeeded, and an end could get stuck~~, blocking every later start (`fd4aff5`).
+- ~~`EnvironmentalMonitor` and `AlarmAudioController` each set the shared audio session~~. `AudioSessionCoordinator`
+  owns it, the alarm outranks a recording, and `AudioSessionGuardTests` keeps everything else off it (`7cbf79f`). It
+  also handles interruptions, route changes and media-services resets for the recording (`a987401`).
+- ~~The alarm screen's Stop left the follow-ups ringing~~ (`52d28a1`). Device check T5.0(d).
+- ~~`MovementDataManager` takes one accelerometer reading a minute~~, and its magnitude included gravity. Deleted with
+  phone movement (`f23e368`, `PARKED_CAPABILITIES.md` §15). `ZeezScore-3.1` infers stages only from movement and heart
+  rate, so a phone-only recording gets no stages or score.
+- ~~`ErrorManager`'s errors reach no screen~~. `RootView` presents `ErrorManager.currentAlert` by `AppError.presentation`:
+  an alert for a failed save, low storage, a recording that can't start or end, the microphone refused (with Open
+  Settings) and a recording the app was closed during; a log line for the rest, including low battery on foreground.
+  Each alert at most once per occurrence, and held while the alarm screen is up (`58df65e`).
+- ~~The battery warning~~ is now a suggestion on the recording screen when unplugged, stronger at 30% or below, and
+  never a gate (`0f3e2f4`).
+- ~~A recording the app was closed during stayed active forever~~; ended at its last sample at launch. Heart rate for a
+  recording that ended locked is looked up again on each foreground. The analysis backlog no longer stops at its first
+  failure (`1ca9674`).
+- ZeezTests 359 → 437 in 67 suites, green after every commit with the attribution check clean (on 2026-11-01 itself
+  apart from the three daylight-saving failures below); UI smoke 10/10; the watch app builds.
 
 **Still open:**
 
@@ -167,7 +194,22 @@ Carried over from the archived roadmap's Phase 3.
   **Split decided 2026-10-29:** free keeps recording, last night with the experimental score, the alarm, Apple Health
   import and the last 7 days; premium adds longer history and Trends, month-over-month comparison, links to the user's
   own notes and environment, and suggestions from the user's own history against their own goal (Tier 3, `PARKED_CAPABILITIES.md`
-  §5). Next: a written spec per premium feature, after recording is reconnected, since most of it needs recorded nights.
+  §5). Next: a written spec per premium feature. Recording is reconnected (2026-11-01), but a recorded night has no
+  score until stages come from somewhere (the item below), so free's "last night with the experimental score" has
+  nothing to show for one yet.
+- **Stages and a score for a recorded night** (asked 2026-11-01, Daniel's decision). A phone-only recording measures
+  its times and the room's noise, nothing more. Recommended: score only nights with Apple-reported stages, reversing
+  `ZEEZ_SCORE_SPECIFICATION.md` §2 (Zeez's own inference is the unvalidated one, `PARKED_CAPABILITIES.md` §9), as its own
+  batch with the spec first; no Zeez watch recorder for now; a watch smart alarm later. Joining a recording to the
+  same night's Apple stages needs the per-night source amendment.
+- **Two sources on one night** (deferred 2026-10-29). A watch wearer who records gets an imported Apple night and a
+  Zeez session, and the dashboard's goal durations, `SleepDebtCalculator` and session counts count both.
+- **Left open by the recording batch** (`PARKED_CAPABILITIES.md` §14): the recording screen covers the app, so changing
+  an alarm means ending the recording; what an interruption or a media-services reset does to a ringing alarm is
+  unchanged and unhandled (the coordinator resumes only a recording); noise is one meter reading every 5 minutes.
+- **Onboarding's bedtime is an hour off on a daylight-saving day** (found 2026-11-01). `OnboardingManager.computeBedtime`
+  subtracts the goal in absolute time, so onboarding on the night the clocks change stores a bedtime an hour off, and
+  the three `OnboardingBedtimeTests` (which use today's date) fail on such a day. Compute it in wall-clock time.
 - Real WidgetKit extension. The in-app `Zeez/Widgets/` tree was deleted in **B1** (it was
   unreachable and carried fabricated readings); a genuine extension target has not been built.
   Tracked as Phase **D3c**; see `PARKED_CAPABILITIES.md` §4. Its Core Data prerequisite is done:
@@ -215,16 +257,7 @@ Carried over from the archived roadmap's Phase 3.
     controller `@MainActor`.
 - ~~**Buttons that do nothing**~~ (found 2026-10-27). Done 2026-10-29, above.
 - ~~**Learn files without callers**~~ (2026-10-27). Done 2026-10-29, above; `LearnContentManager` is the item below.
-- **In-app recording is unreachable** (2026-10-29; `PARKED_CAPABILITIES.md` §14). No screen opens
-  `SleepControlView`, the only caller of `SleepSessionManager.startSession`, so nothing records a night or starts
-  the microphone and motion monitors, and a release build cannot show a Zeez score (Apple Health nights are never
-  scored). Daniel chose to park it. **Blocks `DEVICE_TEST_RUN.md` T4's scored-session checks and T9.** Reconnecting
-  needs a route, a working Add Note, the promised session summary, an error surface, and a decision on
-  `SleepGoalSettingsView`, which duplicates Settings' Sleep Goal section. **Decided later on 2026-10-29: reconnect it,
-  overnight through background audio**, with a soft charger suggestion; the prompt is queued in
-  `SECOND_AUDIT_IMPROVEMENTS.md` §7. Found while writing it: `EnvironmentalMonitor` (`.playAndRecord`) and
-  `AlarmAudioController` (`.playback`) each set the shared audio session's category, and `MovementDataManager` takes
-  one accelerometer reading a minute, which may not measure movement at all.
+- ~~**In-app recording is unreachable**~~ (2026-10-29). Done 2026-11-01, above.
 - **Learn has no content** (2026-10-29; `PARKED_CAPABILITIES.md` §10, "Learn content was never seeded").
   `LearnContentManager.ensureDefaultContent` has never had a caller, so Articles and Challenges are always empty,
   and the daily "Time to Learn" reminder opens that empty tab. Nothing creates a `Quiz`, so the quiz card wired
@@ -240,13 +273,7 @@ Carried over from the archived roadmap's Phase 3.
   dozens. They count against iOS's 64 pending notifications, which the alarm's follow-up chains also need
   (`DEVICE_TEST_RUN.md` T6). Turning reminders off removes them all. Fix with the Learn content decision, or
   sooner if T6 shows pressure.
-- **`ErrorManager`'s errors reach no screen** (2026-10-29). `ErrorView` was its only presenter and was never
-  applied; it is deleted. Live reports therefore go nowhere: `SceneDelegate`'s failed viewContext save and badge
-  reset, `BackgroundTaskManager`'s scheduling failures and its low-battery and low-storage warnings (checked on every
-  foreground), and `TrendsView.swift:230`. The rest come from the parked recording path. **Policy decided 2026-10-29**
-  and built with recording: alert for a failed save, low storage, a recording that fails to start or end, and a
-  permission denied when one starts (with Open Settings); log only scheduling failures, the badge reset and low battery
-  on foreground; each alert at most once per occurrence.
+- ~~**`ErrorManager`'s errors reach no screen**~~ (2026-10-29). Done 2026-11-01, above.
 - **`StoreKitManager`'s transaction listener never starts** (2026-10-29). It starts in `StoreKitManager`'s init,
   and only `SubscriptionView`, which no screen opens, touches `StoreKitManager.shared`. Purchases made elsewhere
   (another device, Ask to Buy, a refund) are not observed. Belongs with the paywall item above.

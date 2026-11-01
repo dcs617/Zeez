@@ -4,8 +4,10 @@
 `SECOND_AUDIT_IMPROVEMENTS.md` §5 and `FUTURE_IMPROVEMENTS.md`.
 
 Hardware: iPhone 13 Pro Max + paired Apple Watch. Branch `feature/sleep-simplification`.
-Baseline at start of run: 359 tests / 57 suites green (2026-10-29, after the dead-code batch), UI smoke
-10/10, iOS + watch targets build.
+Baseline at start of run: 437 tests / 67 suites (2026-11-01, after the recording batch), UI smoke 10/10,
+iOS + watch targets build. On 2026-11-01 itself, the day daylight saving ended, the three
+`OnboardingBedtimeTests` fail on this Mac (they subtract 8 hours from 7 AM on today's date); every other
+test passes. See `FUTURE_IMPROVEMENTS.md`.
 
 ---
 
@@ -269,21 +271,23 @@ must never be treated as deletion); "No sleep data found" in step 1.
 
 **Goal:** the "Experimental Zeez Estimate" only appears when it's earned, and says so.
 
-⚠️ **Blocked in this build: the app cannot record a session.** The Sleep tab has no start control.
-`SleepControlView`, the only screen that starts one, has never been routed, and it stays parked
-(`PARKED_CAPABILITIES.md` §14, decided 2026-10-29). Apple Health nights are never scored
-(`ZEEZ_SCORE_SPECIFICATION.md` §2), so no session in this build can carry a Zeez score, and every
-expectation below needs a recorded one. The other half, no score on an Apple-reported night, is T3 step 4
-on your imported Apple Watch night. Mark T4 **Blocked** and move on; run it once §14 is reconnected.
+⚠️ **Still blocked for a scored session, for a different reason (2026-11-01).** Recording is reconnected
+(T16), but the phone no longer records movement (`PARKED_CAPABILITIES.md` §15), and `ZeezScore-3.1` infers
+stages only from movement **and** heart rate. So a recorded night gets no stages and no score, and Apple
+Health nights are never scored (`ZEEZ_SCORE_SPECIFICATION.md` §2). No real night in this build can carry a
+Zeez score; whether one should come from Apple Watch stages is an open decision (`SECOND_AUDIT_IMPROVEMENTS.md`
+§7). What you can check now:
 
-1. *Blocked (§14).* Record a session in the app: Sleep tab → start → wait **≥ 30 minutes** → end. (Under
-   30 min is deliberately never scored.)
-2. *Blocked.* Reopen it.
+1. Record a night of **≥ 30 minutes** (T16.2), with your watch on. Open it from the dashboard.
+   **Expected:** no score, no stages, no "Experimental Zeez Estimate" card, and the recording summary said
+   "Recorded nights don't get sleep stages or a Zeez score." Its heart rate may appear (T16.7).
+2. The scored-session expectations below stay **Blocked**. The other half, no score on an Apple-reported
+   night, is T3 step 4 on your imported Apple Watch night.
 
 **Expected — a scored session:**
 - Screen titled **Experimental Zeez Estimate**.
 - VoiceOver on the score reads "Experimental Zeez estimated sleep score: N points" (test in T12).
-- Persisted `calculationVersion` = `ZeezScore-3.0`, and `confidenceScore` is **not** 85 for every session —
+- Persisted `calculationVersion` = `ZeezScore-3.1`, and `confidenceScore` is **not** 85 for every session —
   it must vary with how many sensors contributed. (Ask me for a query if you want to check the DB directly.)
 
 **Expected — the breakdown (score breakdown, added after the audit):** below the score, a card titled
@@ -293,7 +297,7 @@ link to the same place. VoiceOver on a row reads its name, its weight, and "Expe
 component: N out of 100".
 - **Silent variant:** the card says "The breakdown for this estimate isn't available" on a session you
   just recorded. That means recomputing from its stored stages didn't reproduce the stored score — report it.
-  "Produced by an earlier version" is expected only for sessions scored before `ZeezScore-3.0`.
+  "Produced by an earlier version" is expected only for sessions scored before `ZeezScore-3.1`.
 
 **Expected — a session with sensor data but no inferrable stages:** shows **no score at all**, not a
 neutral or middling one. Internally `qualityScore <= 1.0` is the "no estimate" sentinel.
@@ -316,6 +320,48 @@ actually computed. If every session you record scores identically, or confidence
 
 Set alarms a few minutes out so you're not waiting. Default cadence is **60 s** between follow-ups, max
 **6** pre-armed follow-ups per alarm; Heavy Sleeper mode uses **31 s** and up to 20.
+
+### T5.0 — The alarm during a recording (2026-11-01) — run these first
+A recording now holds the microphone and the audio session all night, so these come before everything
+else in T5. The design: the recording ends itself **5 seconds before** the next alarm or snooze, so the
+alarm rings exactly as it does with no recording (`RecordingAlarmBoundary`). Have Console.app open
+(Method 2, info messages on, categories `Alarm` and `SleepTracking`). Plug the phone in.
+
+**(a) Foreground.** Sleep tab → **Start Recording** (allow the microphone). The recording screen says
+"Ends just before your <time> alarm." Set nothing else; use an alarm 3 minutes out that you set before
+starting.
+**Expected:** a few seconds before the alarm, the recording screen turns into the night's summary, and
+Console shows `Recording ends for the alarm`. Then the alarm rings exactly as in T5.1: full-screen alarm
+over the summary, audio loops at full volume. After **Stop**, the summary is still there; **Done** closes it.
+
+**(b) Locked.** As (a), but lock the phone after starting.
+**Expected:** the notification rings with its sound at full volume, as T5.2. Unlock and open Zeez: the
+summary is waiting.
+**Silent failures:** the alarm is quiet, ducked or plays through the earpiece; or the notification
+arrives with no sound. Either means the recording still held the session: paste the `Alarm` and
+`SleepTracking` lines.
+
+**(c) Force-quit.** Start a recording, wait **20 minutes**, force-quit Zeez, lock the phone, and let an
+alarm set 3 minutes out ring.
+**Expected:** it rings and the follow-ups continue, as T5.3. Open Zeez: an alert says "Zeez was closed
+during the night, so the recording was saved up to <time>", the time of its last noise sample (within
+5 minutes of the force-quit). The night is on the dashboard. Repeat with only 5 minutes before the
+force-quit: no alert, and no night (under 15 minutes isn't kept).
+
+**(d) The alarm screen's Stop (52d28a1).** Fire an alarm in the foreground (T5.1) and tap **Stop** on the
+full-screen alarm, not the notification.
+**Expected:** no follow-up rings afterwards. Until 2026-10-29 the alarm screen's Stop silenced only the
+in-app audio, and the pre-armed follow-ups kept ringing every 60 s.
+
+**(e) No alarm set.** Turn every alarm off and start a recording.
+**Expected:** "No alarm is set. The recording runs until you end it." End it yourself.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked
+**Notes:**
+```
+
+
+```
 
 ### T5.1 — Foreground
 Set an alarm 2 minutes out. Leave the app open.
@@ -500,24 +546,22 @@ too (Console.app → select the Watch).
 
 ## T9 — Environmental: mic denied, and the noise index (B5)
 
-⚠️ **Blocked in this build: it needs a recorded session, and the app cannot record one**
-(`PARKED_CAPABILITIES.md` §14; see T4). Nothing in this build starts the microphone either, so the
-permission prompt never appears. Mark T9 **Blocked**; run it once §14 is reconnected.
+Unblocked 2026-11-01, and changed: a recording now **needs** the microphone, so a denied microphone
+means no recording at all (T16.1), not a recording with no noise. What remains is that a gap in the
+noise reads unavailable.
 
-**Goal:** noise is a **relative index 0–100**, explicitly *not* decibels. And a denied mic must read
-*unavailable*, never `0` and never "quiet".
+**Goal:** noise is a **relative index 0–100**, explicitly *not* decibels, and a stretch the microphone
+did not hear is left out, never `0` and never "quiet".
 
-1. Settings → Privacy → Microphone → **deny** Zeez.
-2. Record a session. Open its details.
+1. Record a night (T16.2), with a phone call or a minute of Siri in the middle (T16.3).
+2. Read the summary, then open the night from the dashboard.
 
-**Expected:** the environmental row reads **"Relative Noise Index … of 100"**. With the mic denied it shows
-**unavailable**.
+**Expected:** the summary reads "Room noise: Typically <quiet / some noise / noisy> (N of 100)" and notes
+that part of the night wasn't measured. The night's details read **"Relative Noise Index N of 100"**.
 
-**Silent failure — the one this was built to prevent:** it reads `0`, or "Quiet", or displays "dB". A
-denied microphone reading as a silent room is a fabricated measurement. Same class: temperature/light
-showing `-1`, or a freezing pitch-dark room — those are the raw sentinels leaking through.
-
-3. Re-grant the mic, record again, confirm a real index appears.
+**Silent failure — the one this was built to prevent:** "dB" anywhere, or a noisy night summarized as
+quiet because the gap was counted as silence. Same class: temperature/light showing `-1`, or a freezing
+pitch-dark room — those are the raw sentinels leaking through.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked
 **Notes:**
@@ -735,6 +779,69 @@ swinging across the whole chart for a small change (the old scaling).
 
 ---
 
+## T16 — Recording a night (2026-11-01)
+
+**Goal:** Zeez records a whole night on a locked phone, ends before the alarm, and says only what it
+measured. Plug the phone in and leave it on the nightstand. Console.app open (Method 2, info messages on,
+categories `SleepTracking`, `Environment` and `App`).
+
+### T16.1 — The microphone is required **[SIM OK]**
+On a fresh install: Sleep tab → **Start Recording**.
+**Expected:** the microphone prompt reads "Zeez measures how loud your room is while you record a night.
+Audio is analyzed on your iPhone and never stored or uploaded." **Don't Allow** → an alert "Microphone
+access is off" with **Open Settings** (goes to Zeez's page) and **Not Now**; no recording starts. Tap
+Start again: the alert comes back every time. Allow it in Settings, return, Start: the recording screen
+appears.
+
+### T16.2 — A whole night, locked
+Start a recording at bedtime with an alarm set, lock the phone, sleep.
+**Expected in the morning:** the alarm rang as in T5.0(b), and opening Zeez shows "Night Recorded": your
+start and end times, "Recorded session duration", and "Room noise: Typically … (N of 100)". There is
+**no** "Part of the night wasn't measured" line unless something interrupted it.
+**Silent failure:** the summary's end time is hours early, or the noise is "Not measured": the app was
+suspended when the phone locked. Paste the `App` and `Environment` lines from bedtime on.
+
+### T16.3 — Interruptions
+During a recording (screen on, then again locked): have someone call you, or hold the side button for
+Siri for a minute. If you have wired headphones or AirPods, connect and disconnect them.
+**Expected:** Console shows `Audio session interrupted`, then `Audio session interruption ended`; the
+recording keeps running; its summary says part of the night wasn't measured. After a headset change the
+recording continues.
+**Silent failure:** no "ended" line and the recording ends early, or its noise reads "Not measured" from
+the call on. Within five minutes of a missed "ended" the next sample should recover it, so note how long.
+
+### T16.4 — The battery suggestion
+Start a recording unplugged.
+**Expected:** "Recording all night uses battery. Plug in your phone if you can." Below 30%: "Your battery
+is at N%. Plug in your phone so the recording and your alarm last until morning." Plug in: the line goes
+away. The recording never refuses to start.
+
+### T16.5 — Short recordings, and the error alerts **[SIM OK]** for the first part
+Start and end a recording within 15 minutes.
+**Expected:** "Recording Not Kept: Recordings shorter than 15 minutes aren't kept." **Done** closes it.
+Only these reach an alert: a failed save, low storage, a recording that can't start or end, the
+microphone refused (T16.1), and a recording the app was closed during (T5.0c). Low battery, background
+scheduling and HealthKit hiccups are log lines only, so none of them should ever show an alert.
+
+### T16.6 — Notes **[SIM OK]**
+During a recording, type a note and tap **Save Note**.
+**Expected:** "1 note saved"; the summary lists "Notes: 1 note". In Learn, the note appears in no notes
+list or search.
+
+### T16.7 — Heart rate from the watch
+Wear the watch for T16.2. In the morning, unlock, wait a few minutes for the watch to sync, and open Zeez.
+**Expected:** the night's heart-rate card shows readings from the night. If it is empty, background Zeez
+and bring it back after a few more minutes: each return to the foreground looks again for 36 hours.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked
+**Notes:**
+```
+
+
+```
+
+---
+
 ## Run summary — fill in at the end
 
 | Test | Pass | Fail | Blocked | One-line note |
@@ -745,6 +852,7 @@ swinging across the whole chart for a small change (the old scaling).
 | T3 HealthKit import | | | | |
 | T3.1 re-import (§8a) | | | | |
 | T4 score behaviour | | | | |
+| T5.0 alarm during a recording | | | | |
 | T5 alarm E2E | | | | |
 | T5.9a Learn reminder tap plays nothing | | | | |
 | T5.9b alarm actions survive a Learn toggle | | | | |
@@ -759,6 +867,7 @@ swinging across the whole chart for a small change (the old scaling).
 | T14 archive | | | | |
 | T15.1 navigation per tab | | | | |
 | T15.2 Trends | | | | |
+| T16 recording a night | | | | |
 
 **Anything surprising that isn't on this list:**
 ```
