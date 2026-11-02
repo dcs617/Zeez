@@ -4,10 +4,8 @@
 `SECOND_AUDIT_IMPROVEMENTS.md` §5 and `FUTURE_IMPROVEMENTS.md`.
 
 Hardware: iPhone 13 Pro Max + paired Apple Watch. Branch `feature/sleep-simplification`.
-Baseline at start of run: 437 tests / 67 suites (2026-11-01, after the recording batch), UI smoke 10/10,
-iOS + watch targets build. On 2026-11-01 itself, the day daylight saving ended, the three
-`OnboardingBedtimeTests` fail on this Mac (they subtract 8 hours from 7 AM on today's date); every other
-test passes. See `FUTURE_IMPROVEMENTS.md`.
+Baseline at start of run: 442 tests / 68 suites green (2026-11-02, after the recording batch and the
+clock-change bedtime fix), UI smoke 10/10, iOS + watch targets build.
 
 ---
 

@@ -823,9 +823,8 @@ Watch stages, a Zeez watch recorder or seeding Learn content without asking.
 - **Found by the dead-code batch** (`FUTURE_IMPROVEMENTS.md`, still open): `StoreKitManager`'s transaction listener
   never starts (with the paywall item); Learn reminders pile up on each time change; and stage-duration helpers only
   tests use. (`ErrorManager`'s errors now reach `RootView`'s alert, `58df65e`.)
-- **Onboarding's bedtime is an hour off on a daylight-saving day** (found 2026-11-01): `OnboardingManager.computeBedtime`
-  subtracts the goal in absolute time, so onboarding on the night the clocks change stores a bedtime an hour early or
-  late, and the three `OnboardingBedtimeTests` fail on such a day.
+- ~~**Onboarding's bedtime is an hour off on a daylight-saving day**~~ (found 2026-11-01, fixed 2026-11-02): bedtime
+  and the goal's duration are clock arithmetic now, in onboarding and Settings.
 - **Per-night preferred sleep source** — needs an amendment to `SLEEP_METRICS_CLAIMS_AND_VALIDATION.md` first,
   which defines time asleep as the union across sources (`PARKED_CAPABILITIES.md` §8a).
 - **Blocked on the renewed account:** the device pass (the prompt above), D3c WidgetKit extension (needs the App

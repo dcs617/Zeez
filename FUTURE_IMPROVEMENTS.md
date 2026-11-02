@@ -179,7 +179,7 @@ Carried over from the archived roadmap's Phase 3.
   recording that ended locked is looked up again on each foreground. The analysis backlog no longer stops at its first
   failure (`1ca9674`).
 - ZeezTests 359 → 437 in 67 suites, green after every commit with the attribution check clean (on 2026-11-01 itself
-  apart from the three daylight-saving failures below); UI smoke 10/10; the watch app builds.
+  apart from three daylight-saving failures, a real bug fixed the next day); UI smoke 10/10; the watch app builds.
 
 **Still open:**
 
@@ -207,9 +207,10 @@ Carried over from the archived roadmap's Phase 3.
 - **Left open by the recording batch** (`PARKED_CAPABILITIES.md` §14): the recording screen covers the app, so changing
   an alarm means ending the recording; what an interruption or a media-services reset does to a ringing alarm is
   unchanged and unhandled (the coordinator resumes only a recording); noise is one meter reading every 5 minutes.
-- **Onboarding's bedtime is an hour off on a daylight-saving day** (found 2026-11-01). `OnboardingManager.computeBedtime`
-  subtracts the goal in absolute time, so onboarding on the night the clocks change stores a bedtime an hour off, and
-  the three `OnboardingBedtimeTests` (which use today's date) fail on such a day. Compute it in wall-clock time.
+- ~~**Onboarding's bedtime is an hour off on a daylight-saving day**~~ (found 2026-11-01). Fixed 2026-11-02: the
+  bedtime and the goal's duration are clock arithmetic (`OnboardingManager.computeBedtime`, `SleepGoalPolicy.duration`).
+  Settings had the same bug the other way, reading 11 PM–7 AM set on that night as 9 hours, and two times stored on
+  different days as days. `SleepGoalClockChangeTests` use fixed dates.
 - Real WidgetKit extension. The in-app `Zeez/Widgets/` tree was deleted in **B1** (it was
   unreachable and carried fabricated readings); a genuine extension target has not been built.
   Tracked as Phase **D3c**; see `PARKED_CAPABILITIES.md` §4. Its Core Data prerequisite is done:

@@ -40,10 +40,21 @@ final class OnboardingManager: ObservableObject {
     var healthKitAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
     // MARK: - Bedtime Helper
-    /// Single source of truth for the bedtime formula.
-    /// Using TimeInterval arithmetic preserves fractional hours (e.g. 7.5h → 11:30 PM, not midnight).
-    static func computeBedtime(wakeTime: Date, sleepHours: Double) -> Date {
-        wakeTime.addingTimeInterval(-sleepHours * 3600)
+    /// Single source of truth for the bedtime formula: `sleepHours` before the wake time on the
+    /// clock. Fractional hours are kept (7.5 h → 11:30 PM, not midnight), and the clock decides,
+    /// not elapsed time: on the night the clocks change, 8 hours before a 7:00 AM wake is still
+    /// 11:00 PM. Subtracting elapsed time stored midnight, or 10 PM in spring (found 2026-11-01).
+    static func computeBedtime(wakeTime: Date, sleepHours: Double, calendar: Calendar = .current) -> Date {
+        let wake = calendar.dateComponents([.hour, .minute], from: wakeTime)
+        let bedMinutes = (wake.hour ?? 0) * 60 + (wake.minute ?? 0) - Int((sleepHours * 60).rounded())
+        let dayOffset = Int((Double(bedMinutes) / 1440).rounded(.down))
+        let clockMinutes = bedMinutes - dayOffset * 1440
+        guard let day = calendar.date(byAdding: .day, value: dayOffset, to: calendar.startOfDay(for: wakeTime)),
+              let bedtime = calendar.date(bySettingHour: clockMinutes / 60, minute: clockMinutes % 60,
+                                          second: 0, of: day) else {
+            return wakeTime.addingTimeInterval(-sleepHours * 3600)
+        }
+        return bedtime
     }
 
     // MARK: - Initialization

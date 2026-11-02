@@ -38,6 +38,77 @@ struct OnboardingBedtimeTests {
     }
 }
 
+// MARK: - The nights the clocks change
+
+/// Bedtime and the goal's duration are times on the clock (found 2026-11-01, the night US
+/// clocks went back). Both used to be elapsed time: onboarding that night stored a midnight
+/// bedtime for an 8-hour goal and a 7:00 AM wake, and Settings read an 11 PM–7 AM goal set that
+/// night as 9 hours. Fixed dates and a fixed time zone, so these run the same on any day.
+@Suite("Sleep goal across a clock change")
+@MainActor
+struct SleepGoalClockChangeTests {
+
+    private static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        return calendar
+    }()
+
+    private static func date(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+    }
+
+    private static func clock(_ date: Date) -> (hour: Int?, minute: Int?, day: Int?) {
+        let components = calendar.dateComponents([.hour, .minute, .day], from: date)
+        return (components.hour, components.minute, components.day)
+    }
+
+    @Test("When the clocks go back, 8 hours before a 7 AM wake is 11 PM the evening before")
+    func bedtimeWhenClocksGoBack() {
+        let bedtime = OnboardingManager.computeBedtime(wakeTime: Self.date(2026, 11, 1, 7), sleepHours: 8,
+                                                       calendar: Self.calendar)
+        let clock = Self.clock(bedtime)
+        #expect(clock.hour == 23, "Elapsed time gives midnight")
+        #expect(clock.minute == 0)
+        #expect(clock.day == 31)
+    }
+
+    @Test("When the clocks go forward, 7.5 hours before a 7 AM wake is 11:30 PM")
+    func bedtimeWhenClocksGoForward() {
+        let bedtime = OnboardingManager.computeBedtime(wakeTime: Self.date(2026, 3, 8, 7), sleepHours: 7.5,
+                                                       calendar: Self.calendar)
+        let clock = Self.clock(bedtime)
+        #expect(clock.hour == 23, "Elapsed time gives 10:30 PM")
+        #expect(clock.minute == 30)
+        #expect(clock.day == 7)
+    }
+
+    @Test("A goal of 11 PM to 7 AM is 8 hours on either night the clocks change")
+    func durationAcrossClockChanges() {
+        let fallBack = SleepGoalPolicy.duration(from: Self.date(2026, 10, 31, 23), to: Self.date(2026, 11, 1, 7),
+                                                calendar: Self.calendar)
+        let springForward = SleepGoalPolicy.duration(from: Self.date(2026, 3, 7, 23), to: Self.date(2026, 3, 8, 7),
+                                                     calendar: Self.calendar)
+        #expect(fallBack == 8 * 3600, "Elapsed time gives 9 hours")
+        #expect(springForward == 8 * 3600, "Elapsed time gives 7 hours")
+    }
+
+    @Test("A goal's duration ignores which days its two stored times were set on")
+    func durationIgnoresTheStoredDays() {
+        // Settings' pickers keep each value's original date, so the two can be months apart.
+        let duration = SleepGoalPolicy.duration(from: Self.date(2026, 7, 1, 22, 30), to: Self.date(2026, 11, 15, 6, 45),
+                                                calendar: Self.calendar)
+        #expect(duration == 8.25 * 3600)
+    }
+
+    @Test("Onboarding's bedtime and its duration agree on a clock-change night")
+    func bedtimeAndDurationAgree() {
+        let wake = Self.date(2026, 11, 1, 7)
+        let bedtime = OnboardingManager.computeBedtime(wakeTime: wake, sleepHours: 8, calendar: Self.calendar)
+        #expect(SleepGoalPolicy.duration(from: bedtime, to: wake, calendar: Self.calendar) == 8 * 3600)
+    }
+}
+
 // MARK: - Bedtime Persistence Tests
 
 @Suite("Onboarding – Bedtime Persistence")
@@ -69,9 +140,9 @@ struct OnboardingPersistenceTests {
             let bedtime = try #require(saved.targetBedtime)
             let wakeTime = try #require(saved.targetWakeTime)
 
-            let interval = wakeTime.timeIntervalSince(bedtime)
+            let interval = SleepGoalPolicy.duration(from: bedtime, to: wakeTime)
             #expect(abs(interval - targetHours * 3600) < 1,
-                    "Persisted interval between wake and bedtime should be exactly 7.5 hours")
+                    "Persisted bedtime should be exactly 7.5 hours before wake on the clock")
 
             let c = Calendar.current.dateComponents([.hour, .minute], from: bedtime)
             #expect(c.hour == 23, "Bedtime hour should be 23 (11 PM)")
@@ -103,8 +174,8 @@ struct OnboardingPersistenceTests {
             let bedtime = try #require(saved.targetBedtime)
             let storedDuration = saved.targetSleepDuration
 
-            #expect(abs(wakeTime.timeIntervalSince(bedtime) - storedDuration) < 1,
-                    "Gap between wake and bedtime must equal targetSleepDuration")
+            #expect(abs(SleepGoalPolicy.duration(from: bedtime, to: wakeTime) - storedDuration) < 1,
+                    "Gap between bedtime and wake on the clock must equal targetSleepDuration")
         }
     }
 }
